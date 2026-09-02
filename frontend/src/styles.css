@@ -1,0 +1,110 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #15201c;
+  background: #edf2ef;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.status-panel {
+  width: min(100%, 680px);
+  padding: clamp(32px, 6vw, 64px);
+  background: #fbfcfb;
+  border: 1px solid #cfd9d3;
+  border-radius: 20px;
+  box-shadow: 0 18px 60px rgb(46 66 56 / 10%);
+}
+
+.wordmark {
+  color: #325e4a;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 48px;
+  color: #4b5d54;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #9ba7a1;
+}
+
+.status-dot--checking { animation: pulse 1.2s ease-in-out infinite; }
+.status-dot--connected { background: #2e9b63; box-shadow: 0 0 0 4px rgb(46 155 99 / 12%); }
+.status-dot--error { background: #c64e49; box-shadow: 0 0 0 4px rgb(198 78 73 / 12%); }
+
+h1 {
+  max-width: 520px;
+  margin: 22px 0 16px;
+  font-size: clamp(2rem, 7vw, 4.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+p {
+  max-width: 510px;
+  margin: 0;
+  color: #5a6962;
+  line-height: 1.7;
+}
+
+dl {
+  margin: 48px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid #dfe6e2;
+}
+
+dl div { display: grid; gap: 8px; }
+
+dt {
+  color: #718078;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #25372e;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
+}
+
+@keyframes pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
+
+@media (max-width: 520px) {
+  .shell { padding: 16px; }
+  .status-panel { border-radius: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot--checking { animation: none; }
+}
