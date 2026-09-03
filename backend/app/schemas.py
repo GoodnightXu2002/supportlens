@@ -70,3 +70,18 @@ class ConversationRead(ConversationBase):
     dataset_id: UUID
     metadata: dict[str, Any] | None = Field(default=None, validation_alias="metadata_")
     created_at: datetime
+
+
+class DatasetImportConfirmRequest(BaseModel):
+    import_token: str
+
+
+class DatasetImportConfirmResponse(BaseModel):
+    dataset_id: UUID
+    name: str
+    version: str
+    source: DatasetSource
+    privacy_status: PrivacyStatus
+    representativeness_statement: str | None
+    conversation_count: int
+    created_at: datetime
