@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { MdAddCircleOutline, MdHistory, MdMenuBook } from 'react-icons/md'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const API_BASE_URL = (
@@ -111,8 +112,19 @@ function AppShell() {
               </span>
             </div>
           ) : isDatasetRoute ? (
-            <div className="route-header">
+            <div className="route-header route-header--dataset">
               <span className="route-header-title">数据集详情</span>
+              <div className="dataset-header-actions">
+                <button className="dataset-header-action dataset-header-action--plain" type="button">
+                  <MdHistory aria-hidden="true" />查看历史不可变版本
+                </button>
+                <button className="dataset-header-action" type="button">
+                  <MdAddCircleOutline aria-hidden="true" />新建/导入数据集
+                </button>
+                <button className="dataset-header-action" type="button">
+                  <MdMenuBook aria-hidden="true" />查看参考依据
+                </button>
+              </div>
             </div>
           ) : (
             <>
