@@ -6,7 +6,7 @@ import {
   MdTune,
 } from 'react-icons/md'
 import { PiDatabase } from 'react-icons/pi'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import './StartQualityReviewPage.css'
 
@@ -19,6 +19,8 @@ const readinessGates = [
 ]
 
 function StartQualityReviewPage() {
+  const navigate = useNavigate()
+
   return (
     <section className="s01-page" aria-label="开始质量复盘">
       <div className="s01-workspace">
@@ -171,7 +173,11 @@ function StartQualityReviewPage() {
           <span>状态: 尚未生成评测结论</span>
           <span>启动后进入运行中状态；评测完成且输出有效后进入 S03 基线分析。</span>
         </div>
-        <button className="s01-primary-action" type="button">
+        <button
+          className="s01-primary-action"
+          type="button"
+          onClick={() => navigate('/baseline')}
+        >
           开始质量复盘
           <MdPlayArrow aria-hidden="true" />
         </button>
