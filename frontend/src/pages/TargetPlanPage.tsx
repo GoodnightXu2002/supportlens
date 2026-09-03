@@ -34,12 +34,12 @@ const frozenChangeRecords = [
   { scope: '偏差', status: '无偏差 NONE', detail: '实际变更与计划变更无偏差', tone: 'frozen' },
 ] as const
 
-function ContextMetadata({ frozen }: { frozen: boolean }) {
+function ContextMetadata() {
   return (
-    <dl className={frozen ? 's04-metadata s04-metadata--frozen' : 's04-metadata'}>
+    <dl className="s04-metadata s04-metadata--prefreeze">
       <div><dt>数据集</dt><dd>DS-NOVAMART-001 v1.0</dd></div>
-      <div><dt>夹具类型</dt><dd>合成生产相似数据（Synthetic Production-like）</dd></div>
-      <div><dt>声明范围</dt><dd>仅当前评测集（Evaluation Set）</dd></div>
+      <div><dt>数据类型</dt><dd>Synthetic Production-like</dd></div>
+      <div><dt>声明范围</dt><dd>Evaluation Set</dd></div>
     </dl>
   )
 }
@@ -86,11 +86,17 @@ function TargetPlanWorkspace({
         </>
       )}
 
-      {frozen && <ContextMetadata frozen />}
+      {frozen && (
+        <div className="s04-canvas s04-canvas--frozen-meta">
+          <div className="s04-content">
+            <ContextMetadata />
+          </div>
+        </div>
+      )}
 
       <div ref={canvasRef} className={frozen ? 's04-canvas s04-canvas--frozen' : 's04-canvas'}>
         <div className={frozen ? 's04-content s04-content--frozen' : 's04-content'}>
-          {!frozen && <ContextMetadata frozen={false} />}
+          {!frozen && <ContextMetadata />}
           {!frozen && (
             <header className="s04-state">
               <div className="s04-state__title"><span aria-hidden="true" /><h1>验证计划待冻结</h1></div>

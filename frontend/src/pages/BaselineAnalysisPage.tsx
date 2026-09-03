@@ -54,11 +54,11 @@ function BaselineAnalysisPage() {
             </div>
             <div className="s03-metadata__type">
               <dt>数据类型</dt>
-              <dd>合成生产相似评测数据（Synthetic Production-like Evaluation）</dd>
+              <dd>Synthetic Production-like Evaluation</dd>
             </div>
             <div>
               <dt>声明范围</dt>
-              <dd><span>仅当前评测集（Evaluation Set）</span></dd>
+              <dd>Evaluation Set</dd>
             </div>
           </dl>
         </div>
@@ -97,7 +97,7 @@ function BaselineAnalysisPage() {
               <dl className="s03-priority-grid">
                 <div><dt><span className="s03-dot s03-dot--critical" aria-hidden="true" />严重程度：</dt><dd>高</dd></div>
                 <div><dt><span className="s03-dot s03-dot--critical" aria-hidden="true" />业务影响：</dt><dd>高</dd></div>
-                <div><dt><span className="s03-dot s03-dot--secondary" aria-hidden="true" />频率：</dt><dd>6.0% (6/100)</dd></div>
+                <div className="s03-priority-grid__frequency"><dt><span className="s03-dot s03-dot--secondary" aria-hidden="true" />频率：</dt><dd>6.0%</dd></div>
                 <div><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />模式一致性：</dt><dd>高</dd></div>
                 <div className="s03-priority-grid__wide"><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />证据置信度：</dt><dd>高</dd></div>
               </dl>

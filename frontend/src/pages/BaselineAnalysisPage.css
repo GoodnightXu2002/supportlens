@@ -89,18 +89,7 @@
 
 .s03-metadata > div {
   min-width: 0;
-}
-
-.s03-metadata > div:first-child {
-  flex: 0 0 132px;
-}
-
-.s03-metadata__type {
-  flex: 1 1 300px;
-}
-
-.s03-metadata > div:last-child {
-  flex: 0 0 190px;
+  flex: 1 1 0;
 }
 
 .s03-metadata dt {
@@ -118,14 +107,6 @@
   font-size: 13px;
   font-weight: 500;
   line-height: 18px;
-}
-
-.s03-metadata dd span {
-  display: inline;
-  padding: 2px 6px;
-  background: var(--color-surface-high);
-  border-radius: var(--radius-sm);
-  box-decoration-break: clone;
 }
 
 .s03-review-action {
@@ -371,6 +352,10 @@
 
 .s03-priority-grid__wide {
   grid-column: span 2;
+}
+
+.s03-priority-grid__frequency {
+  white-space: nowrap;
 }
 
 .s03-cases-header p {
@@ -817,7 +802,4 @@
   .s03-review-strip__content { gap: 16px; }
   .s03-review-state { width: 216px; min-width: 216px; }
   .s03-metadata { gap: 18px; }
-  .s03-metadata > div:first-child { flex-basis: 115px; }
-  .s03-metadata__type { flex-basis: 200px; }
-  .s03-metadata > div:last-child { flex-basis: 175px; }
 }
