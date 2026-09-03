@@ -4,7 +4,16 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -13,6 +22,17 @@ from app.database import Base
 
 class Dataset(Base):
     __tablename__ = "datasets"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('user_upload', 'fixture_import')",
+            name="ck_datasets_source",
+        ),
+        CheckConstraint(
+            "privacy_status IN "
+            "('synthetic', 'deidentified', 'may_contain_personal_data', 'unknown')",
+            name="ck_datasets_privacy_status",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4
@@ -21,6 +41,13 @@ class Dataset(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[str] = mapped_column(
         String(32), nullable=False, default="v1.0", server_default="v1.0"
+    )
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    privacy_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="unknown", server_default="unknown"
+    )
+    representativeness_statement: Mapped[str | None] = mapped_column(
+        Text, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

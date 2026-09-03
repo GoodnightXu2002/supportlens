@@ -1,14 +1,45 @@
 from datetime import datetime
-from typing import Any
+from enum import StrEnum
+from typing import Any, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class DatasetSource(StrEnum):
+    USER_UPLOAD = "user_upload"
+    FIXTURE_IMPORT = "fixture_import"
+
+
+class PrivacyStatus(StrEnum):
+    SYNTHETIC = "synthetic"
+    DEIDENTIFIED = "deidentified"
+    MAY_CONTAIN_PERSONAL_DATA = "may_contain_personal_data"
+    UNKNOWN = "unknown"
 
 
 class DatasetBase(BaseModel):
     name: str
     description: str | None = None
     version: str = "v1.0"
+    source: DatasetSource
+    privacy_status: PrivacyStatus = PrivacyStatus.UNKNOWN
+    representativeness_statement: str | None = None
+
+    @model_validator(mode="after")
+    def validate_fixture_import_contract(self) -> Self:
+        if self.source is not DatasetSource.FIXTURE_IMPORT:
+            return self
+        if self.privacy_status is not PrivacyStatus.SYNTHETIC:
+            raise ValueError("fixture_import requires privacy_status=synthetic")
+        if not self.representativeness_statement or not (
+            self.representativeness_statement.strip()
+        ):
+            raise ValueError(
+                "fixture_import requires a non-empty "
+                "representativeness_statement"
+            )
+        return self
 
 
 class DatasetCreate(DatasetBase):
