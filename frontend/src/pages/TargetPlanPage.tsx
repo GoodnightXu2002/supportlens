@@ -13,6 +13,8 @@ import {
   MdSmartToy,
   MdWarningAmber,
 } from 'react-icons/md'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import './TargetPlanPage.css'
 
@@ -42,9 +44,33 @@ function ContextMetadata({ frozen }: { frozen: boolean }) {
   )
 }
 
-function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
+type TargetPlanWorkspaceProps = {
+  state: TargetPlanState
+  targetConfirmed: boolean
+  hypothesisConfirmed: boolean
+  onConfirmTarget: () => void
+  onConfirmHypothesis: () => void
+  onFreeze: () => void
+  onEnterValidation: () => void
+}
+
+function TargetPlanWorkspace({
+  state,
+  targetConfirmed,
+  hypothesisConfirmed,
+  onConfirmTarget,
+  onConfirmHypothesis,
+  onFreeze,
+  onEnterValidation,
+}: TargetPlanWorkspaceProps) {
   const frozen = state === 'frozen'
+  const readyToFreeze = targetConfirmed && hypothesisConfirmed
   const changeRecords = frozen ? frozenChangeRecords : preFreezeChangeRecords
+  const canvasRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    canvasRef.current?.scrollTo({ top: 0 })
+  }, [state])
 
   return (
     <section className={`s04-page s04-page--${state}`} aria-label={frozen ? '目标与计划已冻结状态' : '目标与计划冻结前状态'}>
@@ -55,20 +81,20 @@ function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
         </div>
       ) : (
         <>
-          <div className="s04-header-status" aria-label="当前状态：需要人工确认"><span aria-hidden="true" />需要人工确认</div>
+          <div className="s04-header-status" aria-label={readyToFreeze ? '当前状态：确认已完成' : '当前状态：需要人工确认'}><span aria-hidden="true" />{readyToFreeze ? '确认已完成' : '需要人工确认'}</div>
           <MdLockOutline className="s04-candidate-lock" aria-hidden="true" />
         </>
       )}
 
       {frozen && <ContextMetadata frozen />}
 
-      <div className={frozen ? 's04-canvas s04-canvas--frozen' : 's04-canvas'}>
+      <div ref={canvasRef} className={frozen ? 's04-canvas s04-canvas--frozen' : 's04-canvas'}>
         <div className={frozen ? 's04-content s04-content--frozen' : 's04-content'}>
           {!frozen && <ContextMetadata frozen={false} />}
           {!frozen && (
             <header className="s04-state">
               <div className="s04-state__title"><span aria-hidden="true" /><h1>验证计划待冻结</h1></div>
-              <dl><div><dt>结论属性:</dt><dd>非最终结论</dd></div><div><dt>当前阻断:</dt><dd>人工目标与优化假设尚未完成确认</dd></div></dl>
+              <dl><div><dt>结论属性:</dt><dd>非最终结论</dd></div><div><dt>当前阻断:</dt><dd>{readyToFreeze ? '无 · 可冻结验证计划' : '人工目标与优化假设尚未完成确认'}</dd></div></dl>
             </header>
           )}
 
@@ -106,9 +132,9 @@ function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
                   </>
                 ) : (
                   <>
-                    <div className="s04-section-heading"><h2><MdPersonOutline aria-hidden="true" />人工目标确认</h2><span>待人工确认</span></div>
-                    <div className="s04-empty-target">尚未形成人工确认目标</div>
-                    <button className="s04-outline-action" type="button">确认目标</button>
+                    <div className="s04-section-heading"><h2><MdPersonOutline aria-hidden="true" />人工目标确认</h2><span className={targetConfirmed ? 's04-confirmation-status--complete' : undefined}>{targetConfirmed ? '已确认' : '待人工确认'}</span></div>
+                    <div className={targetConfirmed ? 's04-empty-target s04-empty-target--confirmed' : 's04-empty-target'}>{targetConfirmed ? '退款资格判断准确性' : '尚未形成人工确认目标'}</div>
+                    <button className="s04-outline-action" type="button" onClick={onConfirmTarget} disabled={targetConfirmed}>{targetConfirmed ? '目标已确认' : '确认目标'}</button>
                   </>
                 )}
               </div>
@@ -118,7 +144,7 @@ function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
               {frozen ? (
                 <><h2 id="s04-hypothesis-title" className="s04-frozen-section-label"><span aria-hidden="true" />优化假设</h2><p>若 Agent 能明确获得退款 / 退货资格的适用条件、例外条件与必要事实，退款规则误用可能减少。</p><em>待验证假设，不代表已证明根因（Root Cause）</em></>
               ) : (
-                <><div className="s04-section-heading"><h2 id="s04-hypothesis-title"><MdLightbulbOutline aria-hidden="true" />优化假设</h2><span>待确认 · 不代表已证明根因</span></div><p>若 Agent 能明确获得退款 / 退货资格的适用条件、例外条件与必要事实，退款规则误用可能减少。</p><button className="s04-outline-action" type="button">确认优化假设</button></>
+                <><div className="s04-section-heading"><h2 id="s04-hypothesis-title"><MdLightbulbOutline aria-hidden="true" />优化假设</h2><span className={hypothesisConfirmed ? 's04-confirmation-status--complete' : undefined}>{hypothesisConfirmed ? '已确认 · 不代表已证明根因' : '待确认 · 不代表已证明根因'}</span></div><p>若 Agent 能明确获得退款 / 退货资格的适用条件、例外条件与必要事实，退款规则误用可能减少。</p><button className="s04-outline-action" type="button" onClick={onConfirmHypothesis} disabled={hypothesisConfirmed}>{hypothesisConfirmed ? '优化假设已确认' : '确认优化假设'}</button></>
               )}
             </section>
 
@@ -156,7 +182,17 @@ function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
             ) : (
               <section className="s04-validation" aria-label="验证计划草稿">
                 <div className="s04-validation-plan"><h2><MdRule aria-hidden="true" />验证计划草稿</h2><dl className="s04-plan-grid"><div><dt>目标案例</dt><dd>6 个 <button type="button">查看</button></dd></div><div><dt>回归案例</dt><dd>8 个 <button type="button">查看</button></dd></div><div className="s04-plan-grid__wide"><dt>受保护能力</dt><dd>物流、商品咨询、售后 <button type="button">查看纳入原因与关联案例</button></dd></div><div><dt>配置 ID</dt><dd className="s04-mono-value">EVAL-CONFIG-V1-FINAL</dd></div><div><dt>策略</dt><dd>V1</dd></div><div className="s04-plan-grid__wide"><dt>基线快照</dt><dd className="s04-mono-value">BASELINE-VALIDATION-SNAPSHOT-V1</dd></div><div className="s04-plan-grid__wide"><dt>计划哈希</dt><dd className="s04-plan-pending">冻结后生成</dd></div></dl></div>
-                <div className="s04-integrity"><h3>实验完整性规则</h3><ul><li className="s04-integrity__warning"><MdRadioButtonUnchecked aria-hidden="true" />人工确认目标：未完成</li><li className="s04-integrity__warning"><MdRadioButtonUnchecked aria-hidden="true" />确认优化假设：未完成</li><li><MdRadioButtonUnchecked aria-hidden="true" />核对验证计划：待完成</li><li><MdRadioButtonUnchecked aria-hidden="true" />冻结验证计划：未完成</li></ul><p className="s04-lock-note"><MdLockOutline aria-hidden="true" />候选版本验证保持锁定，直到验证计划完成冻结。</p><p className="s04-warning-note"><MdWarningAmber aria-hidden="true" />验证计划冻结前不得生成、导入或查看 Candidate 结果；如发生结果暴露，实验将进入 Compromised 状态，且必须开始新的验证。</p></div>
+                <div className="s04-integrity">
+                  <h3>实验完整性规则</h3>
+                  <ul>
+                    <li className={targetConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{targetConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}人工确认目标：{targetConfirmed ? '已完成' : '未完成'}</li>
+                    <li className={hypothesisConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{hypothesisConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化假设：{hypothesisConfirmed ? '已完成' : '未完成'}</li>
+                    <li><MdRadioButtonUnchecked aria-hidden="true" />核对验证计划：{readyToFreeze ? '已完成' : '待完成'}</li>
+                    <li><MdRadioButtonUnchecked aria-hidden="true" />冻结验证计划：未完成</li>
+                  </ul>
+                  <p className="s04-lock-note"><MdLockOutline aria-hidden="true" />候选版本验证保持锁定，直到验证计划完成冻结。</p>
+                  <p className="s04-warning-note"><MdWarningAmber aria-hidden="true" />验证计划冻结前不得生成、导入或查看 Candidate 结果；如发生结果暴露，实验将进入 Compromised 状态，且必须开始新的验证。</p>
+                </div>
               </section>
             )}
           </div>
@@ -164,9 +200,9 @@ function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
       </div>
 
       {frozen ? (
-        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>候选版本门槛：已就绪</strong><span>验证计划已冻结、实际变更已验证、Candidate 结果未暴露、当前为非最终结论。</span></div><button type="button">进入候选版本验证<MdArrowForward aria-hidden="true" /></button></footer>
+        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>候选版本门槛：已就绪</strong><span>验证计划已冻结、实际变更已验证、Candidate 结果未暴露、当前为非最终结论。</span></div><button type="button" onClick={onEnterValidation}>进入候选版本验证<MdArrowForward aria-hidden="true" /></button></footer>
       ) : (
-        <footer className="s04-action-rail"><p>完成目标与优化假设确认，并冻结验证计划后解锁。</p><div><button type="button" disabled>冻结验证计划</button><button type="button" disabled>进入候选版本验证<MdArrowForward aria-hidden="true" /></button></div></footer>
+        <footer className="s04-action-rail"><p>{readyToFreeze ? '所有必要确认已完成，可以冻结验证计划。' : '完成目标与优化假设确认，并冻结验证计划后解锁。'}</p><div><button className={readyToFreeze ? 's04-freeze-action--ready' : undefined} type="button" onClick={onFreeze} disabled={!readyToFreeze}>冻结验证计划</button><button type="button" disabled>进入候选版本验证<MdArrowForward aria-hidden="true" /></button></div></footer>
       )}
 
       <div className={frozen ? 's04-analyst-dock s04-analyst-dock--frozen' : 's04-analyst-dock'}><img src="/s04-analyst.jpg" alt="Analyst 04" /><div><strong>{frozen ? 'Analyst 04' : '分析员 04'}</strong>{frozen && <span>ID: AN-8842</span>}</div></div>
@@ -175,7 +211,24 @@ function TargetPlanWorkspace({ state }: { state: TargetPlanState }) {
 }
 
 function TargetPlanPage() {
-  return <TargetPlanWorkspace state="frozen" />
+  const navigate = useNavigate()
+  const [state, setState] = useState<TargetPlanState>('pre-freeze')
+  const [targetConfirmed, setTargetConfirmed] = useState(false)
+  const [hypothesisConfirmed, setHypothesisConfirmed] = useState(false)
+
+  return (
+    <TargetPlanWorkspace
+      state={state}
+      targetConfirmed={targetConfirmed}
+      hypothesisConfirmed={hypothesisConfirmed}
+      onConfirmTarget={() => setTargetConfirmed(true)}
+      onConfirmHypothesis={() => setHypothesisConfirmed(true)}
+      onFreeze={() => {
+        if (targetConfirmed && hypothesisConfirmed) setState('frozen')
+      }}
+      onEnterValidation={() => navigate('/validation')}
+    />
+  )
 }
 
 export default TargetPlanPage

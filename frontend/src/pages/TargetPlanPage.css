@@ -221,6 +221,11 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   border: 1px dashed var(--color-border);
 }
 
+.s04-empty-target--confirmed {
+  color: var(--color-text);
+  border-style: solid;
+}
+
 .s04-target-tags {
   display: flex;
   margin-top: 8px;
@@ -283,6 +288,10 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   line-height: 20px;
 }
 
+.s04-section-heading > .s04-confirmation-status--complete {
+  color: var(--color-status-success);
+}
+
 .s04-outline-action {
   width: fit-content;
   margin-top: 16px;
@@ -300,6 +309,11 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
 
 .s04-outline-action:hover {
   background: var(--color-surface-low);
+}
+
+.s04-outline-action:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .s04-hypothesis,
@@ -469,6 +483,10 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   color: var(--color-status-warning);
 }
 
+.s04-integrity .s04-integrity__complete {
+  color: var(--color-status-success);
+}
+
 .s04-lock-note,
 .s04-warning-note {
   display: flex;
@@ -547,6 +565,18 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
 .s04-action-rail button svg {
   width: 18px;
   height: 18px;
+}
+
+.s04-action-rail button.s04-freeze-action--ready {
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  cursor: pointer;
+  opacity: 1;
+}
+
+.s04-action-rail button.s04-freeze-action--ready:hover {
+  background: #2d3133;
 }
 
 .s04-analyst-dock {
