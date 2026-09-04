@@ -51,6 +51,33 @@ export type ImportConfirmResponse = {
   created_at: string
 }
 
+export type DatasetListItem = {
+  dataset_id: string
+  name: string
+  description: string | null
+  version: string
+  source: 'user_upload' | 'fixture_import'
+  privacy_status: PrivacyStatus
+  representativeness_statement: string | null
+  conversation_count: number
+  created_at: string
+}
+
+export type DatasetDetail = DatasetListItem & {
+  scenario_distribution: Record<string, number>
+}
+
+export type DatasetConversation = {
+  id: string
+  external_id: string
+  messages: Array<{
+    role: 'user' | 'assistant'
+    content: string
+  }>
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
 export class ApiRequestError extends Error {
   readonly code: string
   readonly details: ImportErrorDetail[]
@@ -138,5 +165,36 @@ export async function confirmDatasetImport(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ import_token: importToken }),
     }),
+  )
+}
+
+export async function getDatasets(
+  signal?: AbortSignal,
+): Promise<DatasetListItem[]> {
+  return requestJson<DatasetListItem[]>(
+    await fetch(`${API_BASE_URL}/api/datasets`, { signal }),
+  )
+}
+
+export async function getDatasetDetail(
+  datasetId: string,
+  signal?: AbortSignal,
+): Promise<DatasetDetail> {
+  return requestJson<DatasetDetail>(
+    await fetch(`${API_BASE_URL}/api/datasets/${encodeURIComponent(datasetId)}`, {
+      signal,
+    }),
+  )
+}
+
+export async function getDatasetConversations(
+  datasetId: string,
+  signal?: AbortSignal,
+): Promise<DatasetConversation[]> {
+  return requestJson<DatasetConversation[]>(
+    await fetch(
+      `${API_BASE_URL}/api/datasets/${encodeURIComponent(datasetId)}/conversations`,
+      { signal },
+    ),
   )
 }

@@ -1,12 +1,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import {
   MdArrowBack,
   MdCheckCircle,
-  MdChevronRight,
   MdClose,
   MdErrorOutline,
-  MdFilterList,
   MdOutlinePieChart,
   MdSearch,
   MdUploadFile,
@@ -16,7 +14,13 @@ import {
 import {
   ApiRequestError,
   confirmDatasetImport,
+  getDatasetConversations,
+  getDatasetDetail,
+  getDatasets,
   previewDatasetImport,
+  type DatasetConversation,
+  type DatasetDetail,
+  type DatasetListItem,
   type ImportConfirmResponse,
   type ImportErrorDetail,
   type ImportPreviewResponse,
@@ -35,6 +39,7 @@ type ImportStatus =
 
 type DatasetOutletContext = {
   datasetImportOpen: boolean
+  openDatasetImport: () => void
   closeDatasetImport: () => void
 }
 
@@ -44,49 +49,64 @@ type ImportUiError = {
   details: ImportErrorDetail[]
 }
 
-const caseRows = [
-  {
-    id: '[CASE_ID]',
-    scenario: '[SCENARIO]',
-    intent: '[INTENT_SUMMARY]',
-    membership: '[MEMBERSHIP]',
-    status: '[STATUS]',
-    set: 'Core',
-    scenarioFilter: 'Refund',
-  },
-  {
-    id: '[CASE_ID_02]',
-    scenario: '[SCENARIO_02]',
-    intent: '[INTENT_SUMMARY_02]',
-    membership: '[MEMBERSHIP_02]',
-    status: '[STATUS_02]',
-    set: 'Challenge',
-    scenarioFilter: 'Logistics',
-  },
-  {
-    id: '[CASE_ID_03]',
-    scenario: '[SCENARIO_03]',
-    intent: '[INTENT_SUMMARY_03]',
-    membership: '[MEMBERSHIP_03]',
-    status: '[STATUS_03]',
-    set: 'Core',
-    scenarioFilter: 'Refund',
-  },
-] as const
+type DatasetListStatus = 'loading' | 'loaded' | 'error'
 
-const membershipSets = [
-  { label: 'CORE-REVIEW-SET-V1', count: 80, tone: 'slate' },
-  { label: 'CHALLENGE-SET-V1', count: 20, tone: 'warning' },
-  { label: 'TARGET-VALIDATION-SET-V1', count: 6, tone: 'muted' },
-  { label: 'REGRESSION-SET-V1', count: 8, tone: 'muted' },
-] as const
+type DatasetReadError = {
+  datasetId: string
+  code: string
+  message: string
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function readErrorFromUnknown(error: unknown) {
+  if (error instanceof ApiRequestError) {
+    return { code: error.code, message: error.message }
+  }
+  return {
+    code: 'dataset_read_failed',
+    message: '无法读取 Dataset。请确认 Backend 正在运行后重试。',
+  }
+}
+
+function conversationScenario(conversation: DatasetConversation) {
+  const value = conversation.metadata?.scenario
+  return typeof value === 'string' && value.trim() ? value : '—'
+}
+
+function conversationSummary(conversation: DatasetConversation) {
+  const firstUserMessage = conversation.messages.find(
+    (message) => message.role === 'user',
+  )?.content
+  if (!firstUserMessage) return '—'
+  return firstUserMessage.length > 96
+    ? `${firstUserMessage.slice(0, 96)}…`
+    : firstUserMessage
+}
+
+function conversationMetadata(conversation: DatasetConversation) {
+  return JSON.stringify(conversation.metadata ?? {})
+}
 
 function DatasetPage() {
-  const { datasetImportOpen, closeDatasetImport } =
+  const { datasetImportOpen, openDatasetImport, closeDatasetImport } =
     useOutletContext<DatasetOutletContext>()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedDatasetId = searchParams.get('dataset_id')
   const [query, setQuery] = useState('')
-  const [caseSet, setCaseSet] = useState('all')
   const [scenario, setScenario] = useState('all')
+  const [datasets, setDatasets] = useState<DatasetListItem[]>([])
+  const [datasetListStatus, setDatasetListStatus] =
+    useState<DatasetListStatus>('loading')
+  const [datasetListError, setDatasetListError] = useState<string | null>(null)
+  const [datasetListRequest, setDatasetListRequest] = useState(0)
+  const [datasetDetail, setDatasetDetail] = useState<DatasetDetail | null>(null)
+  const [conversations, setConversations] = useState<DatasetConversation[]>([])
+  const [datasetReadError, setDatasetReadError] =
+    useState<DatasetReadError | null>(null)
+  const [datasetReadRequest, setDatasetReadRequest] = useState(0)
   const [importStatus, setImportStatus] = useState<ImportStatus>('idle')
   const [file, setFile] = useState<File | null>(null)
   const [datasetName, setDatasetName] = useState('')
@@ -105,6 +125,72 @@ function DatasetPage() {
   const operationPending =
     importStatus === 'previewing' || importStatus === 'confirming'
 
+  const selectedDatasetId = requestedDatasetId ?? datasets[0]?.dataset_id ?? null
+  const selectedDatasetExists = selectedDatasetId
+    ? datasets.some((dataset) => dataset.dataset_id === selectedDatasetId)
+    : false
+  const detailReady = datasetDetail?.dataset_id === selectedDatasetId
+  const activeReadError =
+    datasetReadError?.datasetId === selectedDatasetId ? datasetReadError : null
+  const datasetNotFound =
+    datasetListStatus === 'loaded' &&
+    datasets.length > 0 &&
+    Boolean(requestedDatasetId) &&
+    (!selectedDatasetExists || activeReadError?.code === 'dataset_not_found')
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    void getDatasets(controller.signal)
+      .then((nextDatasets) => {
+        if (controller.signal.aborted) return
+        setDatasets(nextDatasets)
+        setDatasetListError(null)
+        setDatasetListStatus('loaded')
+
+        const currentParams = new URLSearchParams(window.location.search)
+        if (nextDatasets.length > 0 && !currentParams.get('dataset_id')) {
+          currentParams.set('dataset_id', nextDatasets[0].dataset_id)
+          setSearchParams(currentParams, { replace: true })
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || isAbortError(error)) return
+        const readError = readErrorFromUnknown(error)
+        setDatasetListError(readError.message)
+        setDatasetListStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [datasetListRequest, setSearchParams])
+
+  useEffect(() => {
+    if (!selectedDatasetId || !selectedDatasetExists) return
+    const controller = new AbortController()
+
+    void Promise.all([
+      getDatasetDetail(selectedDatasetId, controller.signal),
+      getDatasetConversations(selectedDatasetId, controller.signal),
+    ])
+      .then(([nextDetail, nextConversations]) => {
+        if (controller.signal.aborted) return
+        setDatasetDetail(nextDetail)
+        setConversations(nextConversations)
+        setDatasetReadError(null)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || isAbortError(error)) return
+        const readError = readErrorFromUnknown(error)
+        setDatasetReadError({
+          datasetId: selectedDatasetId,
+          code: readError.code,
+          message: readError.message,
+        })
+      })
+
+    return () => controller.abort()
+  }, [datasetReadRequest, selectedDatasetExists, selectedDatasetId])
+
   useEffect(() => {
     if (!datasetImportOpen) return
     window.requestAnimationFrame(() => fileInputRef.current?.focus())
@@ -121,22 +207,36 @@ function DatasetPage() {
     return () => window.removeEventListener('keydown', handleEscape)
   })
 
+  const scenarioOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          conversations
+            .map(conversationScenario)
+            .filter((value) => value !== '—'),
+        ),
+      ).sort((left, right) => left.localeCompare(right)),
+    [conversations],
+  )
+
   const visibleRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
 
-    return caseRows.filter((row) => {
+    return conversations.filter((conversation) => {
+      const rowScenario = conversationScenario(conversation)
       const matchesQuery =
         normalizedQuery.length === 0 ||
-        [row.id, row.scenario, row.intent, row.membership, row.status].some(
-          (value) => value.toLowerCase().includes(normalizedQuery),
+        conversation.external_id.toLowerCase().includes(normalizedQuery) ||
+        rowScenario.toLowerCase().includes(normalizedQuery) ||
+        conversation.messages.some((message) =>
+          message.content.toLowerCase().includes(normalizedQuery),
         )
-      const matchesSet = caseSet === 'all' || row.set === caseSet
       const matchesScenario =
-        scenario === 'all' || row.scenarioFilter === scenario
+        scenario === 'all' || rowScenario === scenario
 
-      return matchesQuery && matchesSet && matchesScenario
+      return matchesQuery && matchesScenario
     })
-  }, [caseSet, query, scenario])
+  }, [conversations, query, scenario])
 
   function resetImportFlow() {
     setImportStatus('idle')
@@ -228,6 +328,14 @@ function DatasetPage() {
       const result = await confirmDatasetImport(preview.import_token)
       setImportResult(result)
       setImportStatus('success')
+      setQuery('')
+      setScenario('all')
+      setDatasetDetail(null)
+      setConversations([])
+      setDatasetReadError(null)
+      setDatasetListStatus('loading')
+      setSearchParams({ dataset_id: result.dataset_id }, { replace: true })
+      setDatasetListRequest((request) => request + 1)
     } catch (error) {
       setImportError(errorFromUnknown(error))
       setImportStatus('confirm_error')
@@ -257,40 +365,134 @@ function DatasetPage() {
     }).format(date)
   }
 
+  function selectDataset(datasetId: string) {
+    setQuery('')
+    setScenario('all')
+    setDatasetReadError(null)
+    setSearchParams({ dataset_id: datasetId })
+  }
+
+  function retryDatasetList() {
+    setDatasetListError(null)
+    setDatasetListStatus('loading')
+    setDatasetListRequest((request) => request + 1)
+  }
+
+  function retrySelectedDataset() {
+    setDatasetReadError(null)
+    setDatasetDetail(null)
+    setConversations([])
+    setDatasetReadRequest((request) => request + 1)
+  }
+
+  function renderDataState(
+    title: string,
+    message: string,
+    actionLabel?: string,
+    onAction?: () => void,
+    code?: string,
+  ) {
+    return (
+      <div className="s02-canvas">
+        <section className="s02-data-state" aria-live="polite">
+          <MdOutlinePieChart aria-hidden="true" />
+          <h1>{title}</h1>
+          <p>{message}</p>
+          {code ? <code>{code}</code> : null}
+          {actionLabel && onAction ? (
+            <button type="button" onClick={onAction}>{actionLabel}</button>
+          ) : null}
+        </section>
+      </div>
+    )
+  }
+
   return (
     <section className="s02-page" aria-label="数据集详情工作区">
+      {datasetListStatus === 'loading'
+        ? renderDataState('正在读取 Dataset', '正在从 Backend 获取可用 Dataset…')
+        : datasetListStatus === 'error'
+          ? renderDataState(
+              'Dataset 加载失败',
+              datasetListError ?? '无法获取 Dataset 列表。',
+              '重试',
+              retryDatasetList,
+            )
+          : datasets.length === 0
+            ? renderDataState(
+                '尚无 Dataset',
+                '导入 CSV 或 JSON 后，真实 Dataset 与 Conversation 将显示在这里。',
+                '新建 / 导入数据集',
+                openDatasetImport,
+              )
+            : datasetNotFound
+              ? renderDataState(
+                  'Dataset Not Found',
+                  'URL 指定的 Dataset 不存在，未使用其他 Dataset 替代。',
+                  '查看最新 Dataset',
+                  () => selectDataset(datasets[0].dataset_id),
+                  requestedDatasetId ?? undefined,
+                )
+              : activeReadError
+                ? renderDataState(
+                    'Dataset 读取失败',
+                    activeReadError.message,
+                    '重试',
+                    retrySelectedDataset,
+                    activeReadError.code,
+                  )
+                : !detailReady || !datasetDetail
+                  ? renderDataState(
+                      '正在读取 Dataset',
+                      '正在获取 Dataset Detail 与 Conversations…',
+                    )
+                  : (
+                    <>
       <div className="s02-canvas">
         <section className="s02-ready-banner" aria-label="数据集状态">
           <MdCheckCircle aria-hidden="true" />
           <div>
-            <h1>状态：<span>已就绪 READY</span></h1>
-            <p>数据集必需输入与校验已通过，可用于质量复盘。</p>
+            <h1>{datasetDetail.name}<span>已就绪 READY</span></h1>
+            <p>{datasetDetail.description ?? '未提供 Dataset 描述。'}</p>
           </div>
+          {datasets.length > 1 ? (
+            <label className="s02-dataset-switcher">
+              <span>当前 Dataset</span>
+              <select
+                value={datasetDetail.dataset_id}
+                onChange={(event) => selectDataset(event.target.value)}
+              >
+                {datasets.map((dataset) => (
+                  <option key={dataset.dataset_id} value={dataset.dataset_id}>
+                    {dataset.name} · {dataset.version}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </section>
 
         <section className="s02-metadata" aria-label="数据集基本信息">
           <div className="s02-metadata__item">
             <span>数据集 ID</span>
-            <code>DS-NOVAMART-001 v1.0</code>
+            <code>{datasetDetail.dataset_id}</code>
           </div>
           <div className="s02-metadata__item s02-metadata__item--source">
             <span>来源</span>
-            <strong>合成的类生产评测样例（Synthetic Production-like Evaluation Fixture）</strong>
+            <strong>{datasetDetail.source}</strong>
           </div>
           <div className="s02-metadata__item">
             <span>案例总数</span>
-            <code>100 个案例</code>
+            <code>{datasetDetail.conversation_count} 个案例</code>
           </div>
-          <div className="s02-metadata__item s02-metadata__item--validation">
-            <span>校验详情</span>
-            <strong><MdCheckCircle aria-hidden="true" />有效 VALID</strong>
-            <small>校验问题：[VALIDATION_ISSUES]</small>
-            <button type="button">校验报告：[REPORT_ACCESS]</button>
+          <div className="s02-metadata__item s02-metadata__item--last">
+            <span>创建时间</span>
+            <code>{formatCreatedAt(datasetDetail.created_at)}</code>
           </div>
           <div className="s02-metadata__secondary">
-            <div><span>隐私状态</span><code>[DATA_PRIVACY_STATUS]</code></div>
-            <div><span>数据集快照</span><code>[SNAPSHOT_ID]</code></div>
-            <div><span>不可变版本状态</span><code>[IMMUTABLE_STATUS]</code></div>
+            <div><span>版本</span><code>{datasetDetail.version}</code></div>
+            <div><span>隐私状态</span><code>{datasetDetail.privacy_status}</code></div>
+            <div><span>描述</span><strong>{datasetDetail.description ?? '未提供'}</strong></div>
           </div>
         </section>
 
@@ -302,33 +504,33 @@ function DatasetPage() {
                 <div>
                   <h3>业务场景分布</h3>
                   <div className="s02-stat-chips">
-                    <span>退款 <strong>30</strong></span>
-                    <span>物流 <strong>25</strong></span>
-                    <span>商品咨询 <strong>20</strong></span>
-                    <span>售后 <strong>25</strong></span>
+                    {Object.entries(datasetDetail.scenario_distribution).length > 0 ? (
+                      Object.entries(datasetDetail.scenario_distribution).map(
+                        ([label, count]) => (
+                          <span key={label}>{label} <strong>{count}</strong></span>
+                        ),
+                      )
+                    ) : (
+                      <span>未提供 scenario</span>
+                    )}
                   </div>
                 </div>
                 <div>
                   <h3>案例集成员数量</h3>
-                  <div className="s02-membership-chips">
-                    {membershipSets.map((item) => (
-                      <span key={item.label}>
-                        <i className={`s02-dot s02-dot--${item.tone}`} />
-                        <code>{item.label} ({item.count})</code>
-                      </span>
-                    ))}
-                  </div>
+                  <p className="s02-unconfigured">未配置</p>
                 </div>
               </div>
 
               <div className="s02-overview__references">
                 <div>
                   <h3>参考依据</h3>
-                  <p><code>NOVAMART-RULES-V1</code><button type="button">查看参考依据包</button></p>
+                  <p className="s02-unconfigured">未配置</p>
                 </div>
                 <div>
                   <h3>代表性声明</h3>
-                  <code>DATASET-REPRESENTATIVENESS-STATEMENT-V1</code>
+                  <p className="s02-representativeness">
+                    {datasetDetail.representativeness_statement ?? '未提供'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -349,24 +551,14 @@ function DatasetPage() {
                   />
                 </label>
                 <label>
-                  <span className="s02-visually-hidden">案例集</span>
-                  <select value={caseSet} onChange={(event) => setCaseSet(event.target.value)}>
-                    <option value="all">案例集（全部）</option>
-                    <option value="Core">Core</option>
-                    <option value="Challenge">Challenge</option>
-                  </select>
-                </label>
-                <label>
                   <span className="s02-visually-hidden">业务场景</span>
                   <select value={scenario} onChange={(event) => setScenario(event.target.value)}>
                     <option value="all">业务场景（全部）</option>
-                    <option value="Refund">Refund</option>
-                    <option value="Logistics">Logistics</option>
+                    {scenarioOptions.map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
                   </select>
                 </label>
-                <button className="s02-more-filter" type="button">
-                  <MdFilterList aria-hidden="true" />更多
-                </button>
               </div>
             </div>
 
@@ -376,21 +568,28 @@ function DatasetPage() {
                   <tr>
                     <th>案例 ID</th>
                     <th>业务场景</th>
-                    <th>意图摘要</th>
-                    <th>成员属性</th>
-                    <th>校验状态</th>
-                    <th><span className="s02-visually-hidden">操作</span></th>
+                    <th>消息摘要</th>
+                    <th>Metadata</th>
+                    <th>创建时间</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row) => (
-                    <tr key={row.id}>
-                      <td><code>{row.id}</code></td>
-                      <td>{row.scenario}</td>
-                      <td>{row.intent}</td>
-                      <td><span className="s02-membership-tag">{row.membership}</span></td>
-                      <td><span className="s02-valid-status"><MdCheckCircle aria-hidden="true" />{row.status}</span></td>
-                      <td><button type="button">查看证据<MdChevronRight aria-hidden="true" /></button></td>
+                  {visibleRows.map((conversation) => (
+                    <tr key={conversation.id}>
+                      <td><code>{conversation.external_id}</code></td>
+                      <td>{conversationScenario(conversation)}</td>
+                      <td title={conversationSummary(conversation)}>
+                        {conversationSummary(conversation)}
+                      </td>
+                      <td>
+                        <code
+                          className="s02-metadata-value"
+                          title={conversationMetadata(conversation)}
+                        >
+                          {conversationMetadata(conversation)}
+                        </code>
+                      </td>
+                      <td>{formatCreatedAt(conversation.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -411,6 +610,8 @@ function DatasetPage() {
         </div>
         <Link to="/review">用于质量复盘</Link>
       </footer>
+                    </>
+                  )}
 
       {datasetImportOpen ? (
         <div

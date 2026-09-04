@@ -49,6 +49,10 @@ function AppShell() {
     window.requestAnimationFrame(() => datasetImportButtonRef.current?.focus())
   }
 
+  function openDatasetImport() {
+    setDatasetImportOpen(true)
+  }
+
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
@@ -135,7 +139,7 @@ function AppShell() {
                   type="button"
                   aria-haspopup="dialog"
                   aria-expanded={datasetImportOpen}
-                  onClick={() => setDatasetImportOpen(true)}
+                  onClick={openDatasetImport}
                 >
                   <MdAddCircleOutline aria-hidden="true" />新建/导入数据集
                 </button>
@@ -176,7 +180,13 @@ function AppShell() {
         </header>
 
         <main className="page-content">
-          <Outlet context={{ datasetImportOpen, closeDatasetImport }} />
+          <Outlet
+            context={{
+              datasetImportOpen,
+              openDatasetImport,
+              closeDatasetImport,
+            }}
+          />
         </main>
       </div>
     </div>
