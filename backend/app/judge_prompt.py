@@ -16,6 +16,24 @@ from app.judge_contract import (
 from app.judge_rules import judge_runtime_rules_prompt_payload
 from app.llm_provider import LLMRequest, ProviderMessage, ProviderMessageRole
 
+JUDGE_OUTPUT_EXAMPLE = {
+    "judgment": "success",
+    "primary_failure_mode": None,
+    "secondary_flags": [],
+    "problem": None,
+    "severity": None,
+    "evidence": [
+        {
+            "evidence_type": "response",
+            "content": "A traceable excerpt from the assistant response.",
+            "source_ref": "messages[1]",
+        }
+    ],
+    "uncertainty": None,
+    "review_required": False,
+    "rationale": "Concise explanation grounded in the supplied evidence.",
+}
+
 
 @dataclass(frozen=True)
 class JudgePromptAssets:
@@ -32,6 +50,7 @@ def assemble_judge_request(
             "Evaluate one support conversation using only the supplied case input "
             "and frozen evaluation assets.",
             "Return only structured JSON matching the supplied response schema.",
+            "The response must be one JSON object with every required key.",
             "Do not provide chain-of-thought. Keep rationale concise.",
             f"Judgment values: {', '.join(Judgment)}.",
             f"Failure mode values: {', '.join(FailureMode)}.",
@@ -46,6 +65,8 @@ def assemble_judge_request(
         "case": judge_input.model_dump(mode="json"),
         "judge_runtime_rules": judge_runtime_rules_prompt_payload(),
         "business_reference": assets.business_reference,
+        "judge_output_schema": JudgeOutput.model_json_schema(),
+        "judge_output_example": JUDGE_OUTPUT_EXAMPLE,
     }
     return LLMRequest(
         messages=[

@@ -68,6 +68,7 @@ class FakeProvider:
             provider="fake",
             model="fake-judge",
             structured_payload=self.payload,
+            raw_json_text=json.dumps(self.payload),
             request_id="fake-request-1",
         )
 
