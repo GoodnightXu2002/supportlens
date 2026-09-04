@@ -21,16 +21,23 @@ from app.import_service import (
     ImportServiceError,
     ImportServiceErrorCode,
 )
-from app.models import Conversation, Dataset
+from app.models import Conversation, Dataset, EvaluationRun
 from app.schemas import (
     DatasetConversationRead,
     DatasetDetailResponse,
     DatasetImportConfirmRequest,
     DatasetImportConfirmResponse,
     DatasetListItem,
+    EvaluationRunCreateRequest,
+    EvaluationRunRead,
+    EvaluationRunSource,
+    EvaluationRunStatus,
 )
 
 settings = get_settings()
+
+BASELINE_JUDGE_MODEL = "unconfigured"
+BASELINE_JUDGE_CONTRACT_VERSION = "unconfigured"
 
 app = FastAPI(title=settings.app_name)
 app.add_middleware(
@@ -201,6 +208,91 @@ def _dataset_not_found(dataset_id: UUID) -> JSONResponse:
         status_code=404,
         code="dataset_not_found",
         message=f"Dataset '{dataset_id}' was not found.",
+    )
+
+
+def _evaluation_run_not_found(run_id: UUID) -> JSONResponse:
+    return _error_response(
+        status_code=404,
+        code="evaluation_run_not_found",
+        message=f"Evaluation run '{run_id}' was not found.",
+    )
+
+
+@app.post(
+    "/api/evaluation-runs",
+    response_model=EvaluationRunRead,
+    status_code=201,
+)
+def create_evaluation_run(
+    request: EvaluationRunCreateRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> EvaluationRun | JSONResponse:
+    if db_session.get(Dataset, request.dataset_id) is None:
+        return _dataset_not_found(request.dataset_id)
+
+    evaluation_run = EvaluationRun(
+        dataset_id=request.dataset_id,
+        run_type=request.run_type.value,
+        status=EvaluationRunStatus.PENDING.value,
+        baseline_run_id=None,
+        target_id=None,
+        candidate_label=None,
+        candidate_change_summary=None,
+        judge_model=BASELINE_JUDGE_MODEL,
+        judge_contract_version=BASELINE_JUDGE_CONTRACT_VERSION,
+        run_source=EvaluationRunSource.LIVE.value,
+        response_set_key=f"dataset:{request.dataset_id}:conversations",
+        error_code=None,
+        error_message=None,
+    )
+    try:
+        db_session.add(evaluation_run)
+        db_session.commit()
+    except Exception:
+        db_session.rollback()
+        return _error_response(
+            status_code=500,
+            code="evaluation_run_creation_failed",
+            message="Evaluation run could not be created.",
+        )
+    return evaluation_run
+
+
+@app.get(
+    "/api/evaluation-runs/{run_id}",
+    response_model=EvaluationRunRead,
+)
+def get_evaluation_run(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> EvaluationRun | JSONResponse:
+    evaluation_run = db_session.get(EvaluationRun, run_id)
+    if evaluation_run is None:
+        return _evaluation_run_not_found(run_id)
+    return evaluation_run
+
+
+@app.get(
+    "/api/datasets/{dataset_id}/evaluation-runs",
+    response_model=list[EvaluationRunRead],
+)
+def list_dataset_evaluation_runs(
+    dataset_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> list[EvaluationRun] | JSONResponse:
+    if db_session.get(Dataset, dataset_id) is None:
+        return _dataset_not_found(dataset_id)
+
+    return list(
+        db_session.scalars(
+            select(EvaluationRun)
+            .where(EvaluationRun.dataset_id == dataset_id)
+            .order_by(
+                EvaluationRun.created_at.desc(),
+                EvaluationRun.id.desc(),
+            )
+        ).all()
     )
 
 

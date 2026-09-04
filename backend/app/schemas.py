@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Self
+from typing import Any, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -16,6 +16,23 @@ class PrivacyStatus(StrEnum):
     DEIDENTIFIED = "deidentified"
     MAY_CONTAIN_PERSONAL_DATA = "may_contain_personal_data"
     UNKNOWN = "unknown"
+
+
+class EvaluationRunType(StrEnum):
+    BASELINE = "baseline"
+    CANDIDATE = "candidate"
+
+
+class EvaluationRunStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class EvaluationRunSource(StrEnum):
+    SEED = "seed"
+    LIVE = "live"
 
 
 class DatasetBase(BaseModel):
@@ -113,4 +130,29 @@ class DatasetConversationRead(BaseModel):
         default=None,
         validation_alias="metadata_",
     )
+    created_at: datetime
+
+
+class EvaluationRunCreateRequest(BaseModel):
+    dataset_id: UUID
+    run_type: Literal[EvaluationRunType.BASELINE]
+
+
+class EvaluationRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    dataset_id: UUID
+    run_type: EvaluationRunType
+    status: EvaluationRunStatus
+    baseline_run_id: UUID | None
+    target_id: UUID | None
+    candidate_label: str | None
+    candidate_change_summary: str | None
+    judge_model: str
+    judge_contract_version: str
+    run_source: EvaluationRunSource
+    response_set_key: str
+    error_code: str | None
+    error_message: str | None
     created_at: datetime

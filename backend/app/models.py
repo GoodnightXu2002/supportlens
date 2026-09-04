@@ -54,6 +54,9 @@ class Dataset(Base):
     )
 
     conversations: Mapped[list[Conversation]] = relationship(back_populates="dataset")
+    evaluation_runs: Mapped[list[EvaluationRun]] = relationship(
+        back_populates="dataset"
+    )
 
 
 class Conversation(Base):
@@ -82,3 +85,58 @@ class Conversation(Base):
     )
 
     dataset: Mapped[Dataset] = relationship(back_populates="conversations")
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "run_type IN ('baseline', 'candidate')",
+            name="ck_evaluation_runs_run_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed')",
+            name="ck_evaluation_runs_status",
+        ),
+        CheckConstraint(
+            "run_source IN ('seed', 'live')",
+            name="ck_evaluation_runs_run_source",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    dataset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("datasets.id"),
+        nullable=False,
+        index=True,
+    )
+    run_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    baseline_run_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_runs.id"),
+        nullable=True,
+    )
+    target_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    candidate_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    candidate_change_summary: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    judge_model: Mapped[str] = mapped_column(String(255), nullable=False)
+    judge_contract_version: Mapped[str] = mapped_column(
+        String(64), nullable=False
+    )
+    run_source: Mapped[str] = mapped_column(String(32), nullable=False)
+    response_set_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    dataset: Mapped[Dataset] = relationship(back_populates="evaluation_runs")
