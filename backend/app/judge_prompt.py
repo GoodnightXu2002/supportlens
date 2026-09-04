@@ -13,13 +13,14 @@ from app.judge_contract import (
     Judgment,
     Severity,
 )
+from app.judge_rules import judge_runtime_rules_prompt_payload
 from app.llm_provider import LLMRequest, ProviderMessage, ProviderMessageRole
 
 
 @dataclass(frozen=True)
 class JudgePromptAssets:
-    rubric: str
-    severity_rules: str
+    business_reference: str
+    severity_rules: str | None = None
 
 
 def assemble_judge_request(
@@ -39,13 +40,13 @@ def assemble_judge_request(
             f"Evidence type values: {', '.join(EvidenceType)}.",
             "Do not invent reference evidence that is absent from the case input.",
             "Schema, input, and provider errors are execution errors, not judgments.",
-            "Do not infer or discuss baseline/candidate identity, gold results, "
-            "targets, optimization plans, priorities, or dashboard outcomes.",
+            "Use no context beyond the supplied case and rule assets.",
         ]
     )
     user_payload = {
         "case": judge_input.model_dump(mode="json"),
-        "rubric": assets.rubric,
+        "judge_runtime_rules": judge_runtime_rules_prompt_payload(),
+        "business_reference": assets.business_reference,
         "severity_rules": assets.severity_rules,
     }
     return LLMRequest(

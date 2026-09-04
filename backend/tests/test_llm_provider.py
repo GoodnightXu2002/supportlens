@@ -76,8 +76,7 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
     request = assemble_judge_request(
         _judge_input(),
         assets=JudgePromptAssets(
-            rubric="FROZEN-RUBRIC-ASSET",
-            severity_rules="FROZEN-SEVERITY-ASSET",
+            business_reference="BUSINESS-REFERENCE-ASSET",
         ),
     )
 
@@ -95,8 +94,9 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
         "business_context",
         "reference_evidence",
     }
-    assert payload["rubric"] == "FROZEN-RUBRIC-ASSET"
-    assert payload["severity_rules"] == "FROZEN-SEVERITY-ASSET"
+    assert payload["business_reference"] == "BUSINESS-REFERENCE-ASSET"
+    assert payload["severity_rules"] is None
+    assert payload["judge_runtime_rules"]["ready_for_execution"] is False
     assert "run_type" not in payload["case"]
     assert "gold" not in payload["case"]
     assert "target" not in payload["case"]
@@ -105,7 +105,7 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
 def test_fake_provider_payload_validates_as_judge_output() -> None:
     request = assemble_judge_request(
         _judge_input(),
-        assets=JudgePromptAssets(rubric="rubric", severity_rules="severity"),
+        assets=JudgePromptAssets(business_reference="business reference"),
     )
     provider = FakeProvider(_valid_payload())
 
@@ -119,7 +119,7 @@ def test_fake_provider_payload_validates_as_judge_output() -> None:
 def test_fake_provider_malformed_payload_is_validation_error() -> None:
     request = assemble_judge_request(
         _judge_input(),
-        assets=JudgePromptAssets(rubric="rubric", severity_rules="severity"),
+        assets=JudgePromptAssets(business_reference="business reference"),
     )
     provider = FakeProvider({"judgment": "success"})
 
