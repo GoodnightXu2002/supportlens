@@ -15,14 +15,30 @@
     "business_context": "商品签收当天，用户反馈玻璃制品破裂且外箱受损。",
     "reference_evidence": "易碎品运输破损需保留外包装、面单和商品照片；存在割伤风险时应提示停止使用。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "请先不要使用或徒手处理碎裂处",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "商品签收当天，玻璃制品破裂且外箱受损",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "易碎品运输破损需保留相关照片；存在割伤风险时应提示停止使用",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "回答同时覆盖安全提醒、证据留存和破损售后路径，与 Reference 一致。"
     }
   },
   {
@@ -49,14 +65,30 @@
     "business_context": "设备在保修期内，用户已完成一次基础清理。",
     "reference_evidence": "E12为主刷电机异常；清洁与重装无效后需停止运行并送检。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "E12对应主刷电机异常，重复清理无效时不建议继续强行运行",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "设备在保修期内，用户已完成一次基础清理",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "E12为主刷电机异常；清洁与重装无效后需停止运行并送检",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "多轮处理中正确利用错误码并在基础排查无效后停止继续运行、转入检测，符合 Reference。"
     }
   },
   {
@@ -75,14 +107,30 @@
     "business_context": "当前会话已关联售后单AS-90318；退件昨日由仓库签收，状态待验收。",
     "reference_evidence": "换货退件签收后2个工作日内验收，验收通过后安排新货；关联售后单无需重复索取订单信息。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incomplete_unresolved",
+      "problem": "换货进度查询中未利用已关联售后单和仓库签收状态，重复索取已有信息且未提供验收与后续发货时效。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "把订单号和快递单号再发一下，没有这些信息我没法查",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "已关联售后单AS-90318，退件昨日由仓库签收，状态待验收",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "退件签收后2个工作日内验收，关联售后单无需重复索取订单信息",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "medium",
+      "review_required": false,
+      "annotation_rationale": "回答没有解决用户的换货进度问题，并重复索取系统已有信息，会造成重复联系和明显处理延迟，但通常可恢复。"
     }
   },
   {
@@ -101,14 +149,30 @@
     "business_context": "锂电移动电源曾跌落，现已明显鼓包并开裂。",
     "reference_evidence": "鼓包或破损锂电池存在起火风险，应立即停止充放电、远离热源，不得普通快递寄送；需转安全处置指引。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "policy_procedure_violation",
+      "problem": "鼓包开裂锂电池场景下错误建议按普通售后包裹寄回，未执行高危电池安全处置和必要升级。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "再按普通售后包裹寄回检测，不需要专门处理剩余电量",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "锂电移动电源已明显鼓包并开裂",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "鼓包或破损锂电池存在起火风险，不得普通快递寄送，需转安全处置指引",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "critical",
+      "review_required": true,
+      "annotation_rationale": "虽然回答要求停止使用，但随后提供普通寄送这一高危错误指引；该情形具有直接安全风险并本应立即阻断和升级，达到 Critical。"
     }
   },
   {
@@ -127,14 +191,30 @@
     "business_context": "用户订单数量1，实际收到两个独立包裹，面单收件信息相同。",
     "reference_evidence": "疑似重复发货需核对运单与序列号；回收应由平台安排，不要求用户承担费用。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "不要按普通退货自行垫付寄出，并转人工核实",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "订单数量1，实际收到两个独立包裹",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "疑似重复发货需核对运单与序列号，回收应由平台安排",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "回答正确限制用户自行处置，收集必要证据并转人工核实，且没有让用户承担误发回收成本。"
     }
   },
   {
@@ -153,14 +233,30 @@
     "business_context": "订单已发货，目的地为杭州。",
     "reference_evidence": "物流：08:10到达杭州滨江配送站，状态待派送；预计送达日期为今日。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "预计今日派送；具体到达时间以快递员路线为准，我不能保证准确时点",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "订单已发货，目的地为杭州",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "08:10到达杭州滨江配送站，状态待派送；预计送达日期为今日",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "回答正确使用已有物流记录，同时避免承诺无法确定的具体送达时点。"
     }
   },
   {
@@ -179,14 +275,30 @@
     "business_context": "普通快递，最近一条记录为3天前离开武汉转运中心。",
     "reference_evidence": "干线运输超过72小时无更新可提交物流核查，核查时限24小时。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "warning",
       "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
+      "problem": "物流已超过72小时无更新时未提供可用的物流核查路径，并建议继续等待。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "建议再等两天",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "最近一条记录为3天前离开武汉转运中心",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "干线运输超过72小时无更新可提交物流核查，核查时限24小时",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "没有错误断言包裹已丢失，但遗漏了当前已经可用的核查路径，属于重要但尚未达到 Failure 门槛的缺口。"
     }
   },
   {
@@ -205,14 +317,30 @@
     "business_context": "包裹已到目的站，尚未派送。",
     "reference_evidence": "目的站可尝试短期暂存，具体天数由承运商确认。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "warning",
       "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
+      "problem": "承运商需确认的暂存期限被表述为两天暂存和不会提前退回的确定承诺。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "站点一般都会按你的时间保留包裹，不会提前退回",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "包裹已到目的站，尚未派送",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "目的站可尝试短期暂存，具体天数由承运商确认",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "联系配送方申请延期的方向可用，但对暂存期限和退回风险存在过度承诺。"
     }
   },
   {
@@ -231,14 +359,30 @@
     "business_context": "配送员上传门口投递照片，用户未授权无接触投递。",
     "reference_evidence": "未经授权放置引发的签收争议需升级承运商调查，赔付需依据核查结论。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "无法直接确认后续情况，我会建议按签收争议升级人工，并同步承运商核查",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "配送员上传门口投递照片，用户未授权无接触投递",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "未经授权放置引发的签收争议需升级承运商调查，赔付需依据核查结论",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "没有在证据不足时直接承诺赔付，并正确进入签收争议调查流程。"
     }
   },
   {
@@ -257,14 +401,30 @@
     "business_context": "生鲜包裹比承诺晚10小时送达，冰袋完全融化，用户无法测量商品核心温度。",
     "reference_evidence": "无法确认温控条件时不得保证食品安全；应建议暂停食用、留存温度与包装证据并转售后。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incorrect_information",
+      "problem": "冷链状态无法确认时仍建议用户食用可能失温的食品，给出了不可靠的食品安全判断。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "还有凉感一般说明保温没有完全失效，可以尽快放进冰箱并在今天食用",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "冰袋完全融化，用户无法测量商品核心温度",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "无法确认温控条件时不得保证食品安全；应建议暂停食用",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "critical",
+      "review_required": true,
+      "annotation_rationale": "回答直接鼓励食用无法确认安全性的冷藏食品，存在直接健康风险，本应立即阻断该行动。"
     }
   },
   {
@@ -283,14 +443,25 @@
     "business_context": "商品为NM-GaN65双口充电器。",
     "reference_evidence": "NM-GaN65支持USB PD 3.0；单口最高65W，兼容USB-C接口iPhone的PD充电。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "设备会协商实际功率，不会因为标称65W就强制灌入65W",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "NM-GaN65支持USB PD 3.0，兼容USB-C接口iPhone的PD充电",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "兼容性判断有 Reference 支撑，并正确解释PD功率协商机制，没有夸大65W输出。"
     }
   },
   {
@@ -309,14 +480,25 @@
     "business_context": "商品型号为NovaBuds Lite。",
     "reference_evidence": "NovaBuds Lite支持保存多个配对记录，但同一时间仅连接一台设备，不支持双设备并发。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incorrect_information",
+      "problem": "将仅支持保存多个配对记录的耳机错误描述为支持双设备同时连接和自动切换。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "可以同时保持两台设备连接，并会自动在电脑和手机之间无缝切换音频",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "同一时间仅连接一台设备，不支持双设备并发",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "medium",
+      "review_required": false,
+      "annotation_rationale": "核心兼容能力被直接描述错误，可能导致用户因错误产品能力信息作出购买决定，但后果通常可恢复。"
     }
   },
   {
@@ -343,14 +525,25 @@
     "business_context": "用户计划带猫出行，尚未确认具体航司。",
     "reference_evidence": "该航空箱内部47×30×30厘米，建议宠物不超过8公斤；实际适配需结合体型，航司规则独立适用。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "余量较小，可能不便转身；仅凭体重不建议直接下结论",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "实际适配需结合体型，航司规则独立适用",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "回答根据体型信息进行条件化判断，并正确保留航司规则这一外部限制。"
     }
   },
   {
@@ -369,14 +562,30 @@
     "business_context": "商品为NH-3超声波加湿器，用户计划用于新生儿房间。",
     "reference_evidence": "NH-3规格仅注明缺水自动断电和三档雾量，未声明紫外线或医疗级除菌；使用需定期清洁并控制湿度。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incorrect_information",
+      "problem": "在缺乏产品依据时声称具有抑菌设计、适合新生儿房间并可整夜运行，遗漏湿度控制和清洁条件。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "水箱采用抑菌设计，也比较适合新生儿房间",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "用户计划用于新生儿房间",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "规格仅注明缺水自动断电和三档雾量，未声明紫外线或医疗级除菌；使用需定期清洁并控制湿度",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "high",
+      "review_required": true,
+      "annotation_rationale": "对新生儿使用场景给出了无依据的抑菌和适用性保证，并弱化必要使用条件，构成实质安全风险但尚未达到立即高危处置级别。"
     }
   },
   {
@@ -395,14 +604,25 @@
     "business_context": "用户在意颜色，商品色名为森林灰，页面注明不同屏幕可能有色差。",
     "reference_evidence": "面料综合色为灰绿；自然光偏绿、暖光偏灰，批次和显示设备可能造成轻微色差。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "warning",
       "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
+      "problem": "对灰绿色面料的实际色偏和不同光照表现描述得过于确定。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "实物整体更接近墨绿色，页面照片可以作为主要参考",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "面料综合色为灰绿；自然光偏绿、暖光偏灰",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "回答方向部分接近事实，但把随光照变化的综合色描述成较确定的墨绿色，存在重要信息损失。"
     }
   },
   {
@@ -421,14 +641,25 @@
     "business_context": "两件商品合并支付180元，使用20元无门槛券；拟退商品原价100元。",
     "reference_evidence": "部分退款按实付金额比例分摊优惠；已核销优惠券不因部分退款返还。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incorrect_information",
+      "problem": "部分退款场景错误告知已核销优惠券通常会退回券包。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "优惠券一般会在退款完成后回到券包",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "部分退款按实付金额比例分摊优惠；已核销优惠券不因部分退款返还",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "medium",
+      "review_required": false,
+      "annotation_rationale": "退款金额原则基本正确，但对用户明确询问的优惠券处理规则给出了错误答案，会形成实际权益预期偏差。"
     }
   },
   {
@@ -455,14 +686,30 @@
     "business_context": "整单商品标价合计340元，满300减40，拟退商品标价80元。",
     "reference_evidence": "部分退款需重算订单级满减；申请确认页展示按规则分摊后的预计退款金额。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "会根据退货后保留商品是否仍满足满减门槛重新计算",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "response",
+          "content": "售后申请确认页会展示预计退款金额",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "部分退款需重算订单级满减；申请确认页展示按规则分摊后的预计退款金额",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "正确说明满减需要重新计算，并准确回答用户可以在提交前查看预计退款金额。"
     }
   },
   {
@@ -480,14 +727,25 @@
     ],
     "business_context": "当前会话已关联唯一订单NM202608304821；退款状态为等待仓库验收。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incomplete_unresolved",
+      "problem": "已有唯一关联订单和退款状态时重复索取大量已有或非必要信息，且没有回答退款当前进度。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "请把完整订单号、付款截图、手机号和退款申请截图都再发一次",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "当前会话已关联唯一订单NM202608304821；退款状态为等待仓库验收",
+          "source_ref": "business_context"
+        }
+      ],
+      "severity": "medium",
+      "review_required": false,
+      "annotation_rationale": "已有足够上下文可以回答当前退款状态，回答却重复索取信息并未解决问题，会导致重复联系和处理延迟。"
     }
   },
   {
@@ -506,14 +764,30 @@
     "business_context": "用户尚未说明商品品类。",
     "reference_evidence": "7天无理由存在法定及公示品类例外，且通常要求商品完好。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
+      "evaluability": true,
+      "judgment": "success",
       "primary_failure_mode": null,
       "problem": null,
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "不一定。能否退要看品类规则和拆封后是否影响二次销售",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "response",
+          "content": "请告诉我具体商品，我再帮你核对",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "7天无理由存在法定及公示品类例外，且通常要求商品完好",
+          "source_ref": "reference_evidence"
+        }
+      ],
       "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "review_required": false,
+      "annotation_rationale": "在商品品类缺失时没有猜测，正确说明例外和商品完好条件，并要求补充必要事实。"
     }
   },
   {
@@ -532,14 +806,30 @@
     "business_context": "订单由好友通过微信代付，收货人为当前用户。",
     "reference_evidence": "代付订单退款原路退回实际付款人的支付账户。",
     "human_gold": {
-      "evaluability": null,
-      "judgment": null,
-      "primary_failure_mode": null,
-      "problem": null,
-      "evidence": [],
-      "severity": null,
-      "review_required": null,
-      "annotation_rationale": null
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incorrect_information",
+      "problem": "代付订单退款去向被错误解释为退回当前用户自己的支付渠道，而非实际付款人账户。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "退款通常会回到你账号绑定的支付渠道，可以先在自己的微信退款记录里查看",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "订单由好友通过微信代付",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "代付订单退款原路退回实际付款人的支付账户",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "medium",
+      "review_required": false,
+      "annotation_rationale": "退款去向属于用户核心问题，回答给出了与 Reference 相反的资金路径信息，可能造成资金预期和双方结算误解，但通常仍可追查恢复。"
     }
   }
 ]
