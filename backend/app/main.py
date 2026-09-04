@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from functools import lru_cache
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
@@ -8,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -19,8 +21,14 @@ from app.import_service import (
     ImportServiceError,
     ImportServiceErrorCode,
 )
-from app.models import Dataset
-from app.schemas import DatasetImportConfirmRequest, DatasetImportConfirmResponse
+from app.models import Conversation, Dataset
+from app.schemas import (
+    DatasetConversationRead,
+    DatasetDetailResponse,
+    DatasetImportConfirmRequest,
+    DatasetImportConfirmResponse,
+    DatasetListItem,
+)
 
 settings = get_settings()
 
@@ -185,4 +193,105 @@ def confirm_dataset_import(
         representativeness_statement=dataset.representativeness_statement,
         conversation_count=result.total_conversation_count,
         created_at=dataset.created_at,
+    )
+
+
+def _dataset_not_found(dataset_id: UUID) -> JSONResponse:
+    return _error_response(
+        status_code=404,
+        code="dataset_not_found",
+        message=f"Dataset '{dataset_id}' was not found.",
+    )
+
+
+def _dataset_list_item(
+    dataset: Dataset,
+    conversation_count: int,
+) -> DatasetListItem:
+    return DatasetListItem(
+        dataset_id=dataset.id,
+        name=dataset.name,
+        description=dataset.description,
+        version=dataset.version,
+        source=dataset.source,
+        privacy_status=dataset.privacy_status,
+        representativeness_statement=dataset.representativeness_statement,
+        conversation_count=conversation_count,
+        created_at=dataset.created_at,
+    )
+
+
+@app.get("/api/datasets", response_model=list[DatasetListItem])
+def list_datasets(
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> list[DatasetListItem]:
+    conversation_count = (
+        select(func.count(Conversation.id))
+        .where(Conversation.dataset_id == Dataset.id)
+        .correlate(Dataset)
+        .scalar_subquery()
+    )
+    rows = db_session.execute(
+        select(Dataset, conversation_count.label("conversation_count")).order_by(
+            Dataset.created_at.desc(),
+            Dataset.id.desc(),
+        )
+    ).all()
+    return [
+        _dataset_list_item(dataset, count) for dataset, count in rows
+    ]
+
+
+@app.get(
+    "/api/datasets/{dataset_id}",
+    response_model=DatasetDetailResponse,
+)
+def get_dataset(
+    dataset_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> DatasetDetailResponse | JSONResponse:
+    dataset = db_session.get(Dataset, dataset_id)
+    if dataset is None:
+        return _dataset_not_found(dataset_id)
+
+    conversation_metadata = db_session.scalars(
+        select(Conversation.metadata_).where(
+            Conversation.dataset_id == dataset_id
+        )
+    ).all()
+    scenario_distribution: dict[str, int] = {}
+    for metadata in conversation_metadata:
+        scenario = metadata.get("scenario") if isinstance(metadata, dict) else None
+        if isinstance(scenario, str):
+            scenario_distribution[scenario] = (
+                scenario_distribution.get(scenario, 0) + 1
+            )
+
+    return DatasetDetailResponse(
+        **_dataset_list_item(dataset, len(conversation_metadata)).model_dump(),
+        scenario_distribution=dict(sorted(scenario_distribution.items())),
+    )
+
+
+@app.get(
+    "/api/datasets/{dataset_id}/conversations",
+    response_model=list[DatasetConversationRead],
+)
+def list_dataset_conversations(
+    dataset_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+) -> list[Conversation] | JSONResponse:
+    if db_session.get(Dataset, dataset_id) is None:
+        return _dataset_not_found(dataset_id)
+
+    return list(
+        db_session.scalars(
+            select(Conversation)
+            .where(Conversation.dataset_id == dataset_id)
+            .order_by(
+                Conversation.external_id.asc(),
+                Conversation.created_at.asc(),
+                Conversation.id.asc(),
+            )
+        ).all()
     )

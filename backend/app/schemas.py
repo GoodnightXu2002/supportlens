@@ -85,3 +85,32 @@ class DatasetImportConfirmResponse(BaseModel):
     representativeness_statement: str | None
     conversation_count: int
     created_at: datetime
+
+
+class DatasetListItem(BaseModel):
+    dataset_id: UUID
+    name: str
+    description: str | None
+    version: str
+    source: DatasetSource
+    privacy_status: PrivacyStatus
+    representativeness_statement: str | None
+    conversation_count: int
+    created_at: datetime
+
+
+class DatasetDetailResponse(DatasetListItem):
+    scenario_distribution: dict[str, int]
+
+
+class DatasetConversationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: UUID
+    external_id: str
+    messages: list[dict[str, Any]]
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias="metadata_",
+    )
+    created_at: datetime
