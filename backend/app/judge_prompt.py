@@ -20,7 +20,6 @@ from app.llm_provider import LLMRequest, ProviderMessage, ProviderMessageRole
 @dataclass(frozen=True)
 class JudgePromptAssets:
     business_reference: str
-    severity_rules: str | None = None
 
 
 def assemble_judge_request(
@@ -47,7 +46,6 @@ def assemble_judge_request(
         "case": judge_input.model_dump(mode="json"),
         "judge_runtime_rules": judge_runtime_rules_prompt_payload(),
         "business_reference": assets.business_reference,
-        "severity_rules": assets.severity_rules,
     }
     return LLMRequest(
         messages=[

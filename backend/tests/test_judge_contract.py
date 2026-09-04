@@ -111,6 +111,7 @@ def test_judge_input_allows_absent_optional_context() -> None:
 def test_all_frozen_judgments_are_valid(judgment: Judgment) -> None:
     payload = _valid_output_payload()
     payload["judgment"] = judgment
+    payload["severity"] = "medium" if judgment is Judgment.FAILURE else None
 
     assert JudgeOutput.model_validate(payload).judgment is judgment
 
@@ -154,6 +155,53 @@ def test_all_frozen_severities_are_valid(severity: Severity) -> None:
 def test_invalid_severity_is_rejected() -> None:
     payload = _valid_output_payload()
     payload["severity"] = "urgent"
+
+    with pytest.raises(ValidationError):
+        JudgeOutput.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("judgment", "severity"),
+    [
+        ("success", None),
+        ("warning", None),
+        ("failure", "low"),
+        ("failure", "medium"),
+        ("failure", "high"),
+        ("failure", "critical"),
+        ("uncertain", None),
+    ],
+)
+def test_judgment_severity_valid_combinations_pass(
+    judgment: str,
+    severity: str | None,
+) -> None:
+    payload = _valid_output_payload()
+    payload["judgment"] = judgment
+    payload["severity"] = severity
+
+    output = JudgeOutput.model_validate(payload)
+
+    assert output.judgment.value == judgment
+    assert output.severity is None or output.severity.value == severity
+
+
+@pytest.mark.parametrize(
+    ("judgment", "severity"),
+    [
+        ("success", "low"),
+        ("warning", "low"),
+        ("uncertain", "low"),
+        ("failure", None),
+    ],
+)
+def test_judgment_severity_invalid_combinations_are_rejected(
+    judgment: str,
+    severity: str | None,
+) -> None:
+    payload = _valid_output_payload()
+    payload["judgment"] = judgment
+    payload["severity"] = severity
 
     with pytest.raises(ValidationError):
         JudgeOutput.model_validate(payload)

@@ -1,7 +1,5 @@
 import json
 
-import pytest
-
 from app.judge_contract import (
     EvidenceType,
     FailureMode,
@@ -17,15 +15,18 @@ from app.judge_rules import (
     FAILURE_MODES,
     JUDGMENT_DEFINITIONS,
     JUDGMENT_RULES,
+    JUDGMENT_SEVERITY_RULES,
     PRIORITY_BOUNDARY,
     PROBLEM_DEFINITION,
     PROBLEM_EXCLUSIONS,
     PROBLEM_RULES,
+    SEVERITY_BOUNDARY_RULES,
     SEVERITY_DEFINITIONS,
+    SEVERITY_DOES_NOT_MEASURE,
+    SEVERITY_EVALUATION_BASIS,
     SEVERITY_LEVELS,
     SEVERITY_PRINCIPLE,
     SEVERITY_RULES_STATUS,
-    JudgeRulesNotReadyError,
     get_judge_rules_readiness,
     judge_rules_ready_for_execution,
     require_judge_rules_ready_for_execution,
@@ -78,26 +79,58 @@ def test_problem_and_root_cause_boundary_is_explicit() -> None:
     assert any("optimization hypothesis" in rule.lower() for rule in PROBLEM_RULES)
 
 
-def test_pending_severity_asset_has_no_invented_level_definitions() -> None:
+def test_severity_asset_contains_exactly_four_frozen_definitions() -> None:
     assert SEVERITY_LEVELS == tuple(Severity)
     assert len(SEVERITY_LEVELS) == 4
     assert SEVERITY_PRINCIPLE == "Severity is case-level impact."
+    assert "potential business or user impact" in SEVERITY_EVALUATION_BASIS
+    assert set(SEVERITY_DEFINITIONS) == set(Severity)
+    assert all(
+        definition.definition
+        for definition in SEVERITY_DEFINITIONS.values()
+    )
     assert "problem-level decision" in PRIORITY_BOUNDARY
-    assert SEVERITY_RULES_STATUS == "definition_text_pending"
-    assert dict(SEVERITY_DEFINITIONS) == {}
+    assert SEVERITY_RULES_STATUS == "ready"
 
 
-def test_readiness_reports_only_severity_definitions_missing() -> None:
+def test_readiness_reports_all_runtime_assets_ready() -> None:
     readiness = get_judge_rules_readiness()
 
     assert readiness.judgment_rules_available is True
     assert readiness.failure_mode_rules_available is True
     assert readiness.evidence_rules_available is True
-    assert readiness.severity_definitions_available is False
-    assert readiness.ready_for_execution is False
-    assert judge_rules_ready_for_execution() is False
-    with pytest.raises(JudgeRulesNotReadyError):
-        require_judge_rules_ready_for_execution()
+    assert readiness.severity_definitions_available is True
+    assert readiness.ready_for_execution is True
+    assert judge_rules_ready_for_execution() is True
+    assert require_judge_rules_ready_for_execution() is None
+
+
+def test_severity_safety_uncertainty_and_frequency_boundaries_are_frozen() -> None:
+    high_rules = SEVERITY_DEFINITIONS[Severity.HIGH].boundary_rules
+    assert any(
+        "Safety does not automatically mean critical" in rule
+        for rule in high_rules
+    )
+    assert any(
+        "Insufficient evidence or reference" in rule
+        and "must not" in rule
+        and "high or critical" in rule
+        for rule in SEVERITY_BOUNDARY_RULES
+    )
+    assert any(
+        "Failure frequency does not enter single-case severity" in rule
+        for rule in SEVERITY_BOUNDARY_RULES
+    )
+    assert "Failure frequency" in SEVERITY_DOES_NOT_MEASURE
+
+
+def test_judgment_severity_rules_match_frozen_semantics() -> None:
+    assert JUDGMENT_SEVERITY_RULES == {
+        Judgment.SUCCESS: None,
+        Judgment.WARNING: None,
+        Judgment.FAILURE: tuple(Severity),
+        Judgment.UNCERTAIN: None,
+    }
 
 
 def test_prompt_injects_runtime_rules_without_forbidden_context() -> None:
@@ -110,17 +143,29 @@ def test_prompt_injects_runtime_rules_without_forbidden_context() -> None:
     serialized_request = request.model_dump_json().lower()
     payload = json.loads(request.messages[1].content)
 
-    assert payload["judge_runtime_rules"]["severity_rules_status"] == (
-        "definition_text_pending"
-    )
-    assert payload["judge_runtime_rules"]["severity_definitions"] == {}
-    assert payload["severity_rules"] is None
+    runtime_rules = payload["judge_runtime_rules"]
+    assert runtime_rules["severity_rules_status"] == "ready"
+    assert set(runtime_rules["severity_definitions"]) == {
+        severity.value for severity in Severity
+    }
+    assert runtime_rules["judgment_severity_rules"] == {
+        "success": None,
+        "warning": None,
+        "failure": [severity.value for severity in Severity],
+        "uncertain": None,
+    }
+    assert runtime_rules["severity_boundary_rules"]
+    assert runtime_rules["ready_for_execution"] is True
+    assert "definition_text_pending" not in serialized_request
     for forbidden in (
         "gold",
         "baseline",
         "candidate",
         "target",
+        "optimization hypothesis",
         "optimization change",
+        "change",
         "priority",
+        "dashboard outcome",
     ):
         assert forbidden not in serialized_request

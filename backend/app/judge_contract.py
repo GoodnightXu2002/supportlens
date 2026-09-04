@@ -118,6 +118,16 @@ class JudgeOutput(_StrictContractModel):
             raise ValueError("rationale must not be empty")
         return value
 
+    @model_validator(mode="after")
+    def validate_judgment_severity(self) -> Self:
+        if self.judgment is Judgment.FAILURE and self.severity is None:
+            raise ValueError("failure judgment requires severity")
+        if self.judgment is not Judgment.FAILURE and self.severity is not None:
+            raise ValueError(
+                f"{self.judgment.value} judgment requires severity=null"
+            )
+        return self
+
 
 def assemble_judge_input(conversation: Conversation) -> JudgeInput:
     metadata = (

@@ -7,7 +7,7 @@ from typing import Any, Final
 
 from app.judge_contract import EvidenceType, FailureMode, Judgment, Severity
 
-SEVERITY_RULES_STATUS: Final = "definition_text_pending"
+SEVERITY_RULES_STATUS: Final = "ready"
 
 JUDGMENT_DEFINITIONS: Final[Mapping[Judgment, str]] = MappingProxyType(
     {
@@ -67,10 +67,138 @@ PROBLEM_RULES: Final = (
 
 SEVERITY_LEVELS: Final = tuple(Severity)
 SEVERITY_PRINCIPLE: Final = "Severity is case-level impact."
+SEVERITY_EVALUATION_BASIS: Final = (
+    "Severity measures the potential business or user impact in the current case "
+    "if the user acts on the AI response."
+)
+SEVERITY_DOES_NOT_MEASURE: Final = (
+    "How obvious the error is",
+    "Failure frequency",
+    "Model confidence",
+    "How strongly review is required",
+)
 PRIORITY_BOUNDARY: Final = (
     "Priority is a problem-level decision and must not be used as case severity."
 )
-SEVERITY_DEFINITIONS: Final[Mapping[Severity, str]] = MappingProxyType({})
+
+
+@dataclass(frozen=True)
+class SeverityDefinition:
+    definition: str
+    typical_impacts: tuple[str, ...]
+    boundary_rules: tuple[str, ...]
+
+    def as_prompt_payload(self) -> dict[str, str | list[str]]:
+        return {
+            "definition": self.definition,
+            "typical_impacts": list(self.typical_impacts),
+            "boundary_rules": list(self.boundary_rules),
+        }
+
+
+SEVERITY_DEFINITIONS: Final[Mapping[Severity, SeverityDefinition]] = (
+    MappingProxyType(
+        {
+            Severity.LOW: SeverityDefinition(
+                definition=(
+                    "A clear quality issue causes only mild friction or localized "
+                    "experience loss; the core task outcome remains mostly "
+                    "unaffected and the user can usually recover easily."
+                ),
+                typical_impacts=(
+                    "Non-critical explanation omitted",
+                    "Minor information incompleteness",
+                    "Unnecessary steps",
+                    "Localized experience degradation",
+                ),
+                boundary_rules=(
+                    "The impact is minor and easily recoverable.",
+                    "Do not raise severity merely because the wording is obviously "
+                    "wrong.",
+                ),
+            ),
+            Severity.MEDIUM: SeverityDefinition(
+                definition=(
+                    "The failure clearly reduces resolution efficiency or directs "
+                    "the user toward an incorrect or incomplete process; it is "
+                    "usually recoverable and does not cause major financial, rights, "
+                    "or safety consequences."
+                ),
+                typical_impacts=(
+                    "Incorrect next step",
+                    "Key action omitted",
+                    "Repeated contact required",
+                    "Resolution materially delayed",
+                    "Recoverable incorrect process",
+                ),
+                boundary_rules=("Recoverable, without major consequences.",),
+            ),
+            Severity.HIGH: SeverityDefinition(
+                definition=(
+                    "The failure may cause core task failure, significant financial "
+                    "or user-rights harm, a severe process error, a major policy "
+                    "violation, or a material safety risk below the highest level; "
+                    "reliable recovery usually requires human intervention."
+                ),
+                typical_impacts=(
+                    "Incorrect refund or after-sales rules causing significant "
+                    "rights loss",
+                    "Critical process handled incorrectly",
+                    "Unsafe handling of a high-risk device",
+                    "Major business harm with a reasonable recovery path",
+                ),
+                boundary_rules=(
+                    "Safety does not automatically mean critical.",
+                    "Use high when the safety risk does not substantively meet the "
+                    "critical criteria of severity, directness, urgency, difficulty "
+                    "of recovery, or mandatory immediate blocking or escalation.",
+                ),
+            ),
+            Severity.CRITICAL: SeverityDefinition(
+                definition=(
+                    "The failure may cause severe, direct, or hard-to-recover safety "
+                    "harm; major financial or user-rights loss; or dangerous guidance "
+                    "in a high-risk situation that requires immediate blocking or "
+                    "escalation. Critical is the highest, zero-tolerance risk level."
+                ),
+                typical_impacts=(
+                    "Clear personal safety danger",
+                    "Continued-use advice despite serious device or battery risk",
+                    "Major and hard-to-recover financial operation error",
+                    "Continued high-risk handling when immediate human escalation is "
+                    "required",
+                ),
+                boundary_rules=(
+                    "Use critical only when severity, directness, urgency, difficulty "
+                    "of recovery, or mandatory immediate blocking or escalation is "
+                    "substantively established.",
+                    "Do not raise severity to critical because of model uncertainty.",
+                ),
+            ),
+        }
+    )
+)
+
+JUDGMENT_SEVERITY_RULES: Final[
+    Mapping[Judgment, tuple[Severity, ...] | None]
+] = MappingProxyType(
+    {
+        Judgment.SUCCESS: None,
+        Judgment.WARNING: None,
+        Judgment.FAILURE: tuple(Severity),
+        Judgment.UNCERTAIN: None,
+    }
+)
+
+SEVERITY_BOUNDARY_RULES: Final = (
+    "Judge severity by potential impact in the current case.",
+    "An obviously worded error with minor impact may be low.",
+    "A plausible-sounding answer with a key rule error that may cause significant "
+    "rights loss may be high.",
+    "Failure frequency does not enter single-case severity.",
+    "Insufficient evidence or reference leads to an uncertain judgment and must "
+    "not cause a conservative high or critical severity.",
+)
 
 
 @dataclass(frozen=True)
@@ -104,8 +232,12 @@ def get_judge_rules_readiness() -> JudgeRulesReadiness:
             set(EVIDENCE_TYPE_DEFINITIONS) == set(EvidenceType)
         ),
         severity_definitions_available=(
-            SEVERITY_RULES_STATUS != "definition_text_pending"
+            SEVERITY_RULES_STATUS == "ready"
             and set(SEVERITY_DEFINITIONS) == set(Severity)
+            and all(
+                definition.definition.strip()
+                for definition in SEVERITY_DEFINITIONS.values()
+            )
         ),
     )
 
@@ -117,8 +249,7 @@ def judge_rules_ready_for_execution() -> bool:
 def require_judge_rules_ready_for_execution() -> None:
     if not judge_rules_ready_for_execution():
         raise JudgeRulesNotReadyError(
-            "Judge runtime rules are not ready for execution: severity definition "
-            "text is pending."
+            "Judge runtime rules are not ready for execution."
         )
 
 
@@ -133,10 +264,22 @@ def judge_runtime_rules_prompt_payload() -> dict[str, Any]:
         "evidence_rules": list(EVIDENCE_RULES),
         "problem_definition": PROBLEM_DEFINITION,
         "problem_exclusions": list(PROBLEM_EXCLUSIONS),
-        "problem_rules": list(PROBLEM_RULES),
+        "problem_rules": [PROBLEM_RULES[0]],
         "severity_levels": list(SEVERITY_LEVELS),
         "severity_principle": SEVERITY_PRINCIPLE,
+        "severity_evaluation_basis": SEVERITY_EVALUATION_BASIS,
+        "severity_does_not_measure": list(SEVERITY_DOES_NOT_MEASURE),
         "severity_rules_status": SEVERITY_RULES_STATUS,
-        "severity_definitions": dict(SEVERITY_DEFINITIONS),
+        "severity_definitions": {
+            severity: definition.as_prompt_payload()
+            for severity, definition in SEVERITY_DEFINITIONS.items()
+        },
+        "judgment_severity_rules": {
+            judgment: (
+                None if severities is None else list(severities)
+            )
+            for judgment, severities in JUDGMENT_SEVERITY_RULES.items()
+        },
+        "severity_boundary_rules": list(SEVERITY_BOUNDARY_RULES),
         "ready_for_execution": readiness.ready_for_execution,
     }

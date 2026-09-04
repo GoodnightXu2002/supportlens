@@ -95,8 +95,9 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
         "reference_evidence",
     }
     assert payload["business_reference"] == "BUSINESS-REFERENCE-ASSET"
-    assert payload["severity_rules"] is None
-    assert payload["judge_runtime_rules"]["ready_for_execution"] is False
+    assert payload["judge_runtime_rules"]["severity_rules_status"] == "ready"
+    assert len(payload["judge_runtime_rules"]["severity_definitions"]) == 4
+    assert payload["judge_runtime_rules"]["ready_for_execution"] is True
     assert "run_type" not in payload["case"]
     assert "gold" not in payload["case"]
     assert "target" not in payload["case"]
