@@ -1,10 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MdAddCircleOutline, MdHistory, MdMenuBook } from 'react-icons/md'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
-).replace(/\/$/, '')
+import { API_BASE_URL } from '../api'
 
 const qualityReviewPaths = new Set([
   '/review',
@@ -24,6 +22,8 @@ function AppShell() {
   const isReviewRoute = location.pathname === '/review'
   const isQualityReviewRoute = qualityReviewPaths.has(location.pathname)
   const isDatasetRoute = location.pathname === '/dataset'
+  const [datasetImportOpen, setDatasetImportOpen] = useState(false)
+  const datasetImportButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -44,10 +44,20 @@ function AppShell() {
     return () => controller.abort()
   }, [])
 
+  function closeDatasetImport() {
+    setDatasetImportOpen(false)
+    window.requestAnimationFrame(() => datasetImportButtonRef.current?.focus())
+  }
+
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
-        <Link className="brand" to="/review" aria-label="SupportLens home">
+        <Link
+          className="brand"
+          to="/review"
+          aria-label="SupportLens home"
+          onClick={() => setDatasetImportOpen(false)}
+        >
           <span className="brand-mark" aria-hidden="true">
             <span />
             <span />
@@ -66,6 +76,7 @@ function AppShell() {
                 : 'sidebar-nav-link'
             }
             to="/review"
+            onClick={() => setDatasetImportOpen(false)}
           >
             <svg
               className="sidebar-nav-icon"
@@ -118,7 +129,14 @@ function AppShell() {
                 <button className="dataset-header-action dataset-header-action--plain" type="button">
                   <MdHistory aria-hidden="true" />查看历史不可变版本
                 </button>
-                <button className="dataset-header-action" type="button">
+                <button
+                  ref={datasetImportButtonRef}
+                  className="dataset-header-action"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded={datasetImportOpen}
+                  onClick={() => setDatasetImportOpen(true)}
+                >
                   <MdAddCircleOutline aria-hidden="true" />新建/导入数据集
                 </button>
                 <button className="dataset-header-action" type="button">
@@ -158,7 +176,7 @@ function AppShell() {
         </header>
 
         <main className="page-content">
-          <Outlet />
+          <Outlet context={{ datasetImportOpen, closeDatasetImport }} />
         </main>
       </div>
     </div>
