@@ -1,0 +1,441 @@
+[
+  {
+    "case_id": "NM-AFT-018",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "烤箱门关不严，有一条缝，这是正常散热设计吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "我不能仅凭描述确认。门体明显无法贴合可能影响温控，请先断电，拍摄正面闭合状态和铰链位置；不要自行拆机，交由售后检测。"
+      }
+    ],
+    "business_context": "烤箱签收3天，用户反馈门体闭合后右上角有明显缝隙。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "我不能仅凭描述确认。门体明显无法贴合可能影响温控，请先断电",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "烤箱签收3天，门体闭合后右上角有明显缝隙",
+          "source_ref": "business_context"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "缺少明确 Reference 时没有猜测是否属于正常设计，并采取断电、禁止自行拆机和售后检测的保守处理，符合安全响应原则。"
+    }
+  },
+  {
+    "case_id": "NM-AFT-022",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "净水器装好后水有怪味，安装师傅说多放一会儿就行，但已经放了两天。"
+      },
+      {
+        "role": "assistant",
+        "content": "新滤芯前几天有轻微味道比较常见，可以每天多放几分钟水，再观察三到五天；如果还没改善再联系售后。"
+      }
+    ],
+    "business_context": "新装净水器已按说明冲洗并使用2天，出水仍有明显异味。",
+    "reference_evidence": "完成规定冲洗后仍有异味，应停止饮用并核查滤芯安装、水源及机器，不得直接保证安全。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "policy_procedure_violation",
+      "problem": "净水器完成规定冲洗后仍有明显异味时，未要求停止饮用和排查异常，而是建议继续观察数日。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "可以每天多放几分钟水，再观察三到五天；如果还没改善再联系售后",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "新装净水器已按说明冲洗并使用2天，出水仍有明显异味",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "完成规定冲洗后仍有异味，应停止饮用并核查滤芯安装、水源及机器，不得直接保证安全",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "high",
+      "review_required": true,
+      "annotation_rationale": "回答违反了异常饮用水场景的安全处置要求，可能使用户继续接触无法确认安全性的饮用水，属于明显健康风险，需要人工复核。"
+    }
+  },
+  {
+    "case_id": "NM-AFT-025",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "宝宝餐椅的安全带扣偶尔会自己弹开，视频里不一定拍得到。我能先继续用，等彻底坏了再换吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "不要继续让儿童使用。安全扣偶发失效也涉及跌落风险，请保留现状、记录发生条件并立即转人工安全售后；即使视频暂未拍到，也不应等到完全损坏。"
+      }
+    ],
+    "business_context": "儿童餐椅使用3个月，用户称安全带扣在受力时偶发松脱。",
+    "reference_evidence": "儿童约束装置疑似失效属于安全风险，应立即停用并升级处理，不以复现视频作为继续使用前提。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "不要继续让儿童使用。安全扣偶发失效也涉及跌落风险",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "儿童约束装置疑似失效属于安全风险，应立即停用并升级处理",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "正确识别儿童安全约束装置失效风险，并明确要求立即停用和升级处理，没有要求用户等待故障完全复现。"
+    }
+  },
+  {
+    "case_id": "NM-LOG-005",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "刚下单，地址门牌号写错了，能改成8号楼吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "订单尚未出库，可以先在订单详情尝试修改收货地址。若页面已锁定，请取消后用正确地址重拍。"
+      },
+      {
+        "role": "user",
+        "content": "只改门牌会影响优惠吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "直接修改地址不会重算订单优惠；若只能取消重拍，优惠能否再次使用要以券的返还规则和有效期为准。"
+      }
+    ],
+    "business_context": "订单待发货，地址同城，仅楼栋号填写错误。",
+    "reference_evidence": "未出库订单在系统允许时可修改地址；取消重拍可能影响库存及优惠。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "订单尚未出库，可以先在订单详情尝试修改收货地址",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "response",
+          "content": "若只能取消重拍，优惠能否再次使用要以券的返还规则和有效期为准",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "未出库订单在系统允许时可修改地址；取消重拍可能影响库存及优惠",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "正确区分直接修改地址和取消重拍两种情况，并对优惠重新使用保持必要的不确定性。"
+    }
+  },
+  {
+    "case_id": "NM-LOG-021",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "两个包裹，一个显示台风延误，一个已经到本地。我能让本地那个等另一个一起送吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "两个运单由不同线路独立派送，平台无法保证合并。你可以联系本地站点询问短期暂存，但不要因此承诺另一件何时到。"
+      },
+      {
+        "role": "user",
+        "content": "如果本地这件先退回，会整单退款吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "不会自动整单退款，每个商品要按对应包裹和售后状态处理。退回前建议先确认商品归属。"
+      }
+    ],
+    "business_context": "同一订单拆为两仓发货，包裹A到站，包裹B受台风影响停运。",
+    "reference_evidence": "拆包订单独立履约与售后；站点暂存及合并派送无统一保证。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "两个运单由不同线路独立派送，平台无法保证合并",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "response",
+          "content": "不会自动整单退款，每个商品要按对应包裹和售后状态处理",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "拆包订单独立履约与售后；站点暂存及合并派送无统一保证",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "正确说明拆包订单独立履约、暂存无法保证以及售后不会自动作用于整单。"
+    }
+  },
+  {
+    "case_id": "NM-LOG-025",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我改了收货手机号后，新号码的人说没收到通知，旧号码却收到取件码。把码直接发我这里行吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "为保护包裹安全，我不能在未核验身份时直接转发取件码。请通过订单绑定账户联系人工完成身份核验，再由承运商更新通知或安排取件。"
+      }
+    ],
+    "business_context": "出库后承运商受理了号码更正，但取件通知仍发往原号码。",
+    "reference_evidence": "取件凭证属于敏感信息，需核验订单归属后处理，不可在普通会话中直接披露。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "我不能在未核验身份时直接转发取件码",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "取件凭证属于敏感信息，需核验订单归属后处理，不可在普通会话中直接披露",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "正确保护敏感取件凭证，并提供身份核验后的合法处理路径。"
+    }
+  },
+  {
+    "case_id": "NM-PRO-005",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "买投影仪会送幕布和支架吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "当前基础包装包含主机、遥控器、电源线和说明书，不含幕布或落地支架；页面上的组合套餐可能另含配件，请按所选SKU清单确认。"
+      },
+      {
+        "role": "user",
+        "content": "吊装螺丝有吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "规格表只写了机身有标准安装孔，没有列出吊装螺丝，因此不能确认随箱附送，建议按支架规格另行准备。"
+      }
+    ],
+    "business_context": "用户查看投影仪基础单机SKU。",
+    "reference_evidence": "基础包装清单：主机、遥控器、电源线、说明书；底部M4安装孔，未列吊装螺丝。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "基础包装包含主机、遥控器、电源线和说明书，不含幕布或落地支架",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "response",
+          "content": "没有列出吊装螺丝，因此不能确认随箱附送",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "基础包装清单：主机、遥控器、电源线、说明书；底部M4安装孔，未列吊装螺丝",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "包装内容完全基于 Reference 回答；未列明的吊装螺丝也没有擅自推断为随箱附送。"
+    }
+  },
+  {
+    "case_id": "NM-PRO-018",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我电脑只有一个雷电4口，这个扩展坞能一边充电一边带两台4K屏吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "需要同时核对电脑的多屏输出能力、系统限制和扩展坞供电。扩展坞支持最高100W PD输入及双HDMI，但资料没有保证所有雷电4电脑都能独立双4K输出，请提供电脑型号。"
+      },
+      {
+        "role": "user",
+        "content": "是M1版MacBook Air。"
+      },
+      {
+        "role": "assistant",
+        "content": "该机型原生只支持一台外接显示器，而这款扩展坞不含DisplayLink，因此不能实现两台独立4K扩展屏；充电功能可以使用。"
+      }
+    ],
+    "business_context": "用户后续明确设备为M1 MacBook Air。",
+    "reference_evidence": "扩展坞：双HDMI、100W PD输入、不含DisplayLink；M1 MacBook Air原生支持一台外接显示器。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "该机型原生只支持一台外接显示器，而这款扩展坞不含DisplayLink，因此不能实现两台独立4K扩展屏",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "扩展坞：双HDMI、100W PD输入、不含DisplayLink；M1 MacBook Air原生支持一台外接显示器",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "在用户补充具体电脑型号后给出准确兼容性结论，并正确区分显示输出能力与充电能力。"
+    }
+  },
+  {
+    "case_id": "NM-REF-025",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "这单有三件，外套昨晚发了，鞋还没发，包今天显示退款中。我只想把没发的鞋取消，别动其他两件。"
+      },
+      {
+        "role": "assistant",
+        "content": "可以只选择鞋这一商品行申请取消。外套已发货不会受影响，包的既有退款也会继续处理；提交前请核对页面仅勾选鞋。"
+      },
+      {
+        "role": "user",
+        "content": "鞋用了整单满减，会退多少？"
+      },
+      {
+        "role": "assistant",
+        "content": "会按保留商品重新核算满减，具体金额以提交页试算为准；我不能仅按鞋的标价直接计算。"
+      }
+    ],
+    "business_context": "订单三商品处于已发货、待发货、退款中三个状态，使用订单级满减。",
+    "reference_evidence": "多商品可独立售后；部分取消需重新分摊订单优惠，提交页显示预计金额。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "success",
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "可以只选择鞋这一商品行申请取消",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "response",
+          "content": "会按保留商品重新核算满减，具体金额以提交页试算为准",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "多商品可独立售后；部分取消需重新分摊订单优惠，提交页显示预计金额",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": null,
+      "review_required": false,
+      "annotation_rationale": "正确处理多商品独立售后，并准确说明订单级优惠需要重新分摊且最终金额由提交页试算。"
+    }
+  },
+  {
+    "case_id": "NM-REF-030",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "包裹显示签收第八天，但实际是门卫昨天才给我，我今天发现尺寸不合适，能按七天退吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "你可以按昨天实际拿到的时间提交，并备注门卫延迟转交；一般会按实际领取时间计算，如果页面驳回再联系人工复核。"
+      }
+    ],
+    "business_context": "承运商记录8天前由小区门卫签收，用户称昨日才实际领取。",
+    "reference_evidence": "无理由退货期限通常以物流签收记录为起点；签收事实有争议时需核实或转人工，不可直接承诺。",
+    "human_gold": {
+      "evaluability": true,
+      "judgment": "failure",
+      "primary_failure_mode": "incorrect_information",
+      "problem": "在物流签收记录已超过七天且签收事实存在争议时，错误告知通常可按用户实际领取时间计算无理由退货期限。",
+      "evidence": [
+        {
+          "evidence_type": "response",
+          "content": "一般会按实际领取时间计算",
+          "source_ref": "assistant_response"
+        },
+        {
+          "evidence_type": "case_fact",
+          "content": "承运商记录8天前由小区门卫签收，用户称昨日才实际领取",
+          "source_ref": "business_context"
+        },
+        {
+          "evidence_type": "reference",
+          "content": "无理由退货期限通常以物流签收记录为起点；签收事实有争议时需核实或转人工，不可直接承诺",
+          "source_ref": "reference_evidence"
+        }
+      ],
+      "severity": "medium",
+      "review_required": false,
+      "annotation_rationale": "用户询问的是能否适用七天无理由这一核心权益问题，回答给出了与规则相反的计算原则；正确做法应是核实签收争议或转人工。"
+    }
+  }
+]
