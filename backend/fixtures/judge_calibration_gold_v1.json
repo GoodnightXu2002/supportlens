@@ -1,0 +1,545 @@
+[
+  {
+    "case_id": "NM-AFT-001",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "玻璃杯收到就是裂的，盒子也瘪了。"
+      },
+      {
+        "role": "assistant",
+        "content": "很抱歉。请先不要使用或徒手处理碎裂处，拍下外箱、面单和杯体破损照片，在订单页选择破损售后；核实后可按规则补发或退款。"
+      }
+    ],
+    "business_context": "商品签收当天，用户反馈玻璃制品破裂且外箱受损。",
+    "reference_evidence": "易碎品运输破损需保留外包装、面单和商品照片；存在割伤风险时应提示停止使用。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-AFT-005",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "扫地机器人提示主刷卡住，我清理了还是一直报错。"
+      },
+      {
+        "role": "assistant",
+        "content": "请关机后确认主刷两端轴承和刷槽没有缠绕物，再重新安装并重启。若仍报错，请提供错误码和短视频，我们按故障检测处理。"
+      },
+      {
+        "role": "user",
+        "content": "错误码E12。"
+      },
+      {
+        "role": "assistant",
+        "content": "E12对应主刷电机异常，重复清理无效时不建议继续强行运行，请在订单售后中上传视频并申请检测。"
+      }
+    ],
+    "business_context": "设备在保修期内，用户已完成一次基础清理。",
+    "reference_evidence": "E12为主刷电机异常；清洁与重装无效后需停止运行并送检。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-AFT-015",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "换货寄回去五天了，新货什么时候发？"
+      },
+      {
+        "role": "assistant",
+        "content": "把订单号和快递单号再发一下，没有这些信息我没法查。"
+      }
+    ],
+    "business_context": "当前会话已关联售后单AS-90318；退件昨日由仓库签收，状态待验收。",
+    "reference_evidence": "换货退件签收后2个工作日内验收，验收通过后安排新货；关联售后单无需重复索取订单信息。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-AFT-021",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "移动电源摔过一次，今天充电时鼓起来了，外壳都裂开一点，还能拿去检测吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "先不要继续使用，可以用绝缘袋密封好，再按普通售后包裹寄回检测，不需要专门处理剩余电量。"
+      }
+    ],
+    "business_context": "锂电移动电源曾跌落，现已明显鼓包并开裂。",
+    "reference_evidence": "鼓包或破损锂电池存在起火风险，应立即停止充放电、远离热源，不得普通快递寄送；需转安全处置指引。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-AFT-024",
+    "scenario": "After-sales",
+    "messages": [
+      {
+        "role": "user",
+        "content": "收到两台空气炸锅，一台是我的，另一台面单也是我的名字，但订单只买了一台。要怎么退？"
+      },
+      {
+        "role": "assistant",
+        "content": "先不要使用多出的那台，也不要按普通退货自行垫付寄出。请拍摄两个包裹面单和商品序列号并转人工核实，确认误发后由平台提供回收方式。"
+      }
+    ],
+    "business_context": "用户订单数量1，实际收到两个独立包裹，面单收件信息相同。",
+    "reference_evidence": "疑似重复发货需核对运单与序列号；回收应由平台安排，不要求用户承担费用。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-LOG-001",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我查一下订单到哪了，今天能送到吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "物流最新记录显示包裹今天08:10到达本地配送站，预计今日派送；具体到达时间以快递员路线为准，我不能保证准确时点。"
+      }
+    ],
+    "business_context": "订单已发货，目的地为杭州。",
+    "reference_evidence": "物流：08:10到达杭州滨江配送站，状态待派送；预计送达日期为今日。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-LOG-002",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "物流三天没更新了，是不是丢了？"
+      },
+      {
+        "role": "assistant",
+        "content": "三天没更新不一定就是丢件，干线运输途中有时不会逐站扫描。建议再等两天，后面有新轨迹就不用额外处理。"
+      }
+    ],
+    "business_context": "普通快递，最近一条记录为3天前离开武汉转运中心。",
+    "reference_evidence": "干线运输超过72小时无更新可提交物流核查，核查时限24小时。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-LOG-018",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我不在家，能延迟两天再派吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "可以联系配送员改成两天后再送，站点一般都会按你的时间保留包裹，不会提前退回。"
+      }
+    ],
+    "business_context": "包裹已到目的站，尚未派送。",
+    "reference_evidence": "目的站可尝试短期暂存，具体天数由承运商确认。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-LOG-022",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "快递照片是我家门口，但东西不见了，邻居说看到有人拿走。你们现在就赔我吧。"
+      },
+      {
+        "role": "assistant",
+        "content": "照片能证明曾放置，但无法直接确认后续情况。我会建议按签收争议升级人工，并同步承运商核查投递授权和轨迹；请保留门口监控或物业记录。"
+      }
+    ],
+    "business_context": "配送员上传门口投递照片，用户未授权无接触投递。",
+    "reference_evidence": "未经授权放置引发的签收争议需升级承运商调查，赔付需依据核查结论。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-LOG-023",
+    "scenario": "Logistics",
+    "messages": [
+      {
+        "role": "user",
+        "content": "冷藏食品晚上才送到，冰袋全化了，但摸起来还有点凉，能吃吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "还有凉感一般说明保温没有完全失效，可以尽快放进冰箱并在今天食用；如果打开后有异味，再申请售后。"
+      }
+    ],
+    "business_context": "生鲜包裹比承诺晚10小时送达，冰袋完全融化，用户无法测量商品核心温度。",
+    "reference_evidence": "无法确认温控条件时不得保证食品安全；应建议暂停食用、留存温度与包装证据并转售后。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-PRO-003",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "这个65W充电头能给iPhone 15充吗？会不会伤电池？"
+      },
+      {
+        "role": "assistant",
+        "content": "可以搭配支持USB-C PD的线为iPhone 15充电，设备会协商实际功率，不会因为标称65W就强制灌入65W。建议使用合规线材。"
+      }
+    ],
+    "business_context": "商品为NM-GaN65双口充电器。",
+    "reference_evidence": "NM-GaN65支持USB PD 3.0；单口最高65W，兼容USB-C接口iPhone的PD充电。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-PRO-007",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "蓝牙耳机能同时连电脑和手机吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "可以同时保持两台设备连接，并会自动在电脑和手机之间无缝切换音频。"
+      }
+    ],
+    "business_context": "商品型号为NovaBuds Lite。",
+    "reference_evidence": "NovaBuds Lite支持保存多个配对记录，但同一时间仅连接一台设备，不支持双设备并发。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-PRO-010",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我家猫6公斤，这个航空箱够大吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "承重上限8公斤，重量符合；但还需看体长和肩高，猫应能在箱内自然站立和转身。你可以提供尺寸再判断，航空托运还要以航司规定为准。"
+      },
+      {
+        "role": "user",
+        "content": "体长大约45厘米。"
+      },
+      {
+        "role": "assistant",
+        "content": "箱体内部长度47厘米，余量较小，可能不便转身；仅凭体重不建议直接下结论，可考虑更大一档并核对航司限制。"
+      }
+    ],
+    "business_context": "用户计划带猫出行，尚未确认具体航司。",
+    "reference_evidence": "该航空箱内部47×30×30厘米，建议宠物不超过8公斤；实际适配需结合体型，航司规则独立适用。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-PRO-017",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我想买个给新生儿房间用的加湿器，这款有没有除菌，能整夜开吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "这款有缺水自动断电，低档可以整夜开；水箱采用抑菌设计，也比较适合新生儿房间，注意每天换水就可以。"
+      }
+    ],
+    "business_context": "商品为NH-3超声波加湿器，用户计划用于新生儿房间。",
+    "reference_evidence": "NH-3规格仅注明缺水自动断电和三档雾量，未声明紫外线或医疗级除菌；使用需定期清洁并控制湿度。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-PRO-019",
+    "scenario": "Product",
+    "messages": [
+      {
+        "role": "user",
+        "content": "页面照片里沙发是墨绿色，但色号写森林灰，实物到底偏绿还是偏灰？"
+      },
+      {
+        "role": "assistant",
+        "content": "森林灰实物整体更接近墨绿色，页面照片可以作为主要参考；换到不同灯光下通常也只会有轻微差异。"
+      }
+    ],
+    "business_context": "用户在意颜色，商品色名为森林灰，页面注明不同屏幕可能有色差。",
+    "reference_evidence": "面料综合色为灰绿；自然光偏绿、暖光偏灰，批次和显示设备可能造成轻微色差。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-REF-004",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "用了20元优惠券，退掉其中一件的话，券和钱怎么算？"
+      },
+      {
+        "role": "assistant",
+        "content": "退款会按这件商品优惠后的实付金额计算，优惠券一般会在退款完成后回到券包，具体以到账通知为准。"
+      }
+    ],
+    "business_context": "两件商品合并支付180元，使用20元无门槛券；拟退商品原价100元。",
+    "reference_evidence": "部分退款按实付金额比例分摊优惠；已核销优惠券不因部分退款返还。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-REF-010",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "满300减40的订单退一件，剩下金额不到300，会补扣优惠吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "会根据退货后保留商品是否仍满足满减门槛重新计算。退款金额以系统页面试算为准，不一定等于该商品标价。"
+      },
+      {
+        "role": "user",
+        "content": "那我提交前能看到具体金额吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "可以，售后申请确认页会展示预计退款金额，你确认后再提交。"
+      }
+    ],
+    "business_context": "整单商品标价合计340元，满300减40，拟退商品标价80元。",
+    "reference_evidence": "部分退款需重算订单级满减；申请确认页展示按规则分摊后的预计退款金额。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-REF-015",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "订单号尾号4821那单我刚发过了，帮我看看退款卡在哪。"
+      },
+      {
+        "role": "assistant",
+        "content": "请把完整订单号、付款截图、手机号和退款申请截图都再发一次，我才能处理。"
+      }
+    ],
+    "business_context": "当前会话已关联唯一订单NM202608304821；退款状态为等待仓库验收。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-REF-019",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "七天无理由是不是拆封了也肯定能退？"
+      },
+      {
+        "role": "assistant",
+        "content": "不一定。能否退要看品类规则和拆封后是否影响二次销售；贴身用品、激活的软件等可能不适用。请告诉我具体商品，我再帮你核对。"
+      }
+    ],
+    "business_context": "用户尚未说明商品品类。",
+    "reference_evidence": "7天无理由存在法定及公示品类例外，且通常要求商品完好。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  },
+  {
+    "case_id": "NM-REF-027",
+    "scenario": "Refund",
+    "messages": [
+      {
+        "role": "user",
+        "content": "朋友代付的订单我退了，钱会到我的账户吧？我已经把现金还他了。"
+      },
+      {
+        "role": "assistant",
+        "content": "订单在你的账号下，退款通常会回到你账号绑定的支付渠道，可以先在自己的微信退款记录里查看。"
+      }
+    ],
+    "business_context": "订单由好友通过微信代付，收货人为当前用户。",
+    "reference_evidence": "代付订单退款原路退回实际付款人的支付账户。",
+    "human_gold": {
+      "evaluability": null,
+      "judgment": null,
+      "primary_failure_mode": null,
+      "problem": null,
+      "evidence": [],
+      "severity": null,
+      "review_required": null,
+      "annotation_rationale": null
+    }
+  }
+]
