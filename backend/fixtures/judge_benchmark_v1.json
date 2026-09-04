@@ -1,0 +1,122 @@
+[
+  {
+    "case_id": "NM-AFT-001",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-AFT-005",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-AFT-015",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-AFT-021",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-AFT-024",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-LOG-001",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-LOG-002",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-LOG-018",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-LOG-022",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-LOG-023",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-PRO-003",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-PRO-007",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-PRO-010",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-PRO-017",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-PRO-019",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-REF-004",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-REF-010",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-REF-015",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-REF-019",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-REF-027",
+    "split": "calibration"
+  },
+  {
+    "case_id": "NM-AFT-018",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-AFT-022",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-AFT-025",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-LOG-005",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-LOG-021",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-LOG-025",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-PRO-005",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-PRO-018",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-REF-025",
+    "split": "holdout"
+  },
+  {
+    "case_id": "NM-REF-030",
+    "split": "holdout"
+  }
+]
