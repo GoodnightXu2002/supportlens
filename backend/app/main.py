@@ -21,6 +21,7 @@ from app.import_service import (
     ImportServiceError,
     ImportServiceErrorCode,
 )
+from app.judge_contract import JUDGE_CONTRACT_VERSION
 from app.models import Conversation, Dataset, EvaluationRun
 from app.schemas import (
     DatasetConversationRead,
@@ -37,7 +38,7 @@ from app.schemas import (
 settings = get_settings()
 
 BASELINE_JUDGE_MODEL = "unconfigured"
-BASELINE_JUDGE_CONTRACT_VERSION = "unconfigured"
+BASELINE_JUDGE_CONTRACT_VERSION = JUDGE_CONTRACT_VERSION
 
 app = FastAPI(title=settings.app_name)
 app.add_middleware(
