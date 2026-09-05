@@ -100,9 +100,28 @@ class GoldProvider:
         self.run_overrides = run_overrides or {}
         self.case_calls: defaultdict[str, int] = defaultdict(int)
         self.calls = 0
+        self.primary_calls = 0
+        self._pending_verifier_payload: dict[str, Any] | None = None
 
     def complete(self, request: LLMRequest) -> LLMResponse:
         self.calls += 1
+        if "failure_verifier_prompt_version" in request.metadata:
+            assert self._pending_verifier_payload is not None
+            payload = {
+                "severity": self._pending_verifier_payload["severity"],
+                "secondary_flags": self._pending_verifier_payload[
+                    "secondary_flags"
+                ],
+            }
+            self._pending_verifier_payload = None
+            return LLMResponse(
+                provider=self.provider_name,
+                model="fake-judge",
+                structured_payload=payload,
+                raw_json_text=json.dumps(payload, ensure_ascii=False),
+            )
+
+        self.primary_calls += 1
         request_payload = json.loads(request.messages[1].content)
         case_input = request_payload["case"]
         case_id = case_input["case_id"]
@@ -110,6 +129,8 @@ class GoldProvider:
         payload = _gold_payload(case_input, self.gold[case_id]["human_gold"])
         payload.update(self.overrides.get(case_id, {}))
         payload.update(self.run_overrides.get((case_id, self.case_calls[case_id]), {}))
+        if payload["judgment"] == "failure":
+            self._pending_verifier_payload = payload
         return LLMResponse(
             provider=self.provider_name,
             model="fake-judge",
@@ -159,7 +180,8 @@ def test_acceptance_gate_passes_exact_stable_grounded_outputs() -> None:
 
     report = run_acceptance_gate(provider)
 
-    assert provider.calls == 50
+    assert provider.primary_calls == 50
+    assert provider.calls > provider.primary_calls
     assert report["final_verdict"] == "PASS"
     assert report["calibration"]["judgment_exact"]["matches"] == 20
     assert (

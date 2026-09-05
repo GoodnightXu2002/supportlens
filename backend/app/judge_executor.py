@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from app.failure_verifier import apply_failure_verifier
 from app.judge_contract import (
     JUDGE_CONTRACT_VERSION,
     JudgeOutput,
+    Judgment,
     assemble_judge_input,
     validate_judge_output,
 )
@@ -81,6 +83,13 @@ def execute_judge(
                     error_code="judge_output_invalid",
                 ) from error
             continue
+
+        if output.judgment is Judgment.FAILURE:
+            output = apply_failure_verifier(
+                judge_input=judge_input,
+                primary_output=output,
+                provider=provider,
+            )
 
         return JudgeExecutionResult(
             provider=response.provider,
