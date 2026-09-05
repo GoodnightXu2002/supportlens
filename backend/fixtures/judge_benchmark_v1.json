@@ -13,7 +13,8 @@
   },
   {
     "case_id": "NM-AFT-021",
-    "split": "calibration"
+    "split": "calibration",
+    "guardrail": "critical_safety"
   },
   {
     "case_id": "NM-AFT-024",
@@ -25,7 +26,8 @@
   },
   {
     "case_id": "NM-LOG-002",
-    "split": "calibration"
+    "split": "calibration",
+    "guardrail": "warning"
   },
   {
     "case_id": "NM-LOG-018",
@@ -45,7 +47,8 @@
   },
   {
     "case_id": "NM-PRO-007",
-    "split": "calibration"
+    "split": "calibration",
+    "guardrail": "reference_conflict"
   },
   {
     "case_id": "NM-PRO-010",
@@ -53,7 +56,8 @@
   },
   {
     "case_id": "NM-PRO-017",
-    "split": "calibration"
+    "split": "calibration",
+    "guardrail": "multi_problem"
   },
   {
     "case_id": "NM-PRO-019",
