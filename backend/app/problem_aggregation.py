@@ -20,7 +20,11 @@ from app.models import (
     Problem,
     ResultProblemLink,
 )
-from app.schemas import FinalEffectiveResultStatus, ProblemRead
+from app.schemas import (
+    FinalEffectiveResultStatus,
+    ProblemEvidenceRead,
+    ProblemRead,
+)
 
 PROBLEM_MAPPING_VERSION = "PRIMARY-PROBLEM-EXACT-V1"
 PRIMARY_PROBLEM_ROLE = "primary"
@@ -206,6 +210,14 @@ class ProblemAggregationService:
                 f"Evaluation run '{evaluation_run_id}' was not found.",
             )
 
+        effective_result_by_id = {
+            result.evaluation_result_id: result
+            for result in self._final_result_service.list_final_effective_results(
+                evaluation_run_id,
+                db_session,
+            )
+        }
+
         problems = list(
             db_session.scalars(
                 select(Problem)
@@ -222,6 +234,7 @@ class ProblemAggregationService:
             affected = db_session.execute(
                 select(
                     ResultProblemLink.evaluation_result_id,
+                    Conversation.id,
                     Conversation.external_id,
                 )
                 .join(
@@ -242,6 +255,31 @@ class ProblemAggregationService:
                     EvaluationResult.id.asc(),
                 )
             ).all()
+            evidence: list[ProblemEvidenceRead] = []
+            for evaluation_result_id, conversation_id, case_id in affected:
+                effective_result = effective_result_by_id.get(
+                    evaluation_result_id
+                )
+                if (
+                    effective_result is None
+                    or effective_result.final_result is None
+                ):
+                    raise ProblemAggregationError(
+                        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_FINAL_RESULTS_INCOMPLETE,
+                        "Problem evidence requires a Final Effective Result.",
+                    )
+                evidence.extend(
+                    ProblemEvidenceRead(
+                        problem_id=problem.id,
+                        evaluation_result_id=evaluation_result_id,
+                        conversation_id=conversation_id,
+                        case_id=case_id,
+                        evidence_type=item.evidence_type,
+                        content=item.content,
+                        source_ref=item.source_ref,
+                    )
+                    for item in effective_result.final_result.evidence
+                )
             response.append(
                 ProblemRead(
                     problem_id=problem.id,
@@ -253,7 +291,8 @@ class ProblemAggregationService:
                     created_at=problem.created_at,
                     affected_case_count=len(affected),
                     affected_evaluation_result_ids=[row[0] for row in affected],
-                    affected_case_ids=[row[1] for row in affected],
+                    affected_case_ids=[row[2] for row in affected],
+                    evidence=evidence,
                 )
             )
         return response

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.judge_contract import JudgeOutput
+from app.judge_contract import EvidenceType, JudgeOutput
 
 
 class DatasetSource(StrEnum):
@@ -222,6 +222,16 @@ class FinalEffectiveResultRead(BaseModel):
     human_decision_id: UUID | None
 
 
+class ProblemEvidenceRead(BaseModel):
+    problem_id: UUID
+    evaluation_result_id: UUID
+    conversation_id: UUID
+    case_id: str
+    evidence_type: EvidenceType
+    content: str
+    source_ref: str | None
+
+
 class ProblemRead(BaseModel):
     problem_id: UUID
     evaluation_run_id: UUID
@@ -233,3 +243,4 @@ class ProblemRead(BaseModel):
     affected_case_count: int
     affected_evaluation_result_ids: list[UUID]
     affected_case_ids: list[str]
+    evidence: list[ProblemEvidenceRead]

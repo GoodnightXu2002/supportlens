@@ -57,6 +57,7 @@ def _output(
     problem: str | None,
     *,
     review_required: bool = False,
+    evidence: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     is_failure = judgment == "failure"
     return JudgeOutput.model_validate(
@@ -70,7 +71,7 @@ def _output(
             ),
             "problem": problem,
             "severity": "medium" if is_failure else None,
-            "evidence": [],
+            "evidence": evidence or [],
             "uncertainty": (
                 "The available evidence is incomplete."
                 if judgment == "uncertain"
@@ -127,6 +128,7 @@ def _create_run(
                 str(case["judgment"]),
                 case.get("problem"),
                 review_required=bool(case.get("review_required", False)),
+                evidence=case.get("evidence"),
             ),
         )
         session.add(result)
@@ -498,3 +500,145 @@ def test_problem_reads_do_not_cross_evaluation_runs(api_context) -> None:
     assert first[0]["affected_case_ids"] == ["RUN-A"]
     assert second[0]["evaluation_run_id"] == str(second_run_id)
     assert second[0]["affected_case_ids"] == ["RUN-B"]
+
+
+def test_problem_evidence_uses_linked_final_results_with_full_trace(
+    api_context,
+) -> None:
+    client, engine = api_context
+    machine_evidence = {
+        "evidence_type": "response",
+        "content": "Machine-linked response evidence.",
+        "source_ref": "assistant_response",
+    }
+    obsolete_evidence = {
+        "evidence_type": "case_fact",
+        "content": "Obsolete machine evidence.",
+        "source_ref": "business_context",
+    }
+    corrected_evidence = {
+        "evidence_type": "reference",
+        "content": "Human-corrected final evidence.",
+        "source_ref": "reference_evidence",
+    }
+    unrelated_evidence = {
+        "evidence_type": "response",
+        "content": "Unrelated success evidence.",
+        "source_ref": "assistant_response",
+    }
+    other_run_evidence = {
+        "evidence_type": "response",
+        "content": "Evidence from another run.",
+        "source_ref": "assistant_response",
+    }
+    with Session(engine) as session:
+        evaluation_run, results = _create_run(
+            session,
+            [
+                {
+                    "case_id": "MACHINE-FINAL",
+                    "scenario": "Refund",
+                    "judgment": "warning",
+                    "problem": "Shared evidence problem",
+                    "evidence": [machine_evidence],
+                },
+                {
+                    "case_id": "HUMAN-FINAL",
+                    "scenario": "Refund",
+                    "judgment": "failure",
+                    "problem": "Old machine problem",
+                    "review_required": True,
+                    "evidence": [obsolete_evidence],
+                },
+                {
+                    "case_id": "SUCCESS-NOT-LINKED",
+                    "scenario": "Refund",
+                    "judgment": "success",
+                    "problem": "Shared evidence problem",
+                    "evidence": [unrelated_evidence],
+                },
+            ],
+        )
+        other_run, _other_results = _create_run(
+            session,
+            [
+                {
+                    "case_id": "OTHER-RUN",
+                    "scenario": "Refund",
+                    "judgment": "warning",
+                    "problem": "Shared evidence problem",
+                    "evidence": [other_run_evidence],
+                }
+            ],
+        )
+        session.commit()
+        run_id = evaluation_run.id
+        other_run_id = other_run.id
+        result_ids = {
+            case_id: result.id for case_id, result in results.items()
+        }
+
+    corrected_output = _output(
+        "failure",
+        "Shared evidence problem",
+        review_required=True,
+        evidence=[corrected_evidence],
+    )
+    with Session(engine) as session:
+        HumanReviewService().submit(
+            result_ids["HUMAN-FINAL"],
+            reviewer="reviewer@example.com",
+            action=HumanReviewAction.CORRECT,
+            final_result=corrected_output,
+            change_reason="Use the final reviewed problem and evidence.",
+            db_session=session,
+        )
+
+    generated = _generate(client, run_id)
+    assert generated.status_code == 201
+    problem = generated.json()[0]
+    assert problem["definition"] == "Shared evidence problem"
+    assert problem["affected_case_count"] == 2
+    assert problem["affected_case_ids"] == ["HUMAN-FINAL", "MACHINE-FINAL"]
+    assert set(problem["affected_evaluation_result_ids"]) == {
+        str(result_ids["HUMAN-FINAL"]),
+        str(result_ids["MACHINE-FINAL"]),
+    }
+
+    evidence = problem["evidence"]
+    assert len(evidence) == 2
+    by_case = {item["case_id"]: item for item in evidence}
+    assert {
+        key: by_case["MACHINE-FINAL"][key]
+        for key in ("evidence_type", "content", "source_ref")
+    } == machine_evidence
+    assert {
+        key: by_case["HUMAN-FINAL"][key]
+        for key in ("evidence_type", "content", "source_ref")
+    } == corrected_evidence
+    assert by_case["MACHINE-FINAL"]["problem_id"] == problem["problem_id"]
+    assert by_case["HUMAN-FINAL"]["problem_id"] == problem["problem_id"]
+    assert by_case["MACHINE-FINAL"]["evaluation_result_id"] == str(
+        result_ids["MACHINE-FINAL"]
+    )
+    assert by_case["HUMAN-FINAL"]["evaluation_result_id"] == str(
+        result_ids["HUMAN-FINAL"]
+    )
+    assert by_case["MACHINE-FINAL"]["conversation_id"]
+    assert by_case["HUMAN-FINAL"]["conversation_id"]
+    assert "Obsolete machine evidence" not in generated.text
+    assert "Unrelated success evidence" not in generated.text
+    assert "Evidence from another run" not in generated.text
+
+    repeated_read = client.get(
+        f"/api/evaluation-runs/{run_id}/problems"
+    )
+    assert repeated_read.status_code == 200
+    assert repeated_read.json() == generated.json()
+
+    other_generated = _generate(client, other_run_id)
+    assert other_generated.status_code == 201
+    assert other_generated.json()[0]["affected_case_ids"] == ["OTHER-RUN"]
+    assert other_generated.json()[0]["evidence"][0]["content"] == (
+        "Evidence from another run."
+    )
