@@ -97,6 +97,10 @@ def test_structured_validation_failure_retries_once_with_frozen_request() -> Non
         "judge_prompt_version": JUDGE_PROMPT_VERSION,
         "judge_contract_version": JUDGE_CONTRACT_VERSION,
     }
+    assert JUDGE_PROMPT_VERSION == "JUDGE-PROMPT-V1.4"
+    assert result.prompt_version == provider.requests[0].metadata[
+        "judge_prompt_version"
+    ]
 
 
 def test_timeout_retries_once_then_succeeds() -> None:

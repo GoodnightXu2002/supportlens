@@ -4,12 +4,15 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.judge_contract import (
     JUDGE_CONTRACT_VERSION,
-    JUDGE_PROMPT_VERSION,
     JudgeOutput,
     assemble_judge_input,
     validate_judge_output,
 )
-from app.judge_prompt import JudgePromptAssets, assemble_judge_request
+from app.judge_prompt import (
+    JUDGE_PROMPT_VERSION,
+    JudgePromptAssets,
+    assemble_judge_request,
+)
 from app.judge_rules import require_judge_rules_ready_for_execution
 from app.llm_provider import (
     LLMProvider,
