@@ -2,8 +2,9 @@ import json
 
 import pytest
 
-from app.judge_contract import JUDGE_CONTRACT_VERSION, JUDGE_PROMPT_VERSION
+from app.judge_contract import JUDGE_CONTRACT_VERSION
 from app.judge_executor import JudgeExecutionError, execute_judge
+from app.judge_prompt import JUDGE_PROMPT_VERSION
 from app.llm_provider import (
     LLMProviderError,
     LLMProviderErrorCode,

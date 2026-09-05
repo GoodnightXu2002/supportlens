@@ -6,12 +6,15 @@ from pydantic import ValidationError
 from app.config import Settings
 from app.judge_contract import (
     JUDGE_CONTRACT_VERSION,
-    JUDGE_PROMPT_VERSION,
     JudgeInput,
     Judgment,
     validate_judge_output,
 )
-from app.judge_prompt import JudgePromptAssets, assemble_judge_request
+from app.judge_prompt import (
+    JUDGE_PROMPT_VERSION,
+    JudgePromptAssets,
+    assemble_judge_request,
+)
 from app.llm_provider import (
     DeepSeekProvider,
     LLMProviderError,
@@ -85,6 +88,7 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
         "judge_prompt_version": JUDGE_PROMPT_VERSION,
         "judge_contract_version": JUDGE_CONTRACT_VERSION,
     }
+    assert JUDGE_PROMPT_VERSION == "JUDGE-PROMPT-V1.4"
     assert request.response_schema_name == "JudgeOutput"
     assert request.response_schema["additionalProperties"] is False
     payload = json.loads(request.messages[1].content)
@@ -102,6 +106,36 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
     assert "run_type" not in payload["case"]
     assert "gold" not in payload["case"]
     assert "target" not in payload["case"]
+
+
+def test_prompt_expresses_frozen_calibration_boundaries() -> None:
+    request = assemble_judge_request(
+        _judge_input(),
+        assets=JudgePromptAssets(business_reference="business reference"),
+    )
+
+    system_prompt = request.messages[0].content
+    assert "produce a materially wrong result or action" in system_prompt
+    assert "core response remains usable or advances the task" in system_prompt
+    assert "core task is actually unresolved" in system_prompt
+    assert "repeats requests for that information" in system_prompt
+    assert "Do not automatically make every difference" in system_prompt
+    assert "success, warning, and uncertain each require severity=null" in system_prompt
+    assert "Never assign a severity grade to a warning" in system_prompt
+    assert "unsupported safety assurance" in system_prompt
+    assert "Critical does not require harm to have already occurred" in system_prompt
+    assert "consumption of food whose safety cannot be confirmed" in system_prompt
+    assert "Failure frequency" in system_prompt
+    assert "Insufficient evidence must not increase severity" in system_prompt
+    assert "Decide review_required independently from severity" in system_prompt
+    assert "contiguous original excerpt" in system_prompt
+    assert "source_ref assistant_response" in system_prompt
+    assert "Use incorrect_information when the core error" in system_prompt
+    assert "Use policy_procedure_violation when the core error" in system_prompt
+    assert "Use incomplete_unresolved when necessary case information" in system_prompt
+    assert "two or more genuinely independent failure problems" in system_prompt
+    assert "Do not leave secondary_flags empty" in system_prompt
+    assert "NM-" not in system_prompt
 
 
 def test_fake_provider_payload_validates_as_judge_output() -> None:
