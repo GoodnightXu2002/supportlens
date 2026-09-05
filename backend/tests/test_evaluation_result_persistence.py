@@ -265,7 +265,7 @@ def test_required_judge_output_fields_reject_null(
             )
 
 
-def test_alembic_upgrade_creates_evaluation_and_human_review_fields(
+def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     tmp_path,
 ) -> None:
     backend_root = Path(__file__).resolve().parents[1]
@@ -289,6 +289,43 @@ def test_alembic_upgrade_creates_evaluation_and_human_review_fields(
         run_columns = {
             column["name"]
             for column in inspect(engine).get_columns("evaluation_runs")
+        }
+        problem_columns = {
+            column["name"] for column in inspect(engine).get_columns("problems")
+        }
+        link_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("result_problem_links")
+        }
+        problem_uniques = {
+            tuple(constraint["column_names"])
+            for constraint in inspect(engine).get_unique_constraints("problems")
+        }
+        problem_checks = {
+            constraint["name"]: constraint["sqltext"]
+            for constraint in inspect(engine).get_check_constraints("problems")
+        }
+        link_uniques = {
+            tuple(constraint["column_names"])
+            for constraint in inspect(engine).get_unique_constraints(
+                "result_problem_links"
+            )
+        }
+        link_checks = {
+            constraint["name"]: constraint["sqltext"]
+            for constraint in inspect(engine).get_check_constraints(
+                "result_problem_links"
+            )
+        }
+        link_foreign_keys = {
+            (
+                tuple(constraint["constrained_columns"]),
+                constraint["referred_table"],
+                tuple(constraint["referred_columns"]),
+            )
+            for constraint in inspect(engine).get_foreign_keys(
+                "result_problem_links"
+            )
         }
         result_columns = {
             column["name"]
@@ -327,7 +364,12 @@ def test_alembic_upgrade_creates_evaluation_and_human_review_fields(
 
     assert "evaluation_results" in table_names
     assert "human_decisions" in table_names
-    assert {"case_errors", "business_reference_snapshot"} <= run_columns
+    assert {"problems", "result_problem_links"} <= set(table_names)
+    assert {
+        "case_errors",
+        "business_reference_snapshot",
+        "problem_aggregation_completed_at",
+    } <= run_columns
     assert "raw_judge_output" in result_columns
     assert decision_columns == {
         "id",
@@ -344,6 +386,40 @@ def test_alembic_upgrade_creates_evaluation_and_human_review_fields(
         "evaluation_results",
         ("id",),
     ) in decision_foreign_keys
+    assert problem_columns == {
+        "id",
+        "evaluation_run_id",
+        "scenario",
+        "definition",
+        "mapping_key",
+        "mapping_version",
+        "created_at",
+    }
+    assert link_columns == {
+        "id",
+        "problem_id",
+        "evaluation_result_id",
+        "role",
+    }
+    assert ("evaluation_run_id", "mapping_key") in problem_uniques
+    assert "length(trim(definition)) > 0" in problem_checks[
+        "ck_problems_definition_not_empty"
+    ]
+    assert "PRIMARY-PROBLEM-EXACT-V1" in problem_checks[
+        "ck_problems_mapping_version"
+    ]
+    assert ("evaluation_result_id", "role") in link_uniques
+    assert "role = 'primary'" in link_checks["ck_result_problem_links_role"]
+    assert (
+        ("problem_id",),
+        "problems",
+        ("id",),
+    ) in link_foreign_keys
+    assert (
+        ("evaluation_result_id",),
+        "evaluation_results",
+        ("id",),
+    ) in link_foreign_keys
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "d2a4c6e8f013"
+    assert revision == "f4b6d8e0a215"

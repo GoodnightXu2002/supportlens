@@ -28,6 +28,11 @@ from app.import_service import (
 )
 from app.judge_contract import JUDGE_CONTRACT_VERSION
 from app.models import Conversation, Dataset, EvaluationRun, HumanDecision
+from app.problem_aggregation import (
+    ProblemAggregationError,
+    ProblemAggregationErrorCode,
+    ProblemAggregationService,
+)
 from app.schemas import (
     DatasetConversationRead,
     DatasetDetailResponse,
@@ -41,6 +46,7 @@ from app.schemas import (
     FinalEffectiveResultRead,
     HumanDecisionRead,
     HumanReviewSubmitRequest,
+    ProblemRead,
 )
 
 settings = get_settings()
@@ -66,6 +72,11 @@ def get_import_service() -> ImportService:
 @lru_cache
 def get_human_review_service() -> HumanReviewService:
     return HumanReviewService()
+
+
+@lru_cache
+def get_problem_aggregation_service() -> ProblemAggregationService:
+    return ProblemAggregationService()
 
 
 def get_db_session() -> Iterator[Session]:
@@ -252,6 +263,26 @@ def _human_review_error_response(error: HumanReviewError) -> JSONResponse:
     )
 
 
+def _problem_aggregation_error_response(
+    error: ProblemAggregationError,
+) -> JSONResponse:
+    status_by_code = {
+        ProblemAggregationErrorCode.EVALUATION_RUN_NOT_FOUND: 404,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_NOT_BASELINE: 409,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_RUN_NOT_COMPLETED: 409,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_FINAL_RESULTS_INCOMPLETE: 409,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_PENDING_REVIEW: 409,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_ALREADY_COMPLETED: 409,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_INVALID_INPUT: 400,
+        ProblemAggregationErrorCode.PROBLEM_AGGREGATION_PERSISTENCE_FAILED: 500,
+    }
+    return _error_response(
+        status_code=status_by_code[error.code],
+        code=error.code.value,
+        message=str(error),
+    )
+
+
 @app.post(
     "/api/evaluation-runs",
     response_model=EvaluationRunRead,
@@ -343,6 +374,43 @@ def list_final_effective_results(
         return service.list_final_effective_results(run_id, db_session)
     except HumanReviewError as error:
         return _human_review_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/problems",
+    response_model=list[ProblemRead],
+    status_code=201,
+)
+def generate_problems(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ProblemAggregationService,
+        Depends(get_problem_aggregation_service),
+    ],
+) -> list[ProblemRead] | JSONResponse:
+    try:
+        return service.generate(run_id, db_session)
+    except ProblemAggregationError as error:
+        return _problem_aggregation_error_response(error)
+
+
+@app.get(
+    "/api/evaluation-runs/{run_id}/problems",
+    response_model=list[ProblemRead],
+)
+def list_problems(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ProblemAggregationService,
+        Depends(get_problem_aggregation_service),
+    ],
+) -> list[ProblemRead] | JSONResponse:
+    try:
+        return service.list_problems(run_id, db_session)
+    except ProblemAggregationError as error:
+        return _problem_aggregation_error_response(error)
 
 
 @app.get(

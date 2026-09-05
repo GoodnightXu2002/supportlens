@@ -220,3 +220,16 @@ class FinalEffectiveResultRead(BaseModel):
     source: FinalEffectiveResultSource | None
     final_result: JudgeOutput | None
     human_decision_id: UUID | None
+
+
+class ProblemRead(BaseModel):
+    problem_id: UUID
+    evaluation_run_id: UUID
+    scenario: str
+    definition: str
+    mapping_key: str
+    mapping_version: str
+    created_at: datetime
+    affected_case_count: int
+    affected_evaluation_result_ids: list[UUID]
+    affected_case_ids: list[str]

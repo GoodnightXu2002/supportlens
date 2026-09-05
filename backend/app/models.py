@@ -150,12 +150,18 @@ class EvaluationRun(Base):
     business_reference_snapshot: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
+    problem_aggregation_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     dataset: Mapped[Dataset] = relationship(back_populates="evaluation_runs")
     evaluation_results: Mapped[list[EvaluationResult]] = relationship(
+        back_populates="evaluation_run"
+    )
+    problems: Mapped[list[Problem]] = relationship(
         back_populates="evaluation_run"
     )
 
@@ -241,6 +247,9 @@ class EvaluationResult(Base):
         back_populates="evaluation_result",
         uselist=False,
     )
+    problem_links: Mapped[list[ResultProblemLink]] = relationship(
+        back_populates="evaluation_result"
+    )
 
 
 class HumanDecision(Base):
@@ -278,4 +287,84 @@ class HumanDecision(Base):
 
     evaluation_result: Mapped[EvaluationResult] = relationship(
         back_populates="human_decision"
+    )
+
+
+class Problem(Base):
+    __tablename__ = "problems"
+    __table_args__ = (
+        UniqueConstraint(
+            "evaluation_run_id",
+            "mapping_key",
+            name="uq_problems_run_mapping_key",
+        ),
+        CheckConstraint(
+            "length(trim(definition)) > 0",
+            name="ck_problems_definition_not_empty",
+        ),
+        CheckConstraint(
+            "mapping_version = 'PRIMARY-PROBLEM-EXACT-V1'",
+            name="ck_problems_mapping_version",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    evaluation_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_runs.id"),
+        nullable=False,
+        index=True,
+    )
+    scenario: Mapped[str] = mapped_column(String(255), nullable=False)
+    definition: Mapped[str] = mapped_column(Text, nullable=False)
+    mapping_key: Mapped[str] = mapped_column(Text, nullable=False)
+    mapping_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    evaluation_run: Mapped[EvaluationRun] = relationship(
+        back_populates="problems"
+    )
+    result_links: Mapped[list[ResultProblemLink]] = relationship(
+        back_populates="problem"
+    )
+
+
+class ResultProblemLink(Base):
+    __tablename__ = "result_problem_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "evaluation_result_id",
+            "role",
+            name="uq_result_problem_links_result_role",
+        ),
+        CheckConstraint(
+            "role = 'primary'",
+            name="ck_result_problem_links_role",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    problem_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("problems.id"),
+        nullable=False,
+        index=True,
+    )
+    evaluation_result_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_results.id"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    problem: Mapped[Problem] = relationship(back_populates="result_links")
+    evaluation_result: Mapped[EvaluationResult] = relationship(
+        back_populates="problem_links"
     )
