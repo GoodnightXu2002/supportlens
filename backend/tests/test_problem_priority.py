@@ -216,7 +216,8 @@ def test_evidence_confidence_uses_reviewed_change_and_exposes_signal_gap() -> No
         ReferenceConflictStatus.UNSUPPORTED
     )
     assert unsupported.evidence_confidence is EvidenceConfidence.UNKNOWN
-    assert unsupported.ranking_eligible is False
+    assert unsupported.ranking_eligible is True
+    assert "evidence_confidence_unavailable" not in unsupported.ranking_blockers
     assert explicit_clear.evidence_confidence is EvidenceConfidence.HIGH
     assert explicit_clear.ranking_eligible is True
 
@@ -338,6 +339,54 @@ def test_priority_ranking_is_lexicographic_and_preserves_equal_ties() -> None:
         False,
         True,
     ]
+
+
+def test_unknown_confidence_does_not_block_different_primary_signals() -> None:
+    profiles = [
+        _rankable_profile(
+            severity="high",
+            impact=BusinessImpact.LOW,
+            frequency=1,
+            pattern=PatternConsistency.WEAK,
+            confidence=EvidenceConfidence.UNKNOWN,
+        ),
+        _rankable_profile(
+            severity="medium",
+            impact=BusinessImpact.HIGH,
+            frequency=99,
+            pattern=PatternConsistency.STRONG,
+            confidence=EvidenceConfidence.HIGH,
+        ),
+    ]
+
+    assignments = rank_problem_profiles(profiles)
+
+    assert [assignment.rank for assignment in assignments] == [1, 2]
+    assert all(
+        assignment.equal_review_priority is False
+        for assignment in assignments
+    )
+
+
+def test_tied_primary_signals_with_unknown_confidence_share_rank() -> None:
+    unknown = _rankable_profile(
+        severity="medium",
+        impact=BusinessImpact.MEDIUM,
+        frequency=1,
+        pattern=PatternConsistency.WEAK,
+        confidence=EvidenceConfidence.UNKNOWN,
+    )
+    known = unknown.model_copy(
+        update={"evidence_confidence": EvidenceConfidence.HIGH}
+    )
+
+    assignments = rank_problem_profiles([unknown, known])
+
+    assert [assignment.rank for assignment in assignments] == [1, 1]
+    assert all(
+        assignment.equal_review_priority is True
+        for assignment in assignments
+    )
 
 
 def test_problem_contract_has_no_priority_score() -> None:

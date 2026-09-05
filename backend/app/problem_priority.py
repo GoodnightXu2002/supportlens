@@ -130,11 +130,6 @@ def build_problem_profile(
         blockers.append("priority_severity_unavailable")
     if pattern_consistency is None:
         blockers.append("pattern_consistency_unavailable")
-    if evidence_confidence not in {
-        EvidenceConfidence.HIGH,
-        EvidenceConfidence.MEDIUM,
-    }:
-        blockers.append("evidence_confidence_unavailable")
 
     return ProblemProfileRead(
         profile_version=PROBLEM_PROFILE_VERSION,
@@ -172,21 +167,56 @@ def build_problem_profile(
 def rank_problem_profiles(
     profiles: list[ProblemProfileRead],
 ) -> list[PriorityRankAssignment]:
-    keys_by_index = {
-        index: _ranking_key(profile)
+    primary_keys_by_index = {
+        index: _primary_ranking_key(profile)
         for index, profile in enumerate(profiles)
         if profile.ranking_eligible
     }
-    ordered_keys = sorted(set(keys_by_index.values()), reverse=True)
-    rank_by_key = {key: rank for rank, key in enumerate(ordered_keys, start=1)}
-    key_counts = Counter(keys_by_index.values())
+    indices_by_primary_key: dict[
+        tuple[int, int, Fraction, int],
+        list[int],
+    ] = {}
+    for index, key in primary_keys_by_index.items():
+        indices_by_primary_key.setdefault(key, []).append(index)
+
+    assignments_by_index: dict[int, PriorityRankAssignment] = {}
+    next_rank = 1
+    for primary_key in sorted(indices_by_primary_key, reverse=True):
+        indices = indices_by_primary_key[primary_key]
+        confidences = [profiles[index].evidence_confidence for index in indices]
+        if all(confidence in _EVIDENCE_CONFIDENCE_ORDER for confidence in confidences):
+            indices_by_confidence: dict[EvidenceConfidence, list[int]] = {}
+            for index in indices:
+                confidence = profiles[index].evidence_confidence
+                assert confidence is not None
+                indices_by_confidence.setdefault(confidence, []).append(index)
+            for confidence in sorted(
+                indices_by_confidence,
+                key=_EVIDENCE_CONFIDENCE_ORDER.get,
+                reverse=True,
+            ):
+                tied_indices = indices_by_confidence[confidence]
+                assignment = PriorityRankAssignment(
+                    rank=next_rank,
+                    equal_review_priority=len(tied_indices) > 1,
+                )
+                assignments_by_index.update(
+                    (index, assignment) for index in tied_indices
+                )
+                next_rank += 1
+        else:
+            assignment = PriorityRankAssignment(
+                rank=next_rank,
+                equal_review_priority=len(indices) > 1,
+            )
+            assignments_by_index.update((index, assignment) for index in indices)
+            next_rank += 1
+
     return [
-        PriorityRankAssignment(
-            rank=rank_by_key[keys_by_index[index]],
-            equal_review_priority=key_counts[keys_by_index[index]] > 1,
+        assignments_by_index.get(
+            index,
+            PriorityRankAssignment(rank=None, equal_review_priority=None),
         )
-        if index in keys_by_index
-        else PriorityRankAssignment(rank=None, equal_review_priority=None)
         for index in range(len(profiles))
     ]
 
@@ -240,17 +270,13 @@ def _pattern_consistency(core_count: int) -> PatternConsistency | None:
     return None
 
 
-def _ranking_key(
+def _primary_ranking_key(
     profile: ProblemProfileRead,
-) -> tuple[int, int, Fraction, int, int]:
+) -> tuple[int, int, Fraction, int]:
     assert profile.priority_severity is not None
     assert profile.business_impact is not None
     assert profile.frequency.denominator > 0
     assert profile.pattern_consistency is not None
-    assert profile.evidence_confidence in {
-        EvidenceConfidence.HIGH,
-        EvidenceConfidence.MEDIUM,
-    }
     return (
         _SEVERITY_ORDER[Severity(profile.priority_severity)],
         _BUSINESS_IMPACT_ORDER[profile.business_impact],
@@ -259,5 +285,4 @@ def _ranking_key(
             profile.frequency.denominator,
         ),
         _PATTERN_ORDER[profile.pattern_consistency],
-        _EVIDENCE_CONFIDENCE_ORDER[profile.evidence_confidence],
     )
