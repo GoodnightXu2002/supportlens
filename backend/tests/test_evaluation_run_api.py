@@ -106,7 +106,7 @@ def test_create_baseline_persists_pending_live_run(api_context) -> None:
     assert body["error_code"] is None
     assert body["error_message"] is None
     assert body["created_at"]
-    assert "evaluation_results" not in Base.metadata.tables
+    assert "evaluation_results" in Base.metadata.tables
 
     run_id = UUID(body["id"])
     with Session(engine) as new_session:

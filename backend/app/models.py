@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -85,6 +86,9 @@ class Conversation(Base):
     )
 
     dataset: Mapped[Dataset] = relationship(back_populates="conversations")
+    evaluation_results: Mapped[list[EvaluationResult]] = relationship(
+        back_populates="conversation"
+    )
 
 
 class EvaluationRun(Base):
@@ -140,3 +144,82 @@ class EvaluationRun(Base):
     )
 
     dataset: Mapped[Dataset] = relationship(back_populates="evaluation_runs")
+    evaluation_results: Mapped[list[EvaluationResult]] = relationship(
+        back_populates="evaluation_run"
+    )
+
+
+class EvaluationResult(Base):
+    __tablename__ = "evaluation_results"
+    __table_args__ = (
+        UniqueConstraint(
+            "evaluation_run_id",
+            "conversation_id",
+            name="uq_evaluation_results_run_conversation",
+        ),
+        CheckConstraint(
+            "judgment IN ('success', 'warning', 'failure', 'uncertain')",
+            name="ck_evaluation_results_judgment",
+        ),
+        CheckConstraint(
+            "primary_failure_mode IS NULL OR primary_failure_mode IN "
+            "('incorrect_information', 'incomplete_unresolved', "
+            "'intent_relevance_failure', 'improper_refusal', "
+            "'policy_procedure_violation', 'other')",
+            name="ck_evaluation_results_primary_failure_mode",
+        ),
+        CheckConstraint(
+            "severity IS NULL OR severity IN ('low', 'medium', 'high', 'critical')",
+            name="ck_evaluation_results_severity",
+        ),
+        CheckConstraint(
+            "(judgment = 'failure' AND severity IS NOT NULL) OR "
+            "(judgment <> 'failure' AND severity IS NULL)",
+            name="ck_evaluation_results_judgment_severity",
+        ),
+        CheckConstraint(
+            "length(trim(rationale)) > 0",
+            name="ck_evaluation_results_rationale_not_empty",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    evaluation_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_runs.id"),
+        nullable=False,
+        index=True,
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("conversations.id"),
+        nullable=False,
+        index=True,
+    )
+    judgment: Mapped[str] = mapped_column(String(32), nullable=False)
+    primary_failure_mode: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    secondary_flags: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    problem: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    uncertainty: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_required: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    evaluation_run: Mapped[EvaluationRun] = relationship(
+        back_populates="evaluation_results"
+    )
+    conversation: Mapped[Conversation] = relationship(
+        back_populates="evaluation_results"
+    )
