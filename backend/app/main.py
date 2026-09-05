@@ -14,6 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import SessionLocal
+from app.human_review import (
+    HumanReviewError,
+    HumanReviewErrorCode,
+    HumanReviewService,
+)
 from app.import_service import (
     ImportFileValidationError,
     ImportPreviewResult,
@@ -22,7 +27,7 @@ from app.import_service import (
     ImportServiceErrorCode,
 )
 from app.judge_contract import JUDGE_CONTRACT_VERSION
-from app.models import Conversation, Dataset, EvaluationRun
+from app.models import Conversation, Dataset, EvaluationRun, HumanDecision
 from app.schemas import (
     DatasetConversationRead,
     DatasetDetailResponse,
@@ -33,6 +38,9 @@ from app.schemas import (
     EvaluationRunRead,
     EvaluationRunSource,
     EvaluationRunStatus,
+    FinalEffectiveResultRead,
+    HumanDecisionRead,
+    HumanReviewSubmitRequest,
 )
 
 settings = get_settings()
@@ -53,6 +61,11 @@ app.add_middleware(
 @lru_cache
 def get_import_service() -> ImportService:
     return ImportService()
+
+
+@lru_cache
+def get_human_review_service() -> HumanReviewService:
+    return HumanReviewService()
 
 
 def get_db_session() -> Iterator[Session]:
@@ -220,6 +233,25 @@ def _evaluation_run_not_found(run_id: UUID) -> JSONResponse:
     )
 
 
+def _human_review_error_response(error: HumanReviewError) -> JSONResponse:
+    status_by_code = {
+        HumanReviewErrorCode.EVALUATION_RESULT_NOT_FOUND: 404,
+        HumanReviewErrorCode.EVALUATION_RUN_NOT_FOUND: 404,
+        HumanReviewErrorCode.HUMAN_REVIEW_NOT_REQUIRED: 409,
+        HumanReviewErrorCode.HUMAN_REVIEW_ALREADY_COMPLETED: 409,
+        HumanReviewErrorCode.HUMAN_REVIEW_FINAL_RESULT_REQUIRED: 400,
+        HumanReviewErrorCode.HUMAN_REVIEW_CONFIRM_RESULT_MISMATCH: 400,
+        HumanReviewErrorCode.HUMAN_REVIEW_CHANGE_REASON_REQUIRED: 400,
+        HumanReviewErrorCode.HUMAN_REVIEW_INVALID_RESULT: 400,
+        HumanReviewErrorCode.HUMAN_REVIEW_PERSISTENCE_FAILED: 500,
+    }
+    return _error_response(
+        status_code=status_by_code[error.code],
+        code=error.code.value,
+        message=str(error),
+    )
+
+
 @app.post(
     "/api/evaluation-runs",
     response_model=EvaluationRunRead,
@@ -272,6 +304,45 @@ def get_evaluation_run(
     if evaluation_run is None:
         return _evaluation_run_not_found(run_id)
     return evaluation_run
+
+
+@app.post(
+    "/api/evaluation-results/{evaluation_result_id}/human-review",
+    response_model=HumanDecisionRead,
+    status_code=201,
+)
+def submit_human_review(
+    evaluation_result_id: UUID,
+    request: HumanReviewSubmitRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[HumanReviewService, Depends(get_human_review_service)],
+) -> HumanDecision | JSONResponse:
+    try:
+        return service.submit(
+            evaluation_result_id,
+            reviewer=request.reviewer,
+            action=request.action,
+            final_result=request.final_result,
+            change_reason=request.change_reason,
+            db_session=db_session,
+        )
+    except HumanReviewError as error:
+        return _human_review_error_response(error)
+
+
+@app.get(
+    "/api/evaluation-runs/{run_id}/final-effective-results",
+    response_model=list[FinalEffectiveResultRead],
+)
+def list_final_effective_results(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[HumanReviewService, Depends(get_human_review_service)],
+) -> list[FinalEffectiveResultRead] | JSONResponse:
+    try:
+        return service.list_final_effective_results(run_id, db_session)
+    except HumanReviewError as error:
+        return _human_review_error_response(error)
 
 
 @app.get(

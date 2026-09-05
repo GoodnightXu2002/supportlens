@@ -265,7 +265,9 @@ def test_required_judge_output_fields_reject_null(
             )
 
 
-def test_alembic_upgrade_creates_a2_execution_fields(tmp_path) -> None:
+def test_alembic_upgrade_creates_evaluation_and_human_review_fields(
+    tmp_path,
+) -> None:
     backend_root = Path(__file__).resolve().parents[1]
     database_path = tmp_path / "migration.db"
     environment = os.environ.copy()
@@ -292,6 +294,24 @@ def test_alembic_upgrade_creates_a2_execution_fields(tmp_path) -> None:
             column["name"]
             for column in inspect(engine).get_columns("evaluation_results")
         }
+        decision_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("human_decisions")
+        }
+        decision_uniques = {
+            tuple(constraint["column_names"])
+            for constraint in inspect(engine).get_unique_constraints(
+                "human_decisions"
+            )
+        }
+        decision_foreign_keys = {
+            (
+                tuple(constraint["constrained_columns"]),
+                constraint["referred_table"],
+                tuple(constraint["referred_columns"]),
+            )
+            for constraint in inspect(engine).get_foreign_keys("human_decisions")
+        }
         run_checks = {
             constraint["name"]: constraint["sqltext"]
             for constraint in inspect(engine).get_check_constraints(
@@ -306,8 +326,24 @@ def test_alembic_upgrade_creates_a2_execution_fields(tmp_path) -> None:
         engine.dispose()
 
     assert "evaluation_results" in table_names
+    assert "human_decisions" in table_names
     assert {"case_errors", "business_reference_snapshot"} <= run_columns
     assert "raw_judge_output" in result_columns
+    assert decision_columns == {
+        "id",
+        "evaluation_result_id",
+        "reviewer",
+        "reviewed_at",
+        "original_result",
+        "final_result",
+        "change_reason",
+    }
+    assert ("evaluation_result_id",) in decision_uniques
+    assert (
+        ("evaluation_result_id",),
+        "evaluation_results",
+        ("id",),
+    ) in decision_foreign_keys
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "b7f1c3d5e902"
+    assert revision == "d2a4c6e8f013"

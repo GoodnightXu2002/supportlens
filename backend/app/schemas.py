@@ -3,7 +3,9 @@ from enum import StrEnum
 from typing import Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.judge_contract import JudgeOutput
 
 
 class DatasetSource(StrEnum):
@@ -35,6 +37,21 @@ class EvaluationRunStatus(StrEnum):
 class EvaluationRunSource(StrEnum):
     SEED = "seed"
     LIVE = "live"
+
+
+class HumanReviewAction(StrEnum):
+    CONFIRM = "confirm"
+    CORRECT = "correct"
+
+
+class FinalEffectiveResultStatus(StrEnum):
+    FINAL = "final"
+    PENDING_REVIEW = "pending_review"
+
+
+class FinalEffectiveResultSource(StrEnum):
+    MACHINE = "machine"
+    HUMAN = "human"
 
 
 class DatasetBase(BaseModel):
@@ -158,3 +175,48 @@ class EvaluationRunRead(BaseModel):
     error_code: str | None
     error_message: str | None
     created_at: datetime
+
+
+class HumanReviewSubmitRequest(BaseModel):
+    reviewer: str
+    action: HumanReviewAction
+    final_result: JudgeOutput | None = None
+    change_reason: str | None = None
+
+    @field_validator("reviewer")
+    @classmethod
+    def reviewer_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reviewer must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def correct_requires_final_result(self) -> Self:
+        if (
+            self.action is HumanReviewAction.CORRECT
+            and self.final_result is None
+        ):
+            raise ValueError("correct action requires final_result")
+        return self
+
+
+class HumanDecisionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    evaluation_result_id: UUID
+    reviewer: str
+    reviewed_at: datetime
+    original_result: JudgeOutput
+    final_result: JudgeOutput
+    change_reason: str | None
+
+
+class FinalEffectiveResultRead(BaseModel):
+    evaluation_result_id: UUID
+    conversation_id: UUID
+    case_id: str
+    status: FinalEffectiveResultStatus
+    source: FinalEffectiveResultSource | None
+    final_result: JudgeOutput | None
+    human_decision_id: UUID | None

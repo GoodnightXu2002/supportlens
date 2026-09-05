@@ -237,3 +237,45 @@ class EvaluationResult(Base):
     conversation: Mapped[Conversation] = relationship(
         back_populates="evaluation_results"
     )
+    human_decision: Mapped[HumanDecision | None] = relationship(
+        back_populates="evaluation_result",
+        uselist=False,
+    )
+
+
+class HumanDecision(Base):
+    __tablename__ = "human_decisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "evaluation_result_id",
+            name="uq_human_decisions_evaluation_result_id",
+        ),
+        CheckConstraint(
+            "length(trim(reviewer)) > 0",
+            name="ck_human_decisions_reviewer_not_empty",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    evaluation_result_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_results.id"),
+        nullable=False,
+    )
+    reviewer: Mapped[str] = mapped_column(String(255), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    original_result: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    final_result: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    evaluation_result: Mapped[EvaluationResult] = relationship(
+        back_populates="human_decision"
+    )
