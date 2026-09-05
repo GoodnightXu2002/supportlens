@@ -6,10 +6,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.business_impact_mapping import (
+    BUSINESS_IMPACT_MAPPING_VERSION,
+    BusinessImpactMappingAsset,
+    BusinessImpactMappingService,
+)
 from app.database import Base
 from app.human_review import HumanReviewService
 from app.judge_contract import JudgeOutput
-from app.main import app, get_db_session
+from app.main import app, get_db_session, get_problem_aggregation_service
 from app.models import (
     Conversation,
     Dataset,
@@ -20,6 +25,7 @@ from app.models import (
 )
 from app.problem_aggregation import (
     PROBLEM_MAPPING_VERSION,
+    ProblemAggregationService,
     build_problem_mapping_key,
 )
 from app.schemas import HumanReviewAction
@@ -58,6 +64,7 @@ def _output(
     *,
     review_required: bool = False,
     evidence: list[dict[str, object]] | None = None,
+    severity: str | None = None,
 ) -> dict[str, object]:
     is_failure = judgment == "failure"
     return JudgeOutput.model_validate(
@@ -70,7 +77,7 @@ def _output(
                 ["policy_procedure_violation"] if is_failure else []
             ),
             "problem": problem,
-            "severity": "medium" if is_failure else None,
+            "severity": (severity or "medium") if is_failure else None,
             "evidence": evidence or [],
             "uncertainty": (
                 "The available evidence is incomplete."
@@ -115,7 +122,12 @@ def _create_run(
                 {"role": "user", "content": "Please help."},
                 {"role": "assistant", "content": "Here is an answer."},
             ],
-            metadata_={"scenario": case["scenario"]},
+            metadata_={
+                "scenario": case["scenario"],
+                "metadata": {
+                    "case_set": case.get("case_set", "core"),
+                },
+            },
         )
         session.add(conversation)
         if omit_result_for and case_id in omit_result_for:
@@ -129,6 +141,7 @@ def _create_run(
                 case.get("problem"),
                 review_required=bool(case.get("review_required", False)),
                 evidence=case.get("evidence"),
+                severity=case.get("severity"),
             ),
         )
         session.add(result)
@@ -296,6 +309,115 @@ def test_human_corrected_problem_is_the_only_formal_input(api_context) -> None:
         machine = session.get(EvaluationResult, result_id)
         assert machine is not None
         assert machine.problem == "Obsolete machine problem"
+
+
+def test_profile_uses_core_final_results_and_human_corrections(
+    api_context,
+) -> None:
+    client, engine = api_context
+    definition = "Shared actionable failure"
+    evidence = [
+        {
+            "evidence_type": "response",
+            "content": "The response contains the failing claim.",
+            "source_ref": "assistant_response",
+        }
+    ]
+    with Session(engine) as session:
+        evaluation_run, results = _create_run(
+            session,
+            [
+                {
+                    "case_id": "CORE-LOW",
+                    "scenario": "Refund",
+                    "judgment": "failure",
+                    "problem": definition,
+                    "severity": "low",
+                    "evidence": evidence,
+                    "case_set": "core",
+                },
+                {
+                    "case_id": "CORE-REVIEWED",
+                    "scenario": "Refund",
+                    "judgment": "failure",
+                    "problem": definition,
+                    "severity": "medium",
+                    "evidence": evidence,
+                    "review_required": True,
+                    "case_set": "core",
+                },
+                {
+                    "case_id": "CHALLENGE-CRITICAL",
+                    "scenario": "Refund",
+                    "judgment": "failure",
+                    "problem": definition,
+                    "severity": "critical",
+                    "evidence": evidence,
+                    "case_set": "challenge",
+                },
+            ],
+        )
+        session.commit()
+        run_id = evaluation_run.id
+        reviewed_result_id = results["CORE-REVIEWED"].id
+
+    corrected = _output(
+        "failure",
+        definition,
+        review_required=True,
+        evidence=evidence,
+        severity="high",
+    )
+    with Session(engine) as session:
+        HumanReviewService().submit(
+            reviewed_result_id,
+            reviewer="reviewer@example.com",
+            action=HumanReviewAction.CORRECT,
+            final_result=corrected,
+            change_reason="Correct the final severity.",
+            db_session=session,
+        )
+
+    mapping_key = build_problem_mapping_key("Refund", definition)
+    mapping = BusinessImpactMappingAsset.model_validate(
+        {
+            "mapping_version": BUSINESS_IMPACT_MAPPING_VERSION,
+            "mappings": [
+                {
+                    "mapping_key": mapping_key,
+                    "business_impact": "high",
+                }
+            ],
+        }
+    )
+    service = ProblemAggregationService(
+        business_impact_service=BusinessImpactMappingService(mapping)
+    )
+    app.dependency_overrides[get_problem_aggregation_service] = lambda: service
+
+    response = _generate(client, run_id)
+
+    assert response.status_code == 201
+    problem = response.json()[0]
+    assert problem["frequency"] == {"numerator": 2, "denominator": 2}
+    assert problem["severity_distribution"] == {
+        "low": 1,
+        "medium": 0,
+        "high": 1,
+        "critical": 0,
+    }
+    assert problem["priority_severity"] == "high"
+    assert problem["business_impact"] == "high"
+    assert problem["business_impact_status"] == "mapped"
+    assert problem["review_status"] == "cleared"
+    assert problem["evidence_sufficiency"] == "sufficient"
+    assert problem["evidence_confidence"] == "medium"
+    assert problem["reference_conflict_status"] == "unsupported"
+    assert problem["pattern_consistency"] == "moderate"
+    assert problem["individual_risk_issue"] is False
+    assert problem["ranking_eligible"] is True
+    assert problem["rank"] == 1
+    assert problem["equal_review_priority"] is False
 
 
 def test_pending_review_blocks_aggregation_without_partial_writes(

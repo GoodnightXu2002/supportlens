@@ -70,7 +70,9 @@ def load_business_impact_mapping(
 
 class BusinessImpactMappingService:
     def __init__(self, mapping: BusinessImpactMappingAsset | None = None) -> None:
-        self._mapping = mapping or load_business_impact_mapping()
+        self._mapping = (
+            mapping if mapping is not None else load_business_impact_mapping()
+        )
         self._business_impact_by_key = {
             entry.mapping_key: entry.business_impact
             for entry in self._mapping.mappings

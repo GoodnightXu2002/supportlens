@@ -11,14 +11,21 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.business_impact_mapping import BusinessImpactMappingService
 from app.human_review import HumanReviewService
 from app.judge_contract import Judgment
 from app.models import (
     Conversation,
     EvaluationResult,
     EvaluationRun,
+    HumanDecision,
     Problem,
     ResultProblemLink,
+)
+from app.problem_priority import (
+    ProblemCaseSignal,
+    build_problem_profile,
+    rank_problem_profiles,
 )
 from app.schemas import (
     FinalEffectiveResultStatus,
@@ -59,8 +66,12 @@ class ProblemAggregationService:
     def __init__(
         self,
         final_result_service: HumanReviewService | None = None,
+        business_impact_service: BusinessImpactMappingService | None = None,
     ) -> None:
         self._final_result_service = final_result_service or HumanReviewService()
+        self._business_impact_service = (
+            business_impact_service or BusinessImpactMappingService()
+        )
 
     def generate(
         self,
@@ -204,11 +215,24 @@ class ProblemAggregationService:
         evaluation_run_id: UUID,
         db_session: Session,
     ) -> list[ProblemRead]:
-        if db_session.get(EvaluationRun, evaluation_run_id) is None:
+        evaluation_run = db_session.get(EvaluationRun, evaluation_run_id)
+        if evaluation_run is None:
             raise ProblemAggregationError(
                 ProblemAggregationErrorCode.EVALUATION_RUN_NOT_FOUND,
                 f"Evaluation run '{evaluation_run_id}' was not found.",
             )
+
+        dataset_conversations = list(
+            db_session.scalars(
+                select(Conversation).where(
+                    Conversation.dataset_id == evaluation_run.dataset_id
+                )
+            ).all()
+        )
+        core_denominator = sum(
+            _conversation_case_set(conversation.metadata_) == "core"
+            for conversation in dataset_conversations
+        )
 
         effective_result_by_id = {
             result.evaluation_result_id: result
@@ -216,6 +240,19 @@ class ProblemAggregationService:
                 evaluation_run_id,
                 db_session,
             )
+        }
+        human_decision_by_result_id = {
+            decision.evaluation_result_id: decision
+            for decision in db_session.scalars(
+                select(HumanDecision)
+                .join(
+                    EvaluationResult,
+                    EvaluationResult.id == HumanDecision.evaluation_result_id,
+                )
+                .where(
+                    EvaluationResult.evaluation_run_id == evaluation_run_id
+                )
+            ).all()
         }
 
         problems = list(
@@ -236,6 +273,7 @@ class ProblemAggregationService:
                     ResultProblemLink.evaluation_result_id,
                     Conversation.id,
                     Conversation.external_id,
+                    Conversation.metadata_,
                 )
                 .join(
                     EvaluationResult,
@@ -248,6 +286,7 @@ class ProblemAggregationService:
                 )
                 .where(
                     ResultProblemLink.problem_id == problem.id,
+                    ResultProblemLink.role == PRIMARY_PROBLEM_ROLE,
                     EvaluationResult.evaluation_run_id == evaluation_run_id,
                 )
                 .order_by(
@@ -256,7 +295,13 @@ class ProblemAggregationService:
                 )
             ).all()
             evidence: list[ProblemEvidenceRead] = []
-            for evaluation_result_id, conversation_id, case_id in affected:
+            case_signals: list[ProblemCaseSignal] = []
+            for (
+                evaluation_result_id,
+                conversation_id,
+                case_id,
+                conversation_metadata,
+            ) in affected:
                 effective_result = effective_result_by_id.get(
                     evaluation_result_id
                 )
@@ -280,8 +325,33 @@ class ProblemAggregationService:
                     )
                     for item in effective_result.final_result.evidence
                 )
+                decision = human_decision_by_result_id.get(
+                    evaluation_result_id
+                )
+                case_signals.append(
+                    ProblemCaseSignal(
+                        is_core=(
+                            _conversation_case_set(conversation_metadata)
+                            == "core"
+                        ),
+                        final_status=effective_result.status,
+                        final_result=effective_result.final_result,
+                        human_problem_or_severity_changed=(
+                            _human_changed_problem_or_severity(decision)
+                        ),
+                    )
+                )
+            profile = build_problem_profile(
+                cases=case_signals,
+                core_denominator=core_denominator,
+                run_status=evaluation_run.status,
+                business_impact_lookup=(
+                    self._business_impact_service.lookup(problem.mapping_key)
+                ),
+            )
             response.append(
                 ProblemRead(
+                    **profile.model_dump(),
                     problem_id=problem.id,
                     evaluation_run_id=problem.evaluation_run_id,
                     scenario=problem.scenario,
@@ -295,7 +365,22 @@ class ProblemAggregationService:
                     evidence=evidence,
                 )
             )
-        return response
+        assignments = rank_problem_profiles(response)
+        return [
+            problem.model_copy(
+                update={
+                    "rank": assignment.rank,
+                    "equal_review_priority": (
+                        assignment.equal_review_priority
+                    ),
+                }
+            )
+            for problem, assignment in zip(
+                response,
+                assignments,
+                strict=True,
+            )
+        ]
 
     @staticmethod
     def _already_completed(
@@ -336,4 +421,25 @@ def build_problem_mapping_key(scenario: str, definition: str) -> str:
         [scenario, definition],
         ensure_ascii=False,
         separators=(",", ":"),
+    )
+
+
+def _conversation_case_set(metadata: object) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    nested_metadata = metadata.get("metadata")
+    if not isinstance(nested_metadata, dict):
+        return None
+    case_set = nested_metadata.get("case_set")
+    return case_set if isinstance(case_set, str) else None
+
+
+def _human_changed_problem_or_severity(
+    decision: HumanDecision | None,
+) -> bool:
+    if decision is None:
+        return False
+    return any(
+        decision.original_result.get(field) != decision.final_result.get(field)
+        for field in ("problem", "severity")
     )

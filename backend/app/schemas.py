@@ -5,7 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.judge_contract import EvidenceType, JudgeOutput
+from app.business_impact_mapping import BusinessImpact, BusinessImpactLookupStatus
+from app.judge_contract import EvidenceType, JudgeOutput, Severity
 
 
 class DatasetSource(StrEnum):
@@ -52,6 +53,34 @@ class FinalEffectiveResultStatus(StrEnum):
 class FinalEffectiveResultSource(StrEnum):
     MACHINE = "machine"
     HUMAN = "human"
+
+
+class ProblemReviewStatus(StrEnum):
+    CLEARED = "cleared"
+    PENDING = "pending"
+
+
+class EvidenceSufficiency(StrEnum):
+    SUFFICIENT = "sufficient"
+    INSUFFICIENT = "insufficient"
+
+
+class EvidenceConfidence(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    UNKNOWN = "unknown"
+
+
+class PatternConsistency(StrEnum):
+    STRONG = "strong"
+    MODERATE = "moderate"
+    WEAK = "weak"
+
+
+class ReferenceConflictStatus(StrEnum):
+    CLEAR = "clear"
+    PRESENT = "present"
+    UNSUPPORTED = "unsupported"
 
 
 class DatasetBase(BaseModel):
@@ -232,7 +261,39 @@ class ProblemEvidenceRead(BaseModel):
     source_ref: str | None
 
 
-class ProblemRead(BaseModel):
+class ProblemFrequencyRead(BaseModel):
+    numerator: int = Field(ge=0)
+    denominator: int = Field(ge=0)
+
+
+class SeverityDistributionRead(BaseModel):
+    low: int = Field(ge=0)
+    medium: int = Field(ge=0)
+    high: int = Field(ge=0)
+    critical: int = Field(ge=0)
+
+
+class ProblemProfileRead(BaseModel):
+    profile_version: Literal["BASELINE-PROBLEM-PROFILE-V1"]
+    frequency: ProblemFrequencyRead
+    severity_distribution: SeverityDistributionRead
+    priority_severity: Severity | None
+    business_impact: BusinessImpact | None
+    business_impact_status: BusinessImpactLookupStatus
+    business_impact_mapping_version: str
+    review_status: ProblemReviewStatus
+    evidence_sufficiency: EvidenceSufficiency
+    evidence_confidence: EvidenceConfidence | None
+    reference_conflict_status: ReferenceConflictStatus
+    pattern_consistency: PatternConsistency | None
+    individual_risk_issue: bool
+    ranking_eligible: bool
+    ranking_blockers: list[str]
+    rank: int | None
+    equal_review_priority: bool | None
+
+
+class ProblemRead(ProblemProfileRead):
     problem_id: UUID
     evaluation_run_id: UUID
     scenario: str
