@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.judge_contract import (
@@ -36,6 +38,7 @@ class JudgeExecutionResult(BaseModel):
     provider_response_id: str | None
     token_usage: dict[str, int] | None
     raw_json_text: str
+    raw_judge_output: dict[str, Any]
 
 
 class JudgeExecutionError(RuntimeError):
@@ -44,10 +47,12 @@ class JudgeExecutionError(RuntimeError):
         *,
         attempts: int,
         error_code: str,
+        raw_judge_output: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(f"Judge execution failed after {attempts} attempt(s).")
         self.attempts = attempts
         self.error_code = error_code
+        self.raw_judge_output = raw_judge_output
 
 
 def execute_judge(
@@ -63,15 +68,18 @@ def execute_judge(
         assets=JudgePromptAssets(business_reference=business_reference),
     )
 
+    last_raw_judge_output: dict[str, Any] | None = None
     for attempt in range(1, MAX_JUDGE_ATTEMPTS + 1):
         try:
             response = provider.complete(request)
+            last_raw_judge_output = response.structured_payload
             output = validate_judge_output(response.structured_payload)
         except LLMProviderError as error:
             if not error.retryable or attempt == MAX_JUDGE_ATTEMPTS:
                 raise JudgeExecutionError(
                     attempts=attempt,
                     error_code=error.code.value,
+                    raw_judge_output=last_raw_judge_output,
                 ) from error
             continue
         except ValidationError as error:
@@ -79,6 +87,7 @@ def execute_judge(
                 raise JudgeExecutionError(
                     attempts=attempt,
                     error_code="judge_output_invalid",
+                    raw_judge_output=response.structured_payload,
                 ) from error
             continue
 
@@ -92,9 +101,11 @@ def execute_judge(
             provider_response_id=response.request_id,
             token_usage=response.token_usage,
             raw_json_text=response.raw_json_text,
+            raw_judge_output=response.structured_payload,
         )
 
     raise JudgeExecutionError(
         attempts=MAX_JUDGE_ATTEMPTS,
         error_code=LLMProviderErrorCode.MALFORMED_RESPONSE.value,
+        raw_judge_output=last_raw_judge_output,
     )

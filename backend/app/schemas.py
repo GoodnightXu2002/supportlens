@@ -27,7 +27,9 @@ class EvaluationRunStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
+    PARTIAL_FAILURE = "partial_failure"
     FAILED = "failed"
+    INVALID = "invalid"
 
 
 class EvaluationRunSource(StrEnum):

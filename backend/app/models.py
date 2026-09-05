@@ -99,7 +99,9 @@ class EvaluationRun(Base):
             name="ck_evaluation_runs_run_type",
         ),
         CheckConstraint(
-            "status IN ('pending', 'running', 'completed', 'failed')",
+            "status IN "
+            "('pending', 'running', 'completed', 'partial_failure', "
+            "'failed', 'invalid')",
             name="ck_evaluation_runs_status",
         ),
         CheckConstraint(
@@ -139,6 +141,15 @@ class EvaluationRun(Base):
     response_set_key: Mapped[str] = mapped_column(String(255), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    case_errors: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON(none_as_null=True),
+        nullable=False,
+        default=list,
+        server_default="[]",
+    )
+    business_reference_snapshot: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -213,6 +224,9 @@ class EvaluationResult(Base):
     uncertainty: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_required: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    raw_judge_output: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

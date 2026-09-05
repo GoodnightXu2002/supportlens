@@ -265,7 +265,7 @@ def test_required_judge_output_fields_reject_null(
             )
 
 
-def test_alembic_upgrade_creates_evaluation_results_table(tmp_path) -> None:
+def test_alembic_upgrade_creates_a2_execution_fields(tmp_path) -> None:
     backend_root = Path(__file__).resolve().parents[1]
     database_path = tmp_path / "migration.db"
     environment = os.environ.copy()
@@ -284,6 +284,20 @@ def test_alembic_upgrade_creates_evaluation_results_table(tmp_path) -> None:
     engine = create_engine(environment["DATABASE_URL"])
     try:
         table_names = inspect(engine).get_table_names()
+        run_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("evaluation_runs")
+        }
+        result_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("evaluation_results")
+        }
+        run_checks = {
+            constraint["name"]: constraint["sqltext"]
+            for constraint in inspect(engine).get_check_constraints(
+                "evaluation_runs"
+            )
+        }
         with engine.connect() as connection:
             revision = connection.scalar(
                 text("SELECT version_num FROM alembic_version")
@@ -292,4 +306,8 @@ def test_alembic_upgrade_creates_evaluation_results_table(tmp_path) -> None:
         engine.dispose()
 
     assert "evaluation_results" in table_names
-    assert revision == "e8d2f4a6b901"
+    assert {"case_errors", "business_reference_snapshot"} <= run_columns
+    assert "raw_judge_output" in result_columns
+    assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
+    assert "invalid" in run_checks["ck_evaluation_runs_status"]
+    assert revision == "b7f1c3d5e902"

@@ -206,3 +206,26 @@ def test_two_invalid_outputs_fail_with_stable_execution_error() -> None:
 
     assert exc_info.value.attempts == 2
     assert exc_info.value.error_code == "judge_output_invalid"
+
+
+def test_failure_preserves_last_available_raw_judge_output() -> None:
+    invalid_payload = {"judgment": "success"}
+    provider = ScriptedProvider(
+        [
+            _response(invalid_payload),
+            LLMProviderError(
+                LLMProviderErrorCode.TRANSPORT_ERROR,
+                "safe transport failure",
+                retryable=True,
+            ),
+        ]
+    )
+
+    with pytest.raises(JudgeExecutionError) as exc_info:
+        execute_judge(
+            _conversation(),
+            business_reference="tracking reference",
+            provider=provider,
+        )
+
+    assert exc_info.value.raw_judge_output == invalid_payload
