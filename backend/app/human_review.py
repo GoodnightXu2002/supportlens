@@ -15,6 +15,7 @@ from app.schemas import (
     FinalEffectiveResultRead,
     FinalEffectiveResultSource,
     FinalEffectiveResultStatus,
+    HumanDecisionRead,
     HumanReviewAction,
 )
 
@@ -150,10 +151,11 @@ class HumanReviewService:
 
         effective_results: list[FinalEffectiveResultRead] = []
         for evaluation_result, conversation, decision in rows:
+            machine_result = self._evaluation_output(evaluation_result)
             if evaluation_result.review_required is False:
                 status = FinalEffectiveResultStatus.FINAL
                 source = FinalEffectiveResultSource.MACHINE
-                final_result = self._evaluation_output(evaluation_result)
+                final_result = machine_result
                 decision_id = None
             elif decision is None:
                 status = FinalEffectiveResultStatus.PENDING_REVIEW
@@ -173,8 +175,14 @@ class HumanReviewService:
                     case_id=conversation.external_id,
                     status=status,
                     source=source,
+                    machine_result=machine_result,
                     final_result=final_result,
                     human_decision_id=decision_id,
+                    human_decision=(
+                        HumanDecisionRead.model_validate(decision)
+                        if decision is not None
+                        else None
+                    ),
                 )
             )
         return effective_results

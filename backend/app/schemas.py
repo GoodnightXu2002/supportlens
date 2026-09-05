@@ -203,6 +203,7 @@ class EvaluationRunRead(BaseModel):
     response_set_key: str
     error_code: str | None
     error_message: str | None
+    problem_aggregation_completed_at: datetime | None
     created_at: datetime
 
 
@@ -247,8 +248,10 @@ class FinalEffectiveResultRead(BaseModel):
     case_id: str
     status: FinalEffectiveResultStatus
     source: FinalEffectiveResultSource | None
+    machine_result: JudgeOutput
     final_result: JudgeOutput | None
     human_decision_id: UUID | None
+    human_decision: HumanDecisionRead | None
 
 
 class ProblemEvidenceRead(BaseModel):

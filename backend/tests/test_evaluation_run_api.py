@@ -105,6 +105,7 @@ def test_create_baseline_persists_pending_live_run(api_context) -> None:
     assert body["candidate_change_summary"] is None
     assert body["error_code"] is None
     assert body["error_message"] is None
+    assert body["problem_aggregation_completed_at"] is None
     assert body["created_at"]
     assert "evaluation_results" in Base.metadata.tables
 
@@ -118,6 +119,29 @@ def test_create_baseline_persists_pending_live_run(api_context) -> None:
     get_response = client.get(f"/api/evaluation-runs/{run_id}")
     assert get_response.status_code == 200
     assert get_response.json() == body
+
+
+def test_run_read_returns_problem_aggregation_completion_time(api_context) -> None:
+    client, engine = api_context
+    dataset = _persist_dataset(engine)
+    completed_at = datetime(2026, 9, 6, tzinfo=UTC)
+    run_id = uuid4()
+    with Session(engine) as session:
+        evaluation_run = _stored_run(
+            run_id=run_id,
+            dataset_id=dataset.id,
+            created_at=datetime(2026, 9, 5, tzinfo=UTC),
+        )
+        evaluation_run.problem_aggregation_completed_at = completed_at
+        session.add(evaluation_run)
+        session.commit()
+
+    response = client.get(f"/api/evaluation-runs/{run_id}")
+
+    assert response.status_code == 200
+    assert response.json()["problem_aggregation_completed_at"] == (
+        "2026-09-06T00:00:00"
+    )
 
 
 def test_create_baseline_requires_existing_dataset(api_context) -> None:

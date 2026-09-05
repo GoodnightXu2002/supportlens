@@ -172,15 +172,19 @@ def test_final_results_include_machine_final_and_pending_review(api_context) -> 
         "case_id": "CASE-FINAL",
         "status": "final",
         "source": "machine",
+        "machine_result": _machine_output(review_required=False),
         "final_result": _machine_output(review_required=False),
         "human_decision_id": None,
+        "human_decision": None,
     }
     pending = by_case["CASE-PENDING"]
     assert pending["evaluation_result_id"] == str(result_ids["CASE-PENDING"])
     assert pending["status"] == "pending_review"
     assert pending["source"] is None
+    assert pending["machine_result"] == _machine_output(review_required=True)
     assert pending["final_result"] is None
     assert pending["human_decision_id"] is None
+    assert pending["human_decision"] is None
 
 
 def test_confirm_creates_human_final_equal_to_machine_result(api_context) -> None:
@@ -206,8 +210,10 @@ def test_confirm_creates_human_final_equal_to_machine_result(api_context) -> Non
     effective = final_response.json()[0]
     assert effective["status"] == "final"
     assert effective["source"] == "human"
+    assert effective["machine_result"] == decision["original_result"]
     assert effective["final_result"] == decision["final_result"]
     assert effective["human_decision_id"] == decision["id"]
+    assert effective["human_decision"] == decision
 
 
 def test_correct_changes_final_but_preserves_machine_and_raw_output(
@@ -252,7 +258,9 @@ def test_correct_changes_final_but_preserves_machine_and_raw_output(
     ).json()[0]
     assert effective["status"] == "final"
     assert effective["source"] == "human"
+    assert effective["machine_result"] == original_payload
     assert effective["final_result"] == corrected_payload
+    assert effective["human_decision"] == decision
 
 
 def test_changed_result_requires_non_empty_reason(api_context) -> None:

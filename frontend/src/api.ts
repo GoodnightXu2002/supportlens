@@ -78,6 +78,124 @@ export type DatasetConversation = {
   created_at: string
 }
 
+export type EvaluationRun = {
+  id: string
+  dataset_id: string
+  run_type: 'baseline' | 'candidate'
+  status:
+    | 'pending'
+    | 'running'
+    | 'completed'
+    | 'partial_failure'
+    | 'failed'
+    | 'invalid'
+  baseline_run_id: string | null
+  target_id: string | null
+  candidate_label: string | null
+  candidate_change_summary: string | null
+  judge_model: string
+  judge_contract_version: string
+  run_source: 'seed' | 'live'
+  response_set_key: string
+  error_code: string | null
+  error_message: string | null
+  problem_aggregation_completed_at: string | null
+  created_at: string
+}
+
+export type JudgeEvidence = {
+  evidence_type: 'response' | 'case_fact' | 'reference'
+  content: string
+  source_ref: string | null
+}
+
+export type JudgeOutput = {
+  judgment: 'success' | 'warning' | 'failure' | 'uncertain'
+  primary_failure_mode:
+    | 'incorrect_information'
+    | 'incomplete_unresolved'
+    | 'intent_relevance_failure'
+    | 'improper_refusal'
+    | 'policy_procedure_violation'
+    | 'other'
+    | null
+  secondary_flags: Array<Exclude<JudgeOutput['primary_failure_mode'], null>>
+  problem: string | null
+  severity: 'low' | 'medium' | 'high' | 'critical' | null
+  evidence: JudgeEvidence[]
+  uncertainty: string | null
+  review_required: boolean | null
+  rationale: string
+}
+
+export type HumanDecision = {
+  id: string
+  evaluation_result_id: string
+  reviewer: string
+  reviewed_at: string
+  original_result: JudgeOutput
+  final_result: JudgeOutput
+  change_reason: string | null
+}
+
+export type FinalEffectiveResult = {
+  evaluation_result_id: string
+  conversation_id: string
+  case_id: string
+  status: 'final' | 'pending_review'
+  source: 'machine' | 'human' | null
+  machine_result: JudgeOutput
+  final_result: JudgeOutput | null
+  human_decision_id: string | null
+  human_decision: HumanDecision | null
+}
+
+export type ProblemEvidence = {
+  problem_id: string
+  evaluation_result_id: string
+  conversation_id: string
+  case_id: string
+  evidence_type: JudgeEvidence['evidence_type']
+  content: string
+  source_ref: string | null
+}
+
+export type Problem = {
+  problem_id: string
+  evaluation_run_id: string
+  scenario: string
+  definition: string
+  mapping_key: string
+  mapping_version: string
+  created_at: string
+  affected_case_count: number
+  affected_evaluation_result_ids: string[]
+  affected_case_ids: string[]
+  evidence: ProblemEvidence[]
+  profile_version: 'BASELINE-PROBLEM-PROFILE-V1'
+  frequency: { numerator: number; denominator: number }
+  severity_distribution: {
+    low: number
+    medium: number
+    high: number
+    critical: number
+  }
+  priority_severity: JudgeOutput['severity']
+  business_impact: 'high' | 'medium' | 'low' | null
+  business_impact_status: 'mapped' | 'unmapped'
+  business_impact_mapping_version: string
+  review_status: 'cleared' | 'pending'
+  evidence_sufficiency: 'sufficient' | 'insufficient'
+  evidence_confidence: 'high' | 'medium' | 'unknown' | null
+  reference_conflict_status: 'clear' | 'present' | 'unsupported'
+  pattern_consistency: 'strong' | 'moderate' | 'weak' | null
+  individual_risk_issue: boolean
+  ranking_eligible: boolean
+  ranking_blockers: string[]
+  rank: number | null
+  equal_review_priority: boolean | null
+}
+
 export class ApiRequestError extends Error {
   readonly code: string
   readonly details: ImportErrorDetail[]
@@ -194,6 +312,42 @@ export async function getDatasetConversations(
   return requestJson<DatasetConversation[]>(
     await fetch(
       `${API_BASE_URL}/api/datasets/${encodeURIComponent(datasetId)}/conversations`,
+      { signal },
+    ),
+  )
+}
+
+export async function getEvaluationRun(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}`,
+      { signal },
+    ),
+  )
+}
+
+export async function getFinalEffectiveResults(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<FinalEffectiveResult[]> {
+  return requestJson<FinalEffectiveResult[]>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/final-effective-results`,
+      { signal },
+    ),
+  )
+}
+
+export async function getProblems(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Problem[]> {
+  return requestJson<Problem[]>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/problems`,
       { signal },
     ),
   )
