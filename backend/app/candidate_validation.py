@@ -302,7 +302,25 @@ class CandidateComparisonService:
         )
         existing = self.list(candidate_run_id, db_session)
         if existing:
-            return existing, self.get_summary(candidate_run_id, db_session)
+            conversations = list(
+                db_session.scalars(
+                    select(Conversation).where(
+                        Conversation.dataset_id == baseline.dataset_id
+                    )
+                ).all()
+            )
+            summary = self._build_summary(
+                candidate,
+                baseline,
+                target,
+                existing,
+                self._effective_by_conversation(candidate.id, db_session),
+                {item.id: item for item in conversations},
+                db_session,
+            )
+            candidate.candidate_validation_summary = summary.model_dump(mode="json")
+            db_session.commit()
+            return existing, summary
         if candidate.status != EvaluationRunStatus.COMPLETED.value:
             raise CandidateValidationError(
                 CandidateValidationErrorCode.CANDIDATE_COMPARISON_NOT_READY,
@@ -759,13 +777,17 @@ class CandidateComparisonService:
             blockers.append("protected_capability_membership_unsupported")
         if any(item.movement is CaseMovement.INCONCLUSIVE for item in comparisons):
             blockers.append("case_comparison_inconclusive")
-        if blockers:
+        has_decisive_continue_signal = bool(
+            regression_counts[RegressionLevel.CRITICAL.value]
+            or regression_counts[RegressionLevel.MAJOR.value]
+            or new_systematic
+        )
+        if has_decisive_continue_signal:
+            verdict = RecommendedVerdict.CONTINUE
+        elif blockers:
             verdict = RecommendedVerdict.INCONCLUSIVE
         elif (
             target_outcome not in {"resolved", "improved"}
-            or regression_counts[RegressionLevel.CRITICAL.value]
-            or regression_counts[RegressionLevel.MAJOR.value]
-            or new_systematic
             or remaining_high_critical
         ):
             verdict = RecommendedVerdict.CONTINUE

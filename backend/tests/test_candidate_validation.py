@@ -453,6 +453,39 @@ def test_case_pairing_target_exact_identity_and_idempotency(database_engine) -> 
         assert session.scalar(select(func.count()).select_from(CaseComparison)) == 3
 
 
+def test_existing_comparisons_refresh_decisive_continue_verdict(
+    database_engine,
+) -> None:
+    foundation = _persist_foundation(database_engine)
+    candidate_id = _create_candidate(database_engine, foundation)
+    _persist_candidate_results(
+        database_engine,
+        candidate_id,
+        [
+            _output("failure", problem="New repeated issue", severity="medium"),
+            _output("failure", problem="New repeated issue", severity="medium"),
+            _output("success"),
+        ],
+    )
+    with Session(database_engine) as session:
+        service = CandidateComparisonService()
+        comparisons, summary = service.generate(candidate_id, session)
+        assert summary.recommended_verdict.value == "CONTINUE"
+        comparison_ids = {item.id for item in comparisons}
+
+        candidate = session.get(EvaluationRun, candidate_id)
+        stale_summary = dict(candidate.candidate_validation_summary)
+        stale_summary["recommended_verdict"] = "INCONCLUSIVE"
+        candidate.candidate_validation_summary = stale_summary
+        session.commit()
+
+        refreshed, refreshed_summary = service.generate(candidate_id, session)
+        assert {item.id for item in refreshed} == comparison_ids
+        assert refreshed_summary.recommended_verdict.value == "CONTINUE"
+        assert service.get_summary(candidate_id, session) == refreshed_summary
+        assert session.scalar(select(func.count()).select_from(CaseComparison)) == 3
+
+
 @pytest.mark.parametrize(
     ("baseline", "candidate", "target_status", "other", "expected"),
     [
@@ -556,7 +589,8 @@ def test_new_systematic_problem_and_continue_verdict(database_engine) -> None:
         "CASE-001",
         "CASE-002",
     ]
-    assert summary.recommended_verdict.value != "ACCEPT"
+    assert "case_comparison_inconclusive" in summary.blockers
+    assert summary.recommended_verdict.value == "CONTINUE"
 
 
 def test_protected_capability_unsupported_is_inconclusive(database_engine) -> None:
