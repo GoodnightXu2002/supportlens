@@ -51,7 +51,9 @@ from app.schemas import (
     FinalEffectiveResultRead,
     HumanDecisionRead,
     HumanReviewSubmitRequest,
+    OptimizationTargetActorRequest,
     OptimizationTargetCreateRequest,
+    OptimizationTargetPatchRequest,
     OptimizationTargetRead,
     ProblemRead,
 )
@@ -308,6 +310,17 @@ def _optimization_target_error_response(
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PENDING_REVIEW: 409,
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_AGGREGATION_NOT_COMPLETED: 409,
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_ALREADY_EXISTS: 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FROZEN: 409,
+        (
+            OptimizationTargetErrorCode
+            .OPTIMIZATION_TARGET_TARGET_CONFIRMATION_INCOMPLETE
+        ): 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_TARGET_NOT_CONFIRMED: 409,
+        (
+            OptimizationTargetErrorCode
+            .OPTIMIZATION_TARGET_HYPOTHESIS_CONFIRMATION_INCOMPLETE
+        ): 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FREEZE_GATE_FAILED: 409,
         (
             OptimizationTargetErrorCode
             .OPTIMIZATION_TARGET_PROBLEM_HAS_NO_AFFECTED_CASES
@@ -487,6 +500,82 @@ def get_optimization_target(
 ) -> OptimizationTargetRead | JSONResponse:
     try:
         return service.get(target_id, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.patch(
+    "/api/optimization-targets/{target_id}",
+    response_model=OptimizationTargetRead,
+)
+def patch_optimization_target(
+    target_id: UUID,
+    request: OptimizationTargetPatchRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.patch(target_id, request, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/optimization-targets/{target_id}/confirm-target",
+    response_model=OptimizationTargetRead,
+)
+def confirm_optimization_target(
+    target_id: UUID,
+    request: OptimizationTargetActorRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.confirm_target(target_id, request, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/optimization-targets/{target_id}/confirm-hypothesis",
+    response_model=OptimizationTargetRead,
+)
+def confirm_optimization_target_hypothesis(
+    target_id: UUID,
+    request: OptimizationTargetActorRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.confirm_hypothesis(target_id, request, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/optimization-targets/{target_id}/freeze",
+    response_model=OptimizationTargetRead,
+)
+def freeze_optimization_target(
+    target_id: UUID,
+    request: OptimizationTargetActorRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.freeze(target_id, request, db_session)
     except OptimizationTargetError as error:
         return _optimization_target_error_response(error)
 

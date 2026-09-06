@@ -391,7 +391,7 @@ class OptimizationTarget(Base):
             name="ck_optimization_targets_version_positive",
         ),
         CheckConstraint(
-            "status IN ('draft', 'confirmed')",
+            "status IN ('draft', 'confirmed', 'frozen')",
             name="ck_optimization_targets_status",
         ),
         CheckConstraint(
@@ -426,10 +426,46 @@ class OptimizationTarget(Base):
             name="ck_optimization_targets_confirmer_not_empty",
         ),
         CheckConstraint(
-            "(status = 'draft' AND confirmed_by IS NULL AND confirmed_at IS NULL) "
-            "OR (status = 'confirmed' AND confirmed_by IS NOT NULL "
-            "AND confirmed_at IS NOT NULL)",
+            "(confirmed_by IS NULL AND confirmed_at IS NULL) OR "
+            "(confirmed_by IS NOT NULL AND confirmed_at IS NOT NULL)",
+            name="ck_optimization_targets_target_confirmation_pair",
+        ),
+        CheckConstraint(
+            "(hypothesis_confirmed_by IS NULL AND hypothesis_confirmed_at IS NULL) "
+            "OR (hypothesis_confirmed_by IS NOT NULL "
+            "AND hypothesis_confirmed_at IS NOT NULL)",
+            name="ck_optimization_targets_hypothesis_confirmation_pair",
+        ),
+        CheckConstraint(
+            "hypothesis_confirmed_by IS NULL OR confirmed_by IS NOT NULL",
+            name="ck_optimization_targets_hypothesis_requires_target",
+        ),
+        CheckConstraint(
+            "(status = 'draft' AND (confirmed_by IS NULL "
+            "OR hypothesis_confirmed_by IS NULL)) OR "
+            "(status IN ('confirmed', 'frozen') AND confirmed_by IS NOT NULL "
+            "AND hypothesis_confirmed_by IS NOT NULL)",
             name="ck_optimization_targets_confirmation_state",
+        ),
+        CheckConstraint(
+            "hypothesis_confirmed_by IS NULL "
+            "OR length(trim(hypothesis_confirmed_by)) > 0",
+            name="ck_optimization_targets_hypothesis_confirmer_not_empty",
+        ),
+        CheckConstraint(
+            "frozen_by IS NULL OR length(trim(frozen_by)) > 0",
+            name="ck_optimization_targets_freezer_not_empty",
+        ),
+        CheckConstraint(
+            "plan_hash IS NULL OR length(plan_hash) = 64",
+            name="ck_optimization_targets_plan_hash_length",
+        ),
+        CheckConstraint(
+            "(status <> 'frozen' AND plan_hash IS NULL AND frozen_by IS NULL "
+            "AND frozen_at IS NULL) OR (status = 'frozen' "
+            "AND plan_hash IS NOT NULL AND frozen_by IS NOT NULL "
+            "AND frozen_at IS NOT NULL)",
+            name="ck_optimization_targets_frozen_state",
         ),
     )
 
@@ -468,6 +504,12 @@ class OptimizationTarget(Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    hypothesis_confirmed_by: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    hypothesis_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     hypothesis_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
     hypothesis_evidence_refs: Mapped[list[str]] = mapped_column(
         JSON(none_as_null=True), nullable=False, default=list, server_default="[]"
@@ -499,6 +541,11 @@ class OptimizationTarget(Base):
         JSON(none_as_null=True), nullable=False
     )
     policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    plan_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    frozen_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    frozen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

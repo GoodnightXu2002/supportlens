@@ -313,6 +313,7 @@ class ProblemRead(ProblemProfileRead):
 class OptimizationTargetStatus(StrEnum):
     DRAFT = "draft"
     CONFIRMED = "confirmed"
+    FROZEN = "frozen"
 
 
 class OptimizationTargetChangeStatus(StrEnum):
@@ -370,6 +371,75 @@ class OptimizationTargetCreateRequest(BaseModel):
         return value
 
 
+class OptimizationTargetPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    definition: str | None = None
+    inclusion_criteria: str | None = None
+    exclusion_criteria: str | None = None
+    expected_observable_change: str | None = None
+    hypothesis_statement: str | None = None
+    hypothesis_evidence_refs: list[str] | None = None
+    change_surface: str | None = None
+    planned_change: str | None = None
+    guardrails: list[str] | None = None
+    protected_capabilities: list[str] | None = None
+    policy_version: str | None = None
+
+    @field_validator(
+        "definition",
+        "inclusion_criteria",
+        "exclusion_criteria",
+        "expected_observable_change",
+    )
+    @classmethod
+    def target_text_must_not_be_empty(cls, value: str | None) -> str:
+        if value is None or not value.strip():
+            raise ValueError("value must not be empty")
+        return value
+
+    @field_validator(
+        "hypothesis_statement",
+        "change_surface",
+        "planned_change",
+        "policy_version",
+    )
+    @classmethod
+    def optional_text_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("value must not be empty when provided")
+        return value
+
+    @field_validator(
+        "hypothesis_evidence_refs",
+        "guardrails",
+        "protected_capabilities",
+    )
+    @classmethod
+    def patch_list_entries_must_not_be_empty(
+        cls,
+        value: list[str] | None,
+    ) -> list[str]:
+        if value is None:
+            raise ValueError("value must be an array")
+        if any(not item.strip() for item in value):
+            raise ValueError("list entries must not be empty")
+        return value
+
+
+class OptimizationTargetActorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: str
+
+    @field_validator("actor")
+    @classmethod
+    def actor_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("actor must not be empty")
+        return value
+
+
 class OptimizationTargetBaselineMetricRead(BaseModel):
     affected_core_cases: int = Field(ge=0)
     core_denominator: int = Field(ge=0)
@@ -406,6 +476,8 @@ class OptimizationTargetRead(BaseModel):
     expected_observable_change: str
     confirmed_by: str | None
     confirmed_at: datetime | None
+    hypothesis_confirmed_by: str | None
+    hypothesis_confirmed_at: datetime | None
     hypothesis_statement: str | None
     hypothesis_evidence_refs: list[str]
     change_surface: str | None
@@ -419,5 +491,8 @@ class OptimizationTargetRead(BaseModel):
     baseline_snapshot: OptimizationTargetBaselineSnapshotRead
     evaluation_config_snapshot: dict[str, Any]
     policy_version: str | None
+    plan_hash: str | None
+    frozen_by: str | None
+    frozen_at: datetime | None
     created_at: datetime
     updated_at: datetime

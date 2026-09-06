@@ -463,6 +463,8 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
         "expected_observable_change",
         "confirmed_by",
         "confirmed_at",
+        "hypothesis_confirmed_by",
+        "hypothesis_confirmed_at",
         "hypothesis_statement",
         "hypothesis_evidence_refs",
         "change_surface",
@@ -476,6 +478,9 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
         "baseline_snapshot",
         "evaluation_config_snapshot",
         "policy_version",
+        "plan_hash",
+        "frozen_by",
+        "frozen_at",
         "created_at",
         "updated_at",
     }
@@ -493,9 +498,16 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     ]
     assert "draft" in target_checks["ck_optimization_targets_status"]
     assert "confirmed" in target_checks["ck_optimization_targets_status"]
+    assert "frozen" in target_checks["ck_optimization_targets_status"]
     assert "planned" in target_checks[
         "ck_optimization_targets_change_status"
     ]
+    assert "status = 'frozen'" in target_checks[
+        "ck_optimization_targets_frozen_state"
+    ]
+    assert "length(plan_hash) = 64" in target_checks[
+        "ck_optimization_targets_plan_hash_length"
+    ]
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "a6c8e0f2b314"
+    assert revision == "d8e1f4a6b203"

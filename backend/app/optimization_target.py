@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -15,8 +18,10 @@ from app.schemas import (
     EvaluationRunStatus,
     EvaluationRunType,
     FinalEffectiveResultStatus,
+    OptimizationTargetActorRequest,
     OptimizationTargetChangeStatus,
     OptimizationTargetCreateRequest,
+    OptimizationTargetPatchRequest,
     OptimizationTargetRead,
     OptimizationTargetStatus,
     ProblemRead,
@@ -43,6 +48,19 @@ class OptimizationTargetErrorCode(StrEnum):
         "optimization_target_failure_mode_not_unique"
     )
     OPTIMIZATION_TARGET_ALREADY_EXISTS = "optimization_target_already_exists"
+    OPTIMIZATION_TARGET_FROZEN = "optimization_target_frozen"
+    OPTIMIZATION_TARGET_TARGET_CONFIRMATION_INCOMPLETE = (
+        "optimization_target_target_confirmation_incomplete"
+    )
+    OPTIMIZATION_TARGET_TARGET_NOT_CONFIRMED = (
+        "optimization_target_target_not_confirmed"
+    )
+    OPTIMIZATION_TARGET_HYPOTHESIS_CONFIRMATION_INCOMPLETE = (
+        "optimization_target_hypothesis_confirmation_incomplete"
+    )
+    OPTIMIZATION_TARGET_FREEZE_GATE_FAILED = (
+        "optimization_target_freeze_gate_failed"
+    )
     OPTIMIZATION_TARGET_PERSISTENCE_FAILED = (
         "optimization_target_persistence_failed"
     )
@@ -259,13 +277,141 @@ class OptimizationTargetService:
         return OptimizationTargetRead.model_validate(target)
 
     def get(self, target_id: UUID, db_session: Session) -> OptimizationTargetRead:
-        target = db_session.get(OptimizationTarget, target_id)
-        if target is None:
-            raise OptimizationTargetError(
-                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_NOT_FOUND,
-                f"Optimization target '{target_id}' was not found.",
-            )
+        target = self._load_target(target_id, db_session)
         return OptimizationTargetRead.model_validate(target)
+
+    def patch(
+        self,
+        target_id: UUID,
+        request: OptimizationTargetPatchRequest,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
+        target = self._load_target(target_id, db_session)
+        self._reject_frozen(target)
+
+        updates = request.model_dump(exclude_unset=True)
+        target_fields = {
+            "definition",
+            "inclusion_criteria",
+            "exclusion_criteria",
+            "expected_observable_change",
+        }
+        hypothesis_fields = {
+            "hypothesis_statement",
+            "hypothesis_evidence_refs",
+            "change_surface",
+            "planned_change",
+            "guardrails",
+        }
+        changed_fields = {
+            field
+            for field, value in updates.items()
+            if getattr(target, field) != value
+        }
+        for field, value in updates.items():
+            setattr(target, field, list(value) if isinstance(value, list) else value)
+
+        if changed_fields & target_fields:
+            target.confirmed_by = None
+            target.confirmed_at = None
+            target.hypothesis_confirmed_by = None
+            target.hypothesis_confirmed_at = None
+        elif changed_fields & hypothesis_fields:
+            target.hypothesis_confirmed_by = None
+            target.hypothesis_confirmed_at = None
+        target.status = self._confirmation_status(target)
+
+        return self._commit_and_read(target, db_session)
+
+    def confirm_target(
+        self,
+        target_id: UUID,
+        request: OptimizationTargetActorRequest,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
+        target = self._load_target(target_id, db_session)
+        self._reject_frozen(target)
+        if not all(
+            _has_text(getattr(target, field))
+            for field in (
+                "definition",
+                "inclusion_criteria",
+                "exclusion_criteria",
+                "expected_observable_change",
+            )
+        ):
+            raise OptimizationTargetError(
+                (
+                    OptimizationTargetErrorCode
+                    .OPTIMIZATION_TARGET_TARGET_CONFIRMATION_INCOMPLETE
+                ),
+                "Target confirmation requires all target fields.",
+            )
+
+        target.confirmed_by = request.actor.strip()
+        target.confirmed_at = datetime.now(UTC)
+        target.status = self._confirmation_status(target)
+        return self._commit_and_read(target, db_session)
+
+    def confirm_hypothesis(
+        self,
+        target_id: UUID,
+        request: OptimizationTargetActorRequest,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
+        target = self._load_target(target_id, db_session)
+        self._reject_frozen(target)
+        if target.confirmed_by is None or target.confirmed_at is None:
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_TARGET_NOT_CONFIRMED,
+                "Target must be confirmed before confirming the hypothesis.",
+            )
+        if not all(
+            _has_text(getattr(target, field))
+            for field in (
+                "hypothesis_statement",
+                "change_surface",
+                "planned_change",
+            )
+        ):
+            raise OptimizationTargetError(
+                (
+                    OptimizationTargetErrorCode
+                    .OPTIMIZATION_TARGET_HYPOTHESIS_CONFIRMATION_INCOMPLETE
+                ),
+                (
+                    "Hypothesis confirmation requires hypothesis and planned "
+                    "change fields."
+                ),
+            )
+
+        target.hypothesis_confirmed_by = request.actor.strip()
+        target.hypothesis_confirmed_at = datetime.now(UTC)
+        target.status = OptimizationTargetStatus.CONFIRMED.value
+        return self._commit_and_read(target, db_session)
+
+    def freeze(
+        self,
+        target_id: UUID,
+        request: OptimizationTargetActorRequest,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
+        target = self._load_target(target_id, db_session)
+        if target.status == OptimizationTargetStatus.FROZEN.value:
+            return OptimizationTargetRead.model_validate(target)
+
+        missing_requirements = self._freeze_gate_failures(target)
+        if missing_requirements:
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FREEZE_GATE_FAILED,
+                "Freeze requirements not met: " + ", ".join(missing_requirements),
+            )
+
+        target.plan_hash = build_optimization_target_plan_hash(target)
+        target.frozen_by = request.actor.strip()
+        target.frozen_at = datetime.now(UTC)
+        target.status = OptimizationTargetStatus.FROZEN.value
+        return self._commit_and_read(target, db_session)
 
     def list_for_run(
         self,
@@ -292,6 +438,78 @@ class OptimizationTargetService:
                 f"Evaluation run '{evaluation_run_id}' was not found.",
             )
         return evaluation_run
+
+    @staticmethod
+    def _load_target(
+        target_id: UUID,
+        db_session: Session,
+    ) -> OptimizationTarget:
+        target = db_session.get(OptimizationTarget, target_id)
+        if target is None:
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_NOT_FOUND,
+                f"Optimization target '{target_id}' was not found.",
+            )
+        return target
+
+    @staticmethod
+    def _reject_frozen(target: OptimizationTarget) -> None:
+        if target.status == OptimizationTargetStatus.FROZEN.value:
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FROZEN,
+                "Frozen optimization targets are immutable.",
+            )
+
+    @staticmethod
+    def _confirmation_status(target: OptimizationTarget) -> str:
+        if (
+            target.confirmed_by is not None
+            and target.confirmed_at is not None
+            and target.hypothesis_confirmed_by is not None
+            and target.hypothesis_confirmed_at is not None
+        ):
+            return OptimizationTargetStatus.CONFIRMED.value
+        return OptimizationTargetStatus.DRAFT.value
+
+    @staticmethod
+    def _freeze_gate_failures(target: OptimizationTarget) -> list[str]:
+        failures: list[str] = []
+        if target.confirmed_by is None or target.confirmed_at is None:
+            failures.append("target_confirmation")
+        if (
+            target.hypothesis_confirmed_by is None
+            or target.hypothesis_confirmed_at is None
+        ):
+            failures.append("hypothesis_confirmation")
+        if not target.target_case_ids:
+            failures.append("target_case_ids")
+        if not target.regression_case_ids:
+            failures.append("regression_case_ids")
+        if not target.baseline_snapshot:
+            failures.append("baseline_snapshot")
+        if not target.evaluation_config_snapshot:
+            failures.append("evaluation_config_snapshot")
+        if not _has_text(target.policy_version):
+            failures.append("policy_version")
+        if target.change_status != OptimizationTargetChangeStatus.PLANNED.value:
+            failures.append("change_status")
+        return failures
+
+    @staticmethod
+    def _commit_and_read(
+        target: OptimizationTarget,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
+        try:
+            db_session.commit()
+        except IntegrityError as error:
+            db_session.rollback()
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PERSISTENCE_FAILED,
+                "Optimization target could not be persisted.",
+            ) from error
+        db_session.refresh(target)
+        return OptimizationTargetRead.model_validate(target)
 
     @staticmethod
     def _validate_run(evaluation_run: EvaluationRun) -> None:
@@ -353,3 +571,45 @@ def _case_set(metadata: object) -> str | None:
         return None
     case_set = nested_metadata.get("case_set")
     return case_set if isinstance(case_set, str) else None
+
+
+def build_optimization_target_plan_hash(target: OptimizationTarget) -> str:
+    payload = {
+        "target_contract": {
+            "definition": target.definition,
+            "inclusion_criteria": target.inclusion_criteria,
+            "exclusion_criteria": target.exclusion_criteria,
+            "baseline_affected_case_ids": target.baseline_affected_case_ids,
+            "reference_basis": target.reference_basis,
+            "failure_mode": target.failure_mode,
+            "baseline_metric": target.baseline_metric,
+            "expected_observable_change": target.expected_observable_change,
+        },
+        "hypothesis": {
+            "hypothesis_statement": target.hypothesis_statement,
+            "hypothesis_evidence_refs": target.hypothesis_evidence_refs,
+        },
+        "planned_change": {
+            "change_surface": target.change_surface,
+            "planned_change": target.planned_change,
+        },
+        "guardrails": target.guardrails,
+        "target_case_ids": target.target_case_ids,
+        "regression_case_ids": target.regression_case_ids,
+        "challenge_case_ids": target.challenge_case_ids,
+        "protected_capabilities": target.protected_capabilities,
+        "baseline_snapshot": target.baseline_snapshot,
+        "evaluation_config_snapshot": target.evaluation_config_snapshot,
+        "policy_version": target.policy_version,
+    }
+    canonical_json = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def _has_text(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())

@@ -1,3 +1,5 @@
+import hashlib
+import json
 from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -196,6 +198,68 @@ def _create(client: TestClient, ids: dict[str, UUID], payload=None):
     )
 
 
+def _confirm_and_freeze(
+    client: TestClient,
+    target_id: str,
+    *,
+    actor: str = "owner@example.com",
+):
+    target_confirmation = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-target",
+        json={"actor": actor},
+    )
+    assert target_confirmation.status_code == 200
+    hypothesis_confirmation = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+        json={"actor": actor},
+    )
+    assert hypothesis_confirmation.status_code == 200
+    return client.post(
+        f"/api/optimization-targets/{target_id}/freeze",
+        json={"actor": actor},
+    )
+
+
+def _expected_plan_hash(body: dict[str, object]) -> str:
+    payload = {
+        "target_contract": {
+            "definition": body["definition"],
+            "inclusion_criteria": body["inclusion_criteria"],
+            "exclusion_criteria": body["exclusion_criteria"],
+            "baseline_affected_case_ids": body["baseline_affected_case_ids"],
+            "reference_basis": body["reference_basis"],
+            "failure_mode": body["failure_mode"],
+            "baseline_metric": body["baseline_metric"],
+            "expected_observable_change": body[
+                "expected_observable_change"
+            ],
+        },
+        "hypothesis": {
+            "hypothesis_statement": body["hypothesis_statement"],
+            "hypothesis_evidence_refs": body["hypothesis_evidence_refs"],
+        },
+        "planned_change": {
+            "change_surface": body["change_surface"],
+            "planned_change": body["planned_change"],
+        },
+        "guardrails": body["guardrails"],
+        "target_case_ids": body["target_case_ids"],
+        "regression_case_ids": body["regression_case_ids"],
+        "challenge_case_ids": body["challenge_case_ids"],
+        "protected_capabilities": body["protected_capabilities"],
+        "baseline_snapshot": body["baseline_snapshot"],
+        "evaluation_config_snapshot": body["evaluation_config_snapshot"],
+        "policy_version": body["policy_version"],
+    }
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def test_create_derives_case_sets_metric_snapshot_and_lineage(api_context) -> None:
     client, engine = api_context
     ids = _seed_run(engine)
@@ -211,6 +275,11 @@ def test_create_derives_case_sets_metric_snapshot_and_lineage(api_context) -> No
     assert body["change_status"] == "planned"
     assert body["confirmed_by"] is None
     assert body["confirmed_at"] is None
+    assert body["hypothesis_confirmed_by"] is None
+    assert body["hypothesis_confirmed_at"] is None
+    assert body["plan_hash"] is None
+    assert body["frozen_by"] is None
+    assert body["frozen_at"] is None
     assert body["baseline_affected_case_ids"] == ["CASE-A", "CASE-B"]
     assert body["target_case_ids"] == ["CASE-A", "CASE-B"]
     assert body["regression_case_ids"] == ["CASE-C"]
@@ -529,7 +598,7 @@ def test_creation_does_not_modify_run_problem_or_result(api_context) -> None:
     ("field", "value"),
     [
         ("version", 0),
-        ("status", "frozen"),
+        ("status", "archived"),
         ("change_status", "applied"),
         ("confirmed_by", "reviewer@example.com"),
     ],
@@ -550,3 +619,253 @@ def test_database_rejects_invalid_target_state(
         setattr(target, field, value)
         with pytest.raises(IntegrityError):
             session.commit()
+
+
+def test_draft_can_patch_only_user_editable_fields(api_context) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    created = _create(client, ids).json()
+
+    response = client.patch(
+        f"/api/optimization-targets/{created['id']}",
+        json={
+            "definition": "Improve frozen-reference refund accuracy.",
+            "hypothesis_statement": "A scoped rule reminder may help.",
+            "guardrails": ["Preserve escalation behavior."],
+            "protected_capabilities": ["Escalation"],
+            "policy_version": "POLICY-V2",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["definition"] == "Improve frozen-reference refund accuracy."
+    assert body["hypothesis_statement"] == "A scoped rule reminder may help."
+    assert body["guardrails"] == ["Preserve escalation behavior."]
+    assert body["protected_capabilities"] == ["Escalation"]
+    assert body["policy_version"] == "POLICY-V2"
+    assert body["baseline_run_id"] == created["baseline_run_id"]
+    assert body["problem_id"] == created["problem_id"]
+    assert body["target_case_ids"] == created["target_case_ids"]
+
+    forbidden = client.patch(
+        f"/api/optimization-targets/{created['id']}",
+        json={"target_case_ids": ["CASE-D"], "version": 2},
+    )
+    assert forbidden.status_code == 400
+    assert forbidden.json()["error"]["code"] == "request_validation_failed"
+
+
+def test_target_and_hypothesis_are_confirmed_separately(api_context) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target_id = _create(client, ids).json()["id"]
+
+    too_early = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+        json={"actor": "hypothesis-owner@example.com"},
+    )
+    assert too_early.status_code == 409
+    assert too_early.json()["error"]["code"] == (
+        "optimization_target_target_not_confirmed"
+    )
+
+    target_confirmation = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-target",
+        json={"actor": "target-owner@example.com"},
+    )
+    assert target_confirmation.status_code == 200
+    target_body = target_confirmation.json()
+    assert target_body["status"] == "draft"
+    assert target_body["confirmed_by"] == "target-owner@example.com"
+    assert target_body["confirmed_at"] is not None
+    assert target_body["hypothesis_confirmed_by"] is None
+
+    hypothesis_confirmation = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+        json={"actor": "hypothesis-owner@example.com"},
+    )
+    assert hypothesis_confirmation.status_code == 200
+    hypothesis_body = hypothesis_confirmation.json()
+    assert hypothesis_body["status"] == "confirmed"
+    assert hypothesis_body["confirmed_by"] == "target-owner@example.com"
+    assert (
+        hypothesis_body["hypothesis_confirmed_by"]
+        == "hypothesis-owner@example.com"
+    )
+    assert hypothesis_body["hypothesis_confirmed_at"] is not None
+
+
+def test_patch_clears_only_affected_confirmations(api_context) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target_id = _create(client, ids).json()["id"]
+    target_confirmation = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-target",
+        json={"actor": "target-owner@example.com"},
+    )
+    assert target_confirmation.status_code == 200
+    hypothesis_confirmation = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+        json={"actor": "hypothesis-owner@example.com"},
+    )
+    assert hypothesis_confirmation.status_code == 200
+
+    hypothesis_edit = client.patch(
+        f"/api/optimization-targets/{target_id}",
+        json={"planned_change": "Use a narrower eligibility reminder."},
+    )
+    assert hypothesis_edit.status_code == 200
+    hypothesis_body = hypothesis_edit.json()
+    assert hypothesis_body["status"] == "draft"
+    assert hypothesis_body["confirmed_by"] == "target-owner@example.com"
+    assert hypothesis_body["hypothesis_confirmed_by"] is None
+    assert hypothesis_body["hypothesis_confirmed_at"] is None
+
+    reconfirmed = client.post(
+        f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+        json={"actor": "hypothesis-owner@example.com"},
+    )
+    assert reconfirmed.status_code == 200
+    assert reconfirmed.json()["status"] == "confirmed"
+
+    target_edit = client.patch(
+        f"/api/optimization-targets/{target_id}",
+        json={"definition": "Improve eligibility accuracy for target cases."},
+    )
+    assert target_edit.status_code == 200
+    target_body = target_edit.json()
+    assert target_body["status"] == "draft"
+    assert target_body["confirmed_by"] is None
+    assert target_body["confirmed_at"] is None
+    assert target_body["hypothesis_confirmed_by"] is None
+    assert target_body["hypothesis_confirmed_at"] is None
+
+
+def test_incomplete_plan_cannot_freeze(api_context) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    payload = {**CREATE_PAYLOAD, "policy_version": None}
+    target_id = _create(client, ids, payload).json()["id"]
+    assert client.post(
+        f"/api/optimization-targets/{target_id}/confirm-target",
+        json={"actor": "owner@example.com"},
+    ).status_code == 200
+    assert client.post(
+        f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+        json={"actor": "owner@example.com"},
+    ).status_code == 200
+
+    response = client.post(
+        f"/api/optimization-targets/{target_id}/freeze",
+        json={"actor": "owner@example.com"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == (
+        "optimization_target_freeze_gate_failed"
+    )
+    loaded = client.get(f"/api/optimization-targets/{target_id}").json()
+    assert loaded["status"] == "confirmed"
+    assert loaded["plan_hash"] is None
+
+
+def test_complete_plan_freezes_with_deterministic_hash_and_is_idempotent(
+    api_context,
+) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target_id = _create(client, ids).json()["id"]
+
+    first = _confirm_and_freeze(client, target_id)
+
+    assert first.status_code == 200
+    body = first.json()
+    assert body["status"] == "frozen"
+    assert body["version"] == 1
+    assert body["frozen_by"] == "owner@example.com"
+    assert body["frozen_at"] is not None
+    assert body["plan_hash"] == _expected_plan_hash(body)
+
+    second = client.post(
+        f"/api/optimization-targets/{target_id}/freeze",
+        json={"actor": "different-actor@example.com"},
+    )
+    loaded = client.get(f"/api/optimization-targets/{target_id}")
+
+    assert second.status_code == 200
+    assert second.json() == body
+    assert loaded.status_code == 200
+    assert loaded.json() == body
+    with Session(engine) as session:
+        targets = session.scalars(select(OptimizationTarget)).all()
+        assert len(targets) == 1
+        assert targets[0].version == 1
+
+
+def test_frozen_target_rejects_patch_and_confirmation_changes(api_context) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target_id = _create(client, ids).json()["id"]
+    frozen = _confirm_and_freeze(client, target_id)
+    assert frozen.status_code == 200
+    frozen_body = frozen.json()
+
+    responses = [
+        client.patch(
+            f"/api/optimization-targets/{target_id}",
+            json={"definition": "Forbidden replacement."},
+        ),
+        client.post(
+            f"/api/optimization-targets/{target_id}/confirm-target",
+            json={"actor": "other@example.com"},
+        ),
+        client.post(
+            f"/api/optimization-targets/{target_id}/confirm-hypothesis",
+            json={"actor": "other@example.com"},
+        ),
+    ]
+
+    assert all(response.status_code == 409 for response in responses)
+    assert all(
+        response.json()["error"]["code"] == "optimization_target_frozen"
+        for response in responses
+    )
+    assert client.get(
+        f"/api/optimization-targets/{target_id}"
+    ).json() == frozen_body
+
+
+def test_confirm_and_freeze_do_not_modify_baseline_lineage(api_context) -> None:
+    client, engine = api_context
+    ids = _seed_run(engine)
+    with Session(engine) as session:
+        run = session.get(EvaluationRun, ids["run_id"])
+        problem = session.get(Problem, ids["problem_id"])
+        result = session.get(EvaluationResult, ids["result_id"])
+        assert run is not None and problem is not None and result is not None
+        before = {
+            "run": (run.status, run.problem_aggregation_completed_at),
+            "problem": (problem.definition, problem.mapping_key),
+            "result": (
+                result.judgment,
+                result.primary_failure_mode,
+                deepcopy(result.evidence),
+            ),
+        }
+
+    target_id = _create(client, ids).json()["id"]
+    assert _confirm_and_freeze(client, target_id).status_code == 200
+
+    with Session(engine) as session:
+        run = session.get(EvaluationRun, ids["run_id"])
+        problem = session.get(Problem, ids["problem_id"])
+        result = session.get(EvaluationResult, ids["result_id"])
+        assert run is not None and problem is not None and result is not None
+        assert (run.status, run.problem_aggregation_completed_at) == before["run"]
+        assert (problem.definition, problem.mapping_key) == before["problem"]
+        assert (
+            result.judgment,
+            result.primary_failure_mode,
+            result.evidence,
+        ) == before["result"]
