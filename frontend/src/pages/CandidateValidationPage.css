@@ -290,11 +290,12 @@
 .s05-case-tabs > div {
   display: flex;
   min-width: 0;
-  flex-wrap: wrap;
+  overflow-x: auto;
   gap: 8px;
 }
 
 .s05-case-tab {
+  flex: 0 0 auto;
   padding: 4px 12px;
   color: var(--color-text);
   background: var(--color-surface);

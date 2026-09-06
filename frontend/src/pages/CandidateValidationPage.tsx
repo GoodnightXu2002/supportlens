@@ -226,7 +226,11 @@ function CandidateWorkspace({
   const { target, baselineRun, candidateRun, dataset, conversations, baselineResults, candidateResults, comparisons, summary } = data
   const targetCaseIds = new Set(target.target_case_ids)
   const targetComparisons = comparisons.filter((item) => targetCaseIds.has(item.case_id))
-  const selectedComparison = targetComparisons.find((item) => item.case_id === selectedCaseId) ?? targetComparisons[0]
+  const orderedComparisons = [
+    ...targetComparisons,
+    ...comparisons.filter((item) => !targetCaseIds.has(item.case_id)),
+  ]
+  const selectedComparison = orderedComparisons.find((item) => item.case_id === selectedCaseId) ?? orderedComparisons[0]
   const conversation = conversations.find((item) => item.id === selectedComparison?.conversation_id)
   const baselineResult = baselineResults.find((item) => item.evaluation_result_id === selectedComparison?.baseline_evaluation_result_id)
   const candidateResult = candidateResults.find((item) => item.evaluation_result_id === selectedComparison?.candidate_evaluation_result_id)
@@ -287,7 +291,7 @@ function CandidateWorkspace({
           <article className="s05-outcome-card s05-regression-card"><MdVerified className="s05-outcome-icon" aria-hidden="true" /><div><h2>回归检查 ({comparisons.length - targetComparisons.length} 个非目标案例)</h2><div className="s05-regression-grid"><dl><div><dt>严重回归 CRITICAL</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归 MAJOR</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归 MINOR</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>Other Problems</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>Regression 与 New Systematic Problem 均直接来自 Backend Validation Summary。</p></div></article>
         </section>
 
-        <section className="s05-case-tabs" aria-label="目标案例选择"><strong>目标案例（{targetComparisons.length}）：</strong><div>{targetComparisons.map((item) => <button className={item.case_id === selectedComparison.case_id ? 's05-case-tab s05-case-tab--active' : 's05-case-tab'} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
+        <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={item.case_id === selectedComparison.case_id ? 's05-case-tab s05-case-tab--active' : 's05-case-tab'} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${item.movement}${item.regression_level ? ` · ${item.regression_level}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
 
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
           <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em>conversation_id：{selectedComparison.conversation_id}</em></h2><div><span><i />Baseline</span><span><i />Candidate</span></div></header>
