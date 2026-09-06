@@ -196,6 +196,76 @@ export type Problem = {
   equal_review_priority: boolean | null
 }
 
+export type OptimizationTarget = {
+  id: string
+  baseline_run_id: string
+  problem_id: string
+  version: number
+  status: 'draft' | 'confirmed' | 'frozen'
+  definition: string
+  inclusion_criteria: string
+  exclusion_criteria: string
+  baseline_affected_case_ids: string[]
+  reference_basis: ProblemEvidence[]
+  failure_mode: NonNullable<JudgeOutput['primary_failure_mode']>
+  baseline_metric: {
+    affected_core_cases: number
+    core_denominator: number
+    frequency: { numerator: number; denominator: number }
+  }
+  expected_observable_change: string
+  confirmed_by: string | null
+  confirmed_at: string | null
+  hypothesis_confirmed_by: string | null
+  hypothesis_confirmed_at: string | null
+  hypothesis_statement: string | null
+  hypothesis_evidence_refs: string[]
+  change_surface: string | null
+  planned_change: string | null
+  guardrails: string[]
+  change_status: 'planned'
+  target_case_ids: string[]
+  regression_case_ids: string[]
+  challenge_case_ids: string[]
+  protected_capabilities: string[]
+  baseline_snapshot: {
+    problem_id: string
+    definition: string
+    scenario: string
+    priority_severity: JudgeOutput['severity']
+    business_impact: 'high' | 'medium' | 'low' | null
+    frequency: { numerator: number; denominator: number }
+    pattern_consistency: 'strong' | 'moderate' | 'weak' | null
+    evidence_confidence: 'high' | 'medium' | 'unknown' | null
+    affected_case_ids: string[]
+  }
+  evaluation_config_snapshot: Record<string, unknown>
+  policy_version: string | null
+  plan_hash: string | null
+  frozen_by: string | null
+  frozen_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type OptimizationTargetCreateInput = {
+  definition: string
+  inclusion_criteria: string
+  exclusion_criteria: string
+  expected_observable_change: string
+  hypothesis_statement?: string | null
+  hypothesis_evidence_refs?: string[]
+  change_surface?: string | null
+  planned_change?: string | null
+  guardrails?: string[]
+  protected_capabilities?: string[]
+  policy_version?: string | null
+}
+
+export type OptimizationTargetPatchInput = Partial<
+  OptimizationTargetCreateInput
+>
+
 export class ApiRequestError extends Error {
   readonly code: string
   readonly details: ImportErrorDetail[]
@@ -351,4 +421,103 @@ export async function getProblems(
       { signal },
     ),
   )
+}
+
+export async function getOptimizationTarget(
+  targetId: string,
+  signal?: AbortSignal,
+): Promise<OptimizationTarget> {
+  return requestJson<OptimizationTarget>(
+    await fetch(
+      `${API_BASE_URL}/api/optimization-targets/${encodeURIComponent(targetId)}`,
+      { signal },
+    ),
+  )
+}
+
+export async function getOptimizationTargets(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<OptimizationTarget[]> {
+  return requestJson<OptimizationTarget[]>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/optimization-targets`,
+      { signal },
+    ),
+  )
+}
+
+export async function createOptimizationTarget(
+  runId: string,
+  problemId: string,
+  input: OptimizationTargetCreateInput,
+): Promise<OptimizationTarget> {
+  return requestJson<OptimizationTarget>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/problems/${encodeURIComponent(problemId)}/optimization-targets`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    ),
+  )
+}
+
+export async function patchOptimizationTarget(
+  targetId: string,
+  input: OptimizationTargetPatchInput,
+): Promise<OptimizationTarget> {
+  return requestJson<OptimizationTarget>(
+    await fetch(
+      `${API_BASE_URL}/api/optimization-targets/${encodeURIComponent(targetId)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    ),
+  )
+}
+
+async function submitOptimizationTargetActorAction(
+  targetId: string,
+  action: 'confirm-target' | 'confirm-hypothesis' | 'freeze',
+  actor: string,
+): Promise<OptimizationTarget> {
+  return requestJson<OptimizationTarget>(
+    await fetch(
+      `${API_BASE_URL}/api/optimization-targets/${encodeURIComponent(targetId)}/${action}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actor }),
+      },
+    ),
+  )
+}
+
+export function confirmOptimizationTarget(
+  targetId: string,
+  actor: string,
+): Promise<OptimizationTarget> {
+  return submitOptimizationTargetActorAction(targetId, 'confirm-target', actor)
+}
+
+export function confirmOptimizationHypothesis(
+  targetId: string,
+  actor: string,
+): Promise<OptimizationTarget> {
+  return submitOptimizationTargetActorAction(
+    targetId,
+    'confirm-hypothesis',
+    actor,
+  )
+}
+
+export function freezeOptimizationTarget(
+  targetId: string,
+  actor: string,
+): Promise<OptimizationTarget> {
+  return submitOptimizationTargetActorAction(targetId, 'freeze', actor)
 }

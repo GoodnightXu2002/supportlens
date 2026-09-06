@@ -245,6 +245,96 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   border-style: solid;
 }
 
+.s04-source-note,
+.s04-confirmation-meta {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.s04-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.s04-form-grid--two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.s04-form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.s04-form-field input,
+.s04-form-field textarea {
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  font: 13px/20px var(--font-body);
+  resize: vertical;
+}
+
+.s04-form-field input:focus,
+.s04-form-field textarea:focus,
+.s04-actor-field input:focus {
+  border-color: var(--color-status-info);
+  outline: 2px solid rgb(2 132 199 / 12%);
+}
+
+.s04-form-field input:disabled,
+.s04-form-field textarea:disabled {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-low);
+}
+
+.s04-contract-readout {
+  display: grid;
+  margin: 0;
+  gap: 12px;
+}
+
+.s04-contract-readout--columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.s04-contract-readout > div {
+  min-width: 0;
+  padding: 12px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.s04-contract-readout dt,
+.s04-contract-readout dd {
+  margin: 0;
+}
+
+.s04-contract-readout dt {
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 10px;
+  line-height: 14px;
+  text-transform: uppercase;
+}
+
+.s04-contract-readout dd {
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
 .s04-target-tags {
   display: flex;
   margin-top: 8px;
@@ -619,6 +709,75 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   height: 32px;
   object-fit: cover;
   border-radius: 50%;
+}
+
+.s04-actor-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+}
+
+.s04-actor-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.s04-actor-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 9px;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+
+.s04-actor-field input {
+  width: 138px;
+  padding: 3px 6px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline);
+  border-radius: 4px;
+  font: 11px/16px var(--font-code);
+  text-transform: none;
+}
+
+.s04-page-message {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+}
+
+.s04-page-message > svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-status-warning);
+}
+
+.s04-page-message h1,
+.s04-page-message p {
+  margin: 0;
+}
+
+.s04-page-message h1 {
+  font-family: var(--font-heading);
+  font-size: 20px;
+}
+
+.s04-page-message p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
 }
 
 .s04-analyst-dock strong {
@@ -1266,6 +1425,11 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   background: #2d3133;
 }
 
+.s04-action-rail--frozen > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .s04-analyst-dock > div {
   display: flex;
   min-width: 0;
@@ -1288,6 +1452,11 @@ body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
   .s04-targets--frozen {
     min-height: 240px;
     flex-direction: initial;
+  }
+
+  .s04-form-grid--two-columns,
+  .s04-contract-readout--columns {
+    grid-template-columns: 1fr;
   }
 
   .s04-frozen-validation {

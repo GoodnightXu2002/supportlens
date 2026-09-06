@@ -10,7 +10,7 @@ import {
   MdPerson,
   MdSmartToy,
 } from 'react-icons/md'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   ApiRequestError,
@@ -146,6 +146,7 @@ function sortProblems(problems: Problem[]) {
 }
 
 function BaselineAnalysisPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const runId = searchParams.get('run_id')?.trim() ?? ''
   const [loadResult, setLoadResult] = useState<{
@@ -614,7 +615,20 @@ function BaselineAnalysisPage() {
         <div className="s03-analyst"><strong title={data.run.id}>Run {shortId(data.run.id)}</strong></div>
         <div className="s03-bottom-actions">
           <span>{pendingReviewCount === 0 ? `${data.finalResults.length} 个 Final Effective Results` : `剩余 ${pendingReviewCount} 个案例待复核`}</span>
-          <button type="button" disabled>进入目标与计划</button>
+          <button
+            type="button"
+            disabled={!selectedProblem}
+            onClick={() => {
+              if (!selectedProblem) return
+              const params = new URLSearchParams({
+                run_id: data.run.id,
+                problem_id: selectedProblem.problem_id,
+              })
+              navigate(`/target-plan?${params.toString()}`)
+            }}
+          >
+            进入目标与计划
+          </button>
         </div>
       </footer>
     </section>
