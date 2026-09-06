@@ -489,6 +489,29 @@ export async function getEvaluationRun(
   )
 }
 
+export async function createBaselineRun(
+  datasetId: string,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(`${API_BASE_URL}/api/evaluation-runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataset_id: datasetId, run_type: 'baseline' }),
+    }),
+  )
+}
+
+export async function executeBaselineRun(
+  runId: string,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/execute-baseline`,
+      { method: 'POST' },
+    ),
+  )
+}
+
 export async function getDatasetEvaluationRuns(
   datasetId: string,
   signal?: AbortSignal,

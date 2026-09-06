@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from functools import lru_cache
 from typing import Annotated, Any
@@ -12,6 +13,11 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.baseline_runner import (
+    BaselineRunner,
+    BaselineRunnerError,
+    BaselineRunnerErrorCode,
+)
 from app.candidate_validation import (
     CandidateComparisonService,
     CandidateRunner,
@@ -72,7 +78,7 @@ from app.schemas import (
 
 settings = get_settings()
 
-BASELINE_JUDGE_MODEL = "unconfigured"
+BASELINE_JUDGE_MODEL = settings.deepseek_model or "unconfigured"
 BASELINE_JUDGE_CONTRACT_VERSION = JUDGE_CONTRACT_VERSION
 
 app = FastAPI(title=settings.app_name)
@@ -117,6 +123,10 @@ def get_candidate_comparison_service() -> CandidateComparisonService:
 
 def get_candidate_runner() -> CandidateRunner:
     return CandidateRunner(DeepSeekProvider(settings))
+
+
+def get_baseline_runner() -> BaselineRunner:
+    return BaselineRunner(DeepSeekProvider(settings))
 
 
 def get_db_session() -> Iterator[Session]:
@@ -391,6 +401,36 @@ def _candidate_validation_error_response(
     )
 
 
+def _baseline_runner_error_response(error: BaselineRunnerError) -> JSONResponse:
+    return _error_response(
+        status_code=(
+            404
+            if error.code is BaselineRunnerErrorCode.EVALUATION_RUN_NOT_FOUND
+            else 409
+        ),
+        code=error.code.value,
+        message=str(error),
+    )
+
+
+def _dataset_business_reference_snapshot(
+    dataset_id: UUID,
+    db_session: Session,
+) -> str:
+    references = []
+    for metadata in db_session.scalars(
+        select(Conversation.metadata_)
+        .where(Conversation.dataset_id == dataset_id)
+        .order_by(Conversation.external_id, Conversation.id)
+    ):
+        if (
+            isinstance(metadata, dict)
+            and metadata.get("reference_evidence") is not None
+        ):
+            references.append(metadata["reference_evidence"])
+    return json.dumps({"reference_evidence": references}, ensure_ascii=False)
+
+
 @app.post(
     "/api/evaluation-runs",
     response_model=EvaluationRunRead,
@@ -427,6 +467,10 @@ def create_evaluation_run(
         response_set_key=f"dataset:{request.dataset_id}:conversations",
         error_code=None,
         error_message=None,
+        business_reference_snapshot=_dataset_business_reference_snapshot(
+            request.dataset_id,
+            db_session,
+        ),
     )
     try:
         db_session.add(evaluation_run)
@@ -439,6 +483,21 @@ def create_evaluation_run(
             message="Evaluation run could not be created.",
         )
     return evaluation_run
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/execute-baseline",
+    response_model=EvaluationRunRead,
+)
+def execute_baseline_evaluation_run(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    runner: Annotated[BaselineRunner, Depends(get_baseline_runner)],
+) -> EvaluationRun | JSONResponse:
+    try:
+        return runner.execute(run_id, db_session)
+    except BaselineRunnerError as error:
+        return _baseline_runner_error_response(error)
 
 
 @app.get(

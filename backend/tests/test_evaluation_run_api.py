@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -6,14 +7,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.baseline_runner import BaselineRunner
 from app.database import Base
+from app.llm_provider import LLMRequest, LLMResponse
 from app.main import (
     BASELINE_JUDGE_CONTRACT_VERSION,
     BASELINE_JUDGE_MODEL,
     app,
+    get_baseline_runner,
     get_db_session,
 )
-from app.models import Dataset, EvaluationRun
+from app.models import Conversation, Dataset, EvaluationResult, EvaluationRun
 
 
 @pytest.fixture
@@ -63,6 +67,27 @@ def _create_baseline(client: TestClient, dataset_id: UUID):
         "/api/evaluation-runs",
         json={"dataset_id": str(dataset_id), "run_type": "baseline"},
     )
+
+
+class SuccessfulProvider:
+    def complete(self, _request: LLMRequest) -> LLMResponse:
+        payload = {
+            "judgment": "success",
+            "primary_failure_mode": None,
+            "secondary_flags": [],
+            "problem": None,
+            "severity": None,
+            "evidence": [],
+            "uncertainty": None,
+            "review_required": False,
+            "rationale": "The response meets the supplied reference.",
+        }
+        return LLMResponse(
+            provider="fake",
+            model="fake-judge-v1",
+            structured_payload=payload,
+            raw_json_text=json.dumps(payload),
+        )
 
 
 def _stored_run(
@@ -119,6 +144,50 @@ def test_create_baseline_persists_pending_live_run(api_context) -> None:
     get_response = client.get(f"/api/evaluation-runs/{run_id}")
     assert get_response.status_code == 200
     assert get_response.json() == body
+
+
+def test_create_and_execute_baseline_uses_real_dataset(api_context) -> None:
+    client, engine = api_context
+    dataset = _persist_dataset(engine)
+    with Session(engine) as session:
+        session.add(
+            Conversation(
+                dataset_id=dataset.id,
+                external_id="CASE-001",
+                messages=[
+                    {"role": "user", "content": "Can I return this item?"},
+                    {"role": "assistant", "content": "Yes, within seven days."},
+                ],
+                metadata_={
+                    "scenario": "Refund",
+                    "reference_evidence": "Returns are accepted within seven days.",
+                },
+            )
+        )
+        session.commit()
+
+    app.dependency_overrides[get_baseline_runner] = lambda: BaselineRunner(
+        SuccessfulProvider()
+    )
+    create_response = _create_baseline(client, dataset.id)
+    run_id = UUID(create_response.json()["id"])
+    execute_response = client.post(
+        f"/api/evaluation-runs/{run_id}/execute-baseline"
+    )
+
+    assert create_response.status_code == 201
+    assert execute_response.status_code == 200
+    assert execute_response.json()["id"] == str(run_id)
+    assert execute_response.json()["status"] == "completed"
+    with Session(engine) as session:
+        stored_run = session.get(EvaluationRun, run_id)
+        assert stored_run is not None
+        assert json.loads(stored_run.business_reference_snapshot or "") == {
+            "reference_evidence": ["Returns are accepted within seven days."]
+        }
+        assert session.scalar(
+            select(func.count()).select_from(EvaluationResult)
+        ) == 1
 
 
 def test_run_read_returns_problem_aggregation_completion_time(api_context) -> None:
