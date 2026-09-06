@@ -32,6 +32,8 @@ from app.problem_aggregation import (
     normalize_problem_definition,
 )
 from app.schemas import (
+    CandidateFinalDecision,
+    CandidateFinalDecisionRequest,
     CandidateRunCreateRequest,
     CandidateValidationSummaryRead,
     CaseComparisonRead,
@@ -59,6 +61,15 @@ class CandidateValidationErrorCode(StrEnum):
     CANDIDATE_COMPARISON_NOT_READY = "candidate_comparison_not_ready"
     CANDIDATE_COMPARISON_PERSISTENCE_FAILED = "candidate_comparison_persistence_failed"
     CANDIDATE_VALIDATION_SUMMARY_NOT_FOUND = "candidate_validation_summary_not_found"
+    CANDIDATE_FINAL_DECISION_ALREADY_COMPLETED = (
+        "candidate_final_decision_already_completed"
+    )
+    CANDIDATE_FINAL_DECISION_ACCEPT_BLOCKED = (
+        "candidate_final_decision_accept_blocked"
+    )
+    CANDIDATE_FINAL_DECISION_OVERRIDE_REASON_REQUIRED = (
+        "candidate_final_decision_override_reason_required"
+    )
 
 
 class CandidateValidationError(RuntimeError):
@@ -445,6 +456,62 @@ class CandidateComparisonService:
         return CandidateValidationSummaryRead.model_validate(
             candidate.candidate_validation_summary
         )
+
+    def submit_final_decision(
+        self,
+        candidate_run_id: UUID,
+        request: CandidateFinalDecisionRequest,
+        db_session: Session,
+    ) -> EvaluationRun:
+        candidate = db_session.get(EvaluationRun, candidate_run_id)
+        if candidate is None:
+            raise CandidateValidationError(
+                CandidateValidationErrorCode.EVALUATION_RUN_NOT_FOUND,
+                f"Evaluation run '{candidate_run_id}' was not found.",
+            )
+        if candidate.run_type != EvaluationRunType.CANDIDATE.value:
+            raise CandidateValidationError(
+                CandidateValidationErrorCode.CANDIDATE_RUN_NOT_CANDIDATE,
+                "Final decisions only support candidate runs.",
+            )
+        if candidate.final_decision is not None:
+            raise CandidateValidationError(
+                CandidateValidationErrorCode.CANDIDATE_FINAL_DECISION_ALREADY_COMPLETED,
+                "The candidate final decision has already been completed.",
+            )
+
+        summary = self.get_summary(candidate_run_id, db_session)
+        if (
+            request.final_decision is CandidateFinalDecision.ACCEPT
+            and summary.recommended_verdict is not RecommendedVerdict.ACCEPT
+        ):
+            raise CandidateValidationError(
+                CandidateValidationErrorCode.CANDIDATE_FINAL_DECISION_ACCEPT_BLOCKED,
+                "Accept is blocked unless all machine Accept gates pass.",
+            )
+        if (
+            request.final_decision.value.upper()
+            != summary.recommended_verdict.value
+            and not request.override_reason
+        ):
+            raise CandidateValidationError(
+                (
+                    CandidateValidationErrorCode
+                    .CANDIDATE_FINAL_DECISION_OVERRIDE_REASON_REQUIRED
+                ),
+                "A machine recommendation override requires override_reason.",
+            )
+
+        candidate.final_decision = request.final_decision.value
+        candidate.decided_by = request.decided_by.strip()
+        candidate.decided_at = datetime.now(UTC)
+        candidate.reason = request.reason.strip()
+        candidate.override_reason = (
+            request.override_reason.strip() if request.override_reason else None
+        )
+        db_session.commit()
+        db_session.refresh(candidate)
+        return candidate
 
     def _effective_by_conversation(
         self, run_id: UUID, db_session: Session

@@ -40,6 +40,11 @@ class EvaluationRunSource(StrEnum):
     LIVE = "live"
 
 
+class CandidateFinalDecision(StrEnum):
+    ACCEPT = "accept"
+    CONTINUE = "continue"
+
+
 class HumanReviewAction(StrEnum):
     CONFIRM = "confirm"
     CORRECT = "correct"
@@ -208,6 +213,11 @@ class EvaluationRunRead(BaseModel):
     response_set_hash: str | None
     candidate_manifest_snapshot: dict[str, Any] | None
     candidate_validation_summary: dict[str, Any] | None
+    final_decision: CandidateFinalDecision | None
+    decided_by: str | None
+    decided_at: datetime | None
+    reason: str | None
+    override_reason: str | None
     created_at: datetime
 
 
@@ -543,6 +553,31 @@ class CandidateRunCreateRequest(BaseModel):
     def candidate_text_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("value must not be empty")
+        return value
+
+
+class CandidateFinalDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    final_decision: CandidateFinalDecision
+    decided_by: str
+    reason: str
+    override_reason: str | None = None
+
+    @field_validator("decided_by", "reason")
+    @classmethod
+    def required_decision_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("value must not be empty")
+        return value
+
+    @field_validator("override_reason")
+    @classmethod
+    def override_reason_must_not_be_empty(
+        cls, value: str | None
+    ) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("override_reason must not be empty when provided")
         return value
 
 

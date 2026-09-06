@@ -100,6 +100,15 @@ export type EvaluationRun = {
   error_code: string | null
   error_message: string | null
   problem_aggregation_completed_at: string | null
+  candidate_responses_snapshot: CandidateResponseInput[] | null
+  response_set_hash: string | null
+  candidate_manifest_snapshot: Record<string, unknown> | null
+  candidate_validation_summary: CandidateValidationSummary | null
+  final_decision: 'accept' | 'continue' | null
+  decided_by: string | null
+  decided_at: string | null
+  reason: string | null
+  override_reason: string | null
   created_at: string
 }
 
@@ -266,6 +275,87 @@ export type OptimizationTargetPatchInput = Partial<
   OptimizationTargetCreateInput
 >
 
+export type CandidateResponseInput = {
+  conversation_id: string
+  case_id: string
+  assistant_content: string
+}
+
+export type CandidateRunCreateInput = {
+  baseline_run_id: string
+  target_id: string
+  plan_hash: string
+  candidate_label: string
+  candidate_change_summary: string
+  source: string
+  actual_change_summary: string
+  actual_change_status: 'verified'
+  generation_parity_status: 'verified'
+  candidate_first_exposure_at: string
+  responses: CandidateResponseInput[]
+}
+
+export type CaseComparison = {
+  id: string
+  baseline_run_id: string
+  candidate_run_id: string
+  target_id: string
+  conversation_id: string
+  case_id: string
+  baseline_evaluation_result_id: string
+  candidate_evaluation_result_id: string
+  movement:
+    | 'improved'
+    | 'partially_improved'
+    | 'stable'
+    | 'regressed'
+    | 'inconclusive'
+  target_problem_status: 'present' | 'absent' | 'not_applicable' | 'inconclusive'
+  target_worse: boolean
+  regression_level: 'critical' | 'major' | 'minor' | null
+  evidence_snapshot: {
+    baseline: JudgeEvidence[] | null
+    candidate: JudgeEvidence[] | null
+  }
+  rule_result_snapshot: Record<string, unknown>
+  created_at: string
+}
+
+export type CandidateValidationSummary = {
+  candidate_run_id: string
+  baseline_run_id: string
+  target_id: string
+  target_outcome: 'resolved' | 'improved' | 'not_improved' | 'inconclusive'
+  regression_summary: {
+    critical: number
+    major: number
+    minor: number
+  }
+  other_problems: Array<Record<string, unknown>>
+  new_systematic_problems: Array<Record<string, unknown>>
+  review_complete: boolean
+  integrity_gate: 'passed' | 'failed'
+  compatibility_gate: 'passed' | 'failed'
+  protected_capability_gate: 'not_applicable' | 'unsupported'
+  recommended_verdict: 'ACCEPT' | 'CONTINUE' | 'INCONCLUSIVE'
+  policy_version: string
+  rule_outcomes: {
+    target_case_count: number
+    clear_improved_count: number
+    improvement_threshold: number
+    target_worse_count: number
+    remaining_target_high_critical: number
+  }
+  blockers: string[]
+}
+
+export type CandidateFinalDecisionInput = {
+  final_decision: 'accept' | 'continue'
+  decided_by: string
+  reason: string
+  override_reason?: string | null
+}
+
 export class ApiRequestError extends Error {
   readonly code: string
   readonly details: ImportErrorDetail[]
@@ -399,6 +489,18 @@ export async function getEvaluationRun(
   )
 }
 
+export async function getDatasetEvaluationRuns(
+  datasetId: string,
+  signal?: AbortSignal,
+): Promise<EvaluationRun[]> {
+  return requestJson<EvaluationRun[]>(
+    await fetch(
+      `${API_BASE_URL}/api/datasets/${encodeURIComponent(datasetId)}/evaluation-runs`,
+      { signal },
+    ),
+  )
+}
+
 export async function getFinalEffectiveResults(
   runId: string,
   signal?: AbortSignal,
@@ -520,4 +622,78 @@ export function freezeOptimizationTarget(
   actor: string,
 ): Promise<OptimizationTarget> {
   return submitOptimizationTargetActorAction(targetId, 'freeze', actor)
+}
+
+export async function createCandidateRun(
+  input: CandidateRunCreateInput,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(`${API_BASE_URL}/api/evaluation-runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  )
+}
+
+export async function executeCandidateRun(
+  runId: string,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/execute-candidate`,
+      { method: 'POST' },
+    ),
+  )
+}
+
+export async function createCandidateComparisons(
+  runId: string,
+): Promise<CaseComparison[]> {
+  return requestJson<CaseComparison[]>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/case-comparisons`,
+      { method: 'POST' },
+    ),
+  )
+}
+
+export async function getCandidateComparisons(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<CaseComparison[]> {
+  return requestJson<CaseComparison[]>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/case-comparisons`,
+      { signal },
+    ),
+  )
+}
+
+export async function getCandidateValidationSummary(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<CandidateValidationSummary> {
+  return requestJson<CandidateValidationSummary>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/candidate-validation-summary`,
+      { signal },
+    ),
+  )
+}
+
+export async function submitCandidateFinalDecision(
+  runId: string,
+  input: CandidateFinalDecisionInput,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/final-decision`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    ),
+  )
 }

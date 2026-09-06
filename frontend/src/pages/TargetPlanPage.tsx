@@ -12,7 +12,7 @@ import {
   MdRule,
   MdWarningAmber,
 } from 'react-icons/md'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   ApiRequestError,
@@ -21,6 +21,7 @@ import {
   createOptimizationTarget,
   freezeOptimizationTarget,
   getDatasetDetail,
+  getDatasetEvaluationRuns,
   getEvaluationRun,
   getOptimizationTargets,
   getProblems,
@@ -54,6 +55,7 @@ type LoadedData = {
   dataset: DatasetDetail
   problem: Problem
   target: OptimizationTarget | null
+  candidateRunId: string | null
 }
 
 type PageState =
@@ -201,6 +203,7 @@ type TargetPlanWorkspaceProps = {
   onConfirmTarget: () => void
   onConfirmHypothesis: () => void
   onFreeze: () => void
+  onEnterValidation: () => void
 }
 
 function TargetPlanWorkspace({
@@ -216,6 +219,7 @@ function TargetPlanWorkspace({
   onConfirmTarget,
   onConfirmHypothesis,
   onFreeze,
+  onEnterValidation,
 }: TargetPlanWorkspaceProps) {
   const { problem, target } = data
   const frozen = target?.status === 'frozen'
@@ -322,7 +326,7 @@ function TargetPlanWorkspace({
       </div>
 
       {frozen ? (
-        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span>真实 plan hash、冻结人和冻结时间已从 Backend 恢复。</span></div><button type="button" disabled>Candidate 不在本轮范围</button></footer>
+        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span>真实 plan hash、冻结人和冻结时间已从 Backend 恢复。</span></div><button type="button" onClick={onEnterValidation}>进入候选版本验证</button></footer>
       ) : (
         <footer className="s04-action-rail"><p>{actionError ?? (dirty ? '存在尚未保存的草稿修改。' : '所有状态均来自 Backend。')}</p><div><button className={requiredTargetFieldsComplete && dirty ? 's04-freeze-action--ready' : undefined} type="button" onClick={onSave} disabled={!requiredTargetFieldsComplete || !dirty || busy}>{pendingAction === 'save' ? '保存中…' : target ? '保存草稿' : '创建 Target 草稿'}</button><button className={freezeReady && actor.trim() ? 's04-freeze-action--ready' : undefined} type="button" onClick={onFreeze} disabled={!freezeReady || !actor.trim() || busy}>{pendingAction === 'freeze' ? '冻结中…' : '冻结验证计划'}</button><button type="button" disabled>进入候选版本验证</button></div></footer>
       )}
@@ -336,6 +340,7 @@ function TargetPlanWorkspace({
 }
 
 function TargetPlanPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const runId = searchParams.get('run_id')?.trim() ?? ''
   const problemId = searchParams.get('problem_id')?.trim() ?? ''
@@ -359,10 +364,11 @@ function TargetPlanPage() {
     async function load() {
       try {
         const run = await getEvaluationRun(runId, controller.signal)
-        const [dataset, problems, targets] = await Promise.all([
+        const [dataset, problems, targets, runs] = await Promise.all([
           getDatasetDetail(run.dataset_id, controller.signal),
           getProblems(run.id, controller.signal),
           getOptimizationTargets(run.id, controller.signal),
+          getDatasetEvaluationRuns(run.dataset_id, controller.signal),
         ])
         const problem = problems.find((item) => item.problem_id === problemId)
         if (!problem) {
@@ -370,10 +376,13 @@ function TargetPlanPage() {
           return
         }
         const target = targets.filter((item) => item.problem_id === problem.problem_id).sort((left, right) => right.version - left.version)[0] ?? null
+        const candidateRunId = target
+          ? runs.find((item) => item.run_type === 'candidate' && item.target_id === target.id)?.id ?? null
+          : null
         setForm(target ? formFromTarget(target) : emptyForm)
         setLoadResult({
           requestKey,
-          state: { kind: 'ready', data: { run, dataset, problem, target } },
+          state: { kind: 'ready', data: { run, dataset, problem, target, candidateRunId } },
         })
       } catch (error) {
         if (controller.signal.aborted) return
@@ -452,6 +461,12 @@ function TargetPlanPage() {
       onConfirmTarget={() => { if (target) void runAction('confirm-target', () => confirmOptimizationTarget(target.id, actor.trim())) }}
       onConfirmHypothesis={() => { if (target) void runAction('confirm-hypothesis', () => confirmOptimizationHypothesis(target.id, actor.trim())) }}
       onFreeze={() => { if (target) void runAction('freeze', () => freezeOptimizationTarget(target.id, actor.trim())) }}
+      onEnterValidation={() => {
+        if (!target) return
+        const params = new URLSearchParams({ target_id: target.id })
+        if (data.candidateRunId) params.set('candidate_run_id', data.candidateRunId)
+        navigate(`/validation?${params.toString()}`)
+      }}
     />
   )
 }

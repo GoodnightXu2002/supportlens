@@ -419,6 +419,11 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
         "response_set_hash",
         "candidate_manifest_snapshot",
         "candidate_validation_summary",
+        "final_decision",
+        "decided_by",
+        "decided_at",
+        "reason",
+        "override_reason",
     } <= run_columns
     assert comparison_columns == {
         "id",
@@ -556,7 +561,7 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     ]
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "e3c5a7b9d102"
+    assert revision == "a9c2e4f6b108"
 
 
 def test_candidate_migration_preserves_populated_evaluation_run_references(
@@ -676,7 +681,7 @@ def test_candidate_migration_preserves_populated_evaluation_run_references(
             )
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                == "e3c5a7b9d102"
+                == "a9c2e4f6b108"
             )
     finally:
         engine.dispose()

@@ -113,6 +113,18 @@ class EvaluationRun(Base):
             "response_set_hash IS NULL OR length(response_set_hash) = 64",
             name="ck_evaluation_runs_response_set_hash_length",
         ),
+        CheckConstraint(
+            "final_decision IS NULL OR final_decision IN ('accept', 'continue')",
+            name="ck_evaluation_runs_final_decision",
+        ),
+        CheckConstraint(
+            "(final_decision IS NULL AND decided_by IS NULL AND "
+            "decided_at IS NULL AND reason IS NULL AND override_reason IS NULL) OR "
+            "(final_decision IS NOT NULL AND decided_by IS NOT NULL AND "
+            "length(trim(decided_by)) > 0 AND decided_at IS NOT NULL AND "
+            "reason IS NOT NULL AND length(trim(reason)) > 0)",
+            name="ck_evaluation_runs_final_decision_fields",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -174,6 +186,13 @@ class EvaluationRun(Base):
     candidate_validation_summary: Mapped[dict[str, Any] | None] = mapped_column(
         JSON(none_as_null=True), nullable=True
     )
+    final_decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -711,3 +711,132 @@ def test_candidate_api_create_execute_compare_and_read(database_engine) -> None:
             assert summary_response.json()["recommended_verdict"] == "ACCEPT"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_human_final_decision_persists_and_is_immutable(database_engine) -> None:
+    foundation = _persist_foundation(database_engine)
+    candidate_id = _create_candidate(database_engine, foundation)
+    _persist_candidate_results(
+        database_engine,
+        candidate_id,
+        [_output("success"), _output("success"), _output("success")],
+    )
+    with Session(database_engine) as session:
+        CandidateComparisonService().generate(candidate_id, session)
+
+    def override_db_session():
+        with Session(database_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = override_db_session
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                f"/api/evaluation-runs/{candidate_id}/final-decision",
+                json={
+                    "final_decision": "accept",
+                    "decided_by": "decision-owner",
+                    "reason": "All Accept gates passed.",
+                    "override_reason": None,
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["final_decision"] == "accept"
+            assert response.json()["decided_at"] is not None
+
+            loaded = client.get(f"/api/evaluation-runs/{candidate_id}")
+            assert loaded.json()["decided_by"] == "decision-owner"
+            assert loaded.json()["reason"] == "All Accept gates passed."
+
+            duplicate = client.post(
+                f"/api/evaluation-runs/{candidate_id}/final-decision",
+                json={
+                    "final_decision": "continue",
+                    "decided_by": "other-owner",
+                    "reason": "Try to overwrite.",
+                    "override_reason": "Different from machine.",
+                },
+            )
+            assert duplicate.status_code == 409
+            assert duplicate.json()["error"]["code"] == (
+                "candidate_final_decision_already_completed"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_human_final_decision_enforces_override_and_accept_gate(
+    database_engine,
+) -> None:
+    accept_foundation = _persist_foundation(database_engine)
+    accept_candidate_id = _create_candidate(database_engine, accept_foundation)
+    _persist_candidate_results(
+        database_engine,
+        accept_candidate_id,
+        [_output("success"), _output("success"), _output("success")],
+    )
+    continue_foundation = _persist_foundation(database_engine)
+    continue_candidate_id = _create_candidate(database_engine, continue_foundation)
+    _persist_candidate_results(
+        database_engine,
+        continue_candidate_id,
+        [
+            _output("failure", problem="Target issue", severity="high"),
+            _output("success"),
+            _output("success"),
+        ],
+    )
+    with Session(database_engine) as session:
+        service = CandidateComparisonService()
+        service.generate(accept_candidate_id, session)
+        service.generate(continue_candidate_id, session)
+
+    def override_db_session():
+        with Session(database_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = override_db_session
+    try:
+        with TestClient(app) as client:
+            missing_override = client.post(
+                f"/api/evaluation-runs/{accept_candidate_id}/final-decision",
+                json={
+                    "final_decision": "continue",
+                    "decided_by": "decision-owner",
+                    "reason": "Continue iterating.",
+                },
+            )
+            assert missing_override.status_code == 409
+            assert missing_override.json()["error"]["code"] == (
+                "candidate_final_decision_override_reason_required"
+            )
+
+            overridden = client.post(
+                f"/api/evaluation-runs/{accept_candidate_id}/final-decision",
+                json={
+                    "final_decision": "continue",
+                    "decided_by": "decision-owner",
+                    "reason": "Continue iterating.",
+                    "override_reason": "Additional review is required.",
+                },
+            )
+            assert overridden.status_code == 200
+            assert overridden.json()["override_reason"] == (
+                "Additional review is required."
+            )
+
+            blocked_accept = client.post(
+                f"/api/evaluation-runs/{continue_candidate_id}/final-decision",
+                json={
+                    "final_decision": "accept",
+                    "decided_by": "decision-owner",
+                    "reason": "Attempt blocked Accept.",
+                    "override_reason": "Disagree with machine.",
+                },
+            )
+            assert blocked_accept.status_code == 409
+            assert blocked_accept.json()["error"]["code"] == (
+                "candidate_final_decision_accept_blocked"
+            )
+    finally:
+        app.dependency_overrides.clear()

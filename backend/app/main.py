@@ -47,6 +47,7 @@ from app.problem_aggregation import (
     ProblemAggregationService,
 )
 from app.schemas import (
+    CandidateFinalDecisionRequest,
     CandidateRunCreateRequest,
     CandidateValidationSummaryRead,
     CaseComparisonRead,
@@ -376,6 +377,12 @@ def _candidate_validation_error_response(
         CandidateValidationErrorCode.CANDIDATE_COMPARISON_NOT_READY: 409,
         CandidateValidationErrorCode.CANDIDATE_COMPARISON_PERSISTENCE_FAILED: 500,
         CandidateValidationErrorCode.CANDIDATE_VALIDATION_SUMMARY_NOT_FOUND: 404,
+        CandidateValidationErrorCode.CANDIDATE_FINAL_DECISION_ALREADY_COMPLETED: 409,
+        CandidateValidationErrorCode.CANDIDATE_FINAL_DECISION_ACCEPT_BLOCKED: 409,
+        (
+            CandidateValidationErrorCode
+            .CANDIDATE_FINAL_DECISION_OVERRIDE_REASON_REQUIRED
+        ): 409,
     }
     return _error_response(
         status_code=status_by_code[error.code],
@@ -515,6 +522,25 @@ def get_candidate_validation_summary(
 ) -> CandidateValidationSummaryRead | JSONResponse:
     try:
         return service.get_summary(run_id, db_session)
+    except CandidateValidationError as error:
+        return _candidate_validation_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/final-decision",
+    response_model=EvaluationRunRead,
+)
+def submit_candidate_final_decision(
+    run_id: UUID,
+    request: CandidateFinalDecisionRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        CandidateComparisonService,
+        Depends(get_candidate_comparison_service),
+    ],
+) -> EvaluationRun | JSONResponse:
+    try:
+        return service.submit_final_decision(run_id, request, db_session)
     except CandidateValidationError as error:
         return _candidate_validation_error_response(error)
 
