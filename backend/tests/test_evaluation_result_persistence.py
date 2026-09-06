@@ -557,3 +557,126 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
     assert revision == "e3c5a7b9d102"
+
+
+def test_candidate_migration_preserves_populated_evaluation_run_references(
+    tmp_path,
+) -> None:
+    backend_root = Path(__file__).resolve().parents[1]
+    database_path = tmp_path / "populated-migration.db"
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
+    to_freeze_revision = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "upgrade",
+            "d8e1f4a6b203",
+        ],
+        cwd=backend_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert to_freeze_revision.returncode == 0, (
+        to_freeze_revision.stdout + to_freeze_revision.stderr
+    )
+
+    dataset_id = uuid4().hex
+    conversation_id = uuid4().hex
+    run_id = uuid4().hex
+    result_id = uuid4().hex
+    engine = create_engine(environment["DATABASE_URL"])
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO datasets "
+                    "(id, name, version, source, privacy_status, created_at) "
+                    "VALUES (:id, 'Migration dataset', 'v1.0', "
+                    "'user_upload', 'unknown', CURRENT_TIMESTAMP)"
+                ),
+                {"id": dataset_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO conversations "
+                    "(id, dataset_id, external_id, messages, metadata, created_at) "
+                    "VALUES (:id, :dataset_id, 'CASE-001', :messages, "
+                    ":metadata, CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "id": conversation_id,
+                    "dataset_id": dataset_id,
+                    "messages": '[{"role":"user","content":"Q"},'
+                    '{"role":"assistant","content":"A"}]',
+                    "metadata": '{"scenario":"Test"}',
+                },
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO evaluation_runs "
+                    "(id, dataset_id, run_type, status, judge_model, "
+                    "judge_contract_version, run_source, response_set_key, "
+                    "case_errors, business_reference_snapshot, created_at) "
+                    "VALUES (:id, :dataset_id, 'baseline', 'completed', "
+                    "'judge', 'contract', 'live', 'response-set', '[]', "
+                    "'reference', CURRENT_TIMESTAMP)"
+                ),
+                {"id": run_id, "dataset_id": dataset_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO evaluation_results "
+                    "(id, evaluation_run_id, conversation_id, judgment, "
+                    "primary_failure_mode, secondary_flags, problem, severity, "
+                    "evidence, uncertainty, review_required, rationale, "
+                    "raw_judge_output, created_at) VALUES "
+                    "(:id, :run_id, :conversation_id, 'success', NULL, '[]', "
+                    "NULL, NULL, '[]', NULL, 0, 'Valid result.', NULL, "
+                    "CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "id": result_id,
+                    "run_id": run_id,
+                    "conversation_id": conversation_id,
+                },
+            )
+    finally:
+        engine.dispose()
+
+    to_head = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert to_head.returncode == 0, to_head.stdout + to_head.stderr
+
+    engine = create_engine(environment["DATABASE_URL"])
+    try:
+        with engine.connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM evaluation_runs WHERE id = :id"),
+                    {"id": run_id},
+                )
+                == 1
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM evaluation_results WHERE id = :id"),
+                    {"id": result_id},
+                )
+                == 1
+            )
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version"))
+                == "e3c5a7b9d102"
+            )
+    finally:
+        engine.dispose()

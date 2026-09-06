@@ -18,6 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_evaluation_runs")
     with op.batch_alter_table("evaluation_runs") as batch_op:
         batch_op.add_column(
             sa.Column("candidate_responses_snapshot", sa.JSON(), nullable=True)
@@ -100,6 +101,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_evaluation_runs")
     op.drop_table("case_comparisons")
     with op.batch_alter_table("evaluation_runs") as batch_op:
         batch_op.drop_constraint(
