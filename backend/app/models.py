@@ -109,6 +109,10 @@ class EvaluationRun(Base):
             "run_source IN ('seed', 'live')",
             name="ck_evaluation_runs_run_source",
         ),
+        CheckConstraint(
+            "response_set_hash IS NULL OR length(response_set_hash) = 64",
+            name="ck_evaluation_runs_response_set_hash_length",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -129,7 +133,11 @@ class EvaluationRun(Base):
         ForeignKey("evaluation_runs.id"),
         nullable=True,
     )
-    target_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    target_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("optimization_targets.id"),
+        nullable=True,
+    )
     candidate_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     candidate_change_summary: Mapped[str | None] = mapped_column(
         Text, nullable=True
@@ -154,6 +162,18 @@ class EvaluationRun(Base):
     problem_aggregation_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    candidate_responses_snapshot: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    response_set_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    candidate_manifest_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    candidate_validation_summary: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -166,7 +186,16 @@ class EvaluationRun(Base):
         back_populates="evaluation_run"
     )
     optimization_targets: Mapped[list[OptimizationTarget]] = relationship(
-        back_populates="baseline_run"
+        back_populates="baseline_run",
+        foreign_keys="OptimizationTarget.baseline_run_id",
+    )
+    baseline_case_comparisons: Mapped[list[CaseComparison]] = relationship(
+        back_populates="baseline_run",
+        foreign_keys="CaseComparison.baseline_run_id",
+    )
+    candidate_case_comparisons: Mapped[list[CaseComparison]] = relationship(
+        back_populates="candidate_run",
+        foreign_keys="CaseComparison.candidate_run_id",
     )
 
 
@@ -557,6 +586,85 @@ class OptimizationTarget(Base):
     )
 
     baseline_run: Mapped[EvaluationRun] = relationship(
-        back_populates="optimization_targets"
+        back_populates="optimization_targets",
+        foreign_keys=[baseline_run_id],
     )
     problem: Mapped[Problem] = relationship(back_populates="optimization_targets")
+    case_comparisons: Mapped[list[CaseComparison]] = relationship(
+        back_populates="target"
+    )
+
+
+class CaseComparison(Base):
+    __tablename__ = "case_comparisons"
+    __table_args__ = (
+        UniqueConstraint(
+            "baseline_run_id",
+            "candidate_run_id",
+            "conversation_id",
+            name="uq_case_comparisons_run_pair_conversation",
+        ),
+        CheckConstraint(
+            "movement IN ('improved', 'partially_improved', 'stable', "
+            "'regressed', 'inconclusive')",
+            name="ck_case_comparisons_movement",
+        ),
+        CheckConstraint(
+            "target_problem_status IN ('present', 'absent', 'not_applicable', "
+            "'inconclusive')",
+            name="ck_case_comparisons_target_problem_status",
+        ),
+        CheckConstraint(
+            "regression_level IS NULL OR regression_level IN "
+            "('critical', 'major', 'minor')",
+            name="ck_case_comparisons_regression_level",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    baseline_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("evaluation_runs.id"), nullable=False
+    )
+    candidate_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("evaluation_runs.id"), nullable=False
+    )
+    target_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("optimization_targets.id"), nullable=False
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("conversations.id"), nullable=False
+    )
+    case_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    baseline_evaluation_result_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("evaluation_results.id"), nullable=False
+    )
+    candidate_evaluation_result_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("evaluation_results.id"), nullable=False
+    )
+    movement: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_problem_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_worse: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    regression_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evidence_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    rule_result_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    baseline_run: Mapped[EvaluationRun] = relationship(
+        back_populates="baseline_case_comparisons",
+        foreign_keys=[baseline_run_id],
+    )
+    candidate_run: Mapped[EvaluationRun] = relationship(
+        back_populates="candidate_case_comparisons",
+        foreign_keys=[candidate_run_id],
+    )
+    target: Mapped[OptimizationTarget] = relationship(
+        back_populates="case_comparisons"
+    )

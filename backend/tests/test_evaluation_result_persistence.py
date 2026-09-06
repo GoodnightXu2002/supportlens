@@ -375,11 +375,29 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
                 "optimization_targets"
             )
         }
+        comparison_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("case_comparisons")
+        }
+        comparison_uniques = {
+            tuple(constraint["column_names"])
+            for constraint in inspect(engine).get_unique_constraints(
+                "case_comparisons"
+            )
+        }
         run_checks = {
             constraint["name"]: constraint["sqltext"]
             for constraint in inspect(engine).get_check_constraints(
                 "evaluation_runs"
             )
+        }
+        run_foreign_keys = {
+            (
+                tuple(constraint["constrained_columns"]),
+                constraint["referred_table"],
+                tuple(constraint["referred_columns"]),
+            )
+            for constraint in inspect(engine).get_foreign_keys("evaluation_runs")
         }
         with engine.connect() as connection:
             revision = connection.scalar(
@@ -392,11 +410,39 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     assert "human_decisions" in table_names
     assert {"problems", "result_problem_links"} <= set(table_names)
     assert "optimization_targets" in table_names
+    assert "case_comparisons" in table_names
     assert {
         "case_errors",
         "business_reference_snapshot",
         "problem_aggregation_completed_at",
+        "candidate_responses_snapshot",
+        "response_set_hash",
+        "candidate_manifest_snapshot",
+        "candidate_validation_summary",
     } <= run_columns
+    assert comparison_columns == {
+        "id",
+        "baseline_run_id",
+        "candidate_run_id",
+        "target_id",
+        "conversation_id",
+        "case_id",
+        "baseline_evaluation_result_id",
+        "candidate_evaluation_result_id",
+        "movement",
+        "target_problem_status",
+        "target_worse",
+        "regression_level",
+        "evidence_snapshot",
+        "rule_result_snapshot",
+        "created_at",
+    }
+    assert (
+        "baseline_run_id",
+        "candidate_run_id",
+        "conversation_id",
+    ) in comparison_uniques
+    assert (("target_id",), "optimization_targets", ("id",)) in run_foreign_keys
     assert "raw_judge_output" in result_columns
     assert decision_columns == {
         "id",
@@ -510,4 +556,4 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     ]
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "d8e1f4a6b203"
+    assert revision == "e3c5a7b9d102"

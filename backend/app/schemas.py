@@ -204,6 +204,10 @@ class EvaluationRunRead(BaseModel):
     error_code: str | None
     error_message: str | None
     problem_aggregation_completed_at: datetime | None
+    candidate_responses_snapshot: list[dict[str, Any]] | None
+    response_set_hash: str | None
+    candidate_manifest_snapshot: dict[str, Any] | None
+    candidate_validation_summary: dict[str, Any] | None
     created_at: datetime
 
 
@@ -496,3 +500,112 @@ class OptimizationTargetRead(BaseModel):
     frozen_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class CandidateResponseInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: UUID
+    case_id: str
+    assistant_content: str
+
+    @field_validator("case_id", "assistant_content")
+    @classmethod
+    def candidate_response_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("value must not be empty")
+        return value
+
+
+class CandidateRunCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    baseline_run_id: UUID
+    target_id: UUID
+    plan_hash: str
+    candidate_label: str
+    candidate_change_summary: str
+    source: str
+    actual_change_summary: str
+    actual_change_status: Literal["verified"]
+    generation_parity_status: Literal["verified"]
+    candidate_first_exposure_at: datetime
+    responses: list[CandidateResponseInput] = Field(min_length=1)
+
+    @field_validator(
+        "plan_hash",
+        "candidate_label",
+        "candidate_change_summary",
+        "source",
+        "actual_change_summary",
+    )
+    @classmethod
+    def candidate_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("value must not be empty")
+        return value
+
+
+class CaseMovement(StrEnum):
+    IMPROVED = "improved"
+    PARTIALLY_IMPROVED = "partially_improved"
+    STABLE = "stable"
+    REGRESSED = "regressed"
+    INCONCLUSIVE = "inconclusive"
+
+
+class TargetProblemStatus(StrEnum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    NOT_APPLICABLE = "not_applicable"
+    INCONCLUSIVE = "inconclusive"
+
+
+class RegressionLevel(StrEnum):
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+
+
+class RecommendedVerdict(StrEnum):
+    ACCEPT = "ACCEPT"
+    CONTINUE = "CONTINUE"
+    INCONCLUSIVE = "INCONCLUSIVE"
+
+
+class CaseComparisonRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    baseline_run_id: UUID
+    candidate_run_id: UUID
+    target_id: UUID
+    conversation_id: UUID
+    case_id: str
+    baseline_evaluation_result_id: UUID
+    candidate_evaluation_result_id: UUID
+    movement: CaseMovement
+    target_problem_status: TargetProblemStatus
+    target_worse: bool
+    regression_level: RegressionLevel | None
+    evidence_snapshot: dict[str, Any]
+    rule_result_snapshot: dict[str, Any]
+    created_at: datetime
+
+
+class CandidateValidationSummaryRead(BaseModel):
+    candidate_run_id: UUID
+    baseline_run_id: UUID
+    target_id: UUID
+    target_outcome: Literal["resolved", "improved", "not_improved", "inconclusive"]
+    regression_summary: dict[str, Any]
+    other_problems: list[dict[str, Any]]
+    new_systematic_problems: list[dict[str, Any]]
+    review_complete: bool
+    integrity_gate: Literal["passed", "failed"]
+    compatibility_gate: Literal["passed", "failed"]
+    protected_capability_gate: Literal["not_applicable", "unsupported"]
+    recommended_verdict: RecommendedVerdict
+    policy_version: str
+    rule_outcomes: dict[str, Any]
+    blockers: list[str]

@@ -12,6 +12,13 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.candidate_validation import (
+    CandidateComparisonService,
+    CandidateRunner,
+    CandidateRunService,
+    CandidateValidationError,
+    CandidateValidationErrorCode,
+)
 from app.config import get_settings
 from app.database import SessionLocal
 from app.human_review import (
@@ -27,6 +34,7 @@ from app.import_service import (
     ImportServiceErrorCode,
 )
 from app.judge_contract import JUDGE_CONTRACT_VERSION
+from app.llm_provider import DeepSeekProvider
 from app.models import Conversation, Dataset, EvaluationRun, HumanDecision
 from app.optimization_target import (
     OptimizationTargetError,
@@ -39,6 +47,9 @@ from app.problem_aggregation import (
     ProblemAggregationService,
 )
 from app.schemas import (
+    CandidateRunCreateRequest,
+    CandidateValidationSummaryRead,
+    CaseComparisonRead,
     DatasetConversationRead,
     DatasetDetailResponse,
     DatasetImportConfirmRequest,
@@ -91,6 +102,20 @@ def get_problem_aggregation_service() -> ProblemAggregationService:
 @lru_cache
 def get_optimization_target_service() -> OptimizationTargetService:
     return OptimizationTargetService()
+
+
+@lru_cache
+def get_candidate_run_service() -> CandidateRunService:
+    return CandidateRunService()
+
+
+@lru_cache
+def get_candidate_comparison_service() -> CandidateComparisonService:
+    return CandidateComparisonService()
+
+
+def get_candidate_runner() -> CandidateRunner:
+    return CandidateRunner(DeepSeekProvider(settings))
 
 
 def get_db_session() -> Iterator[Session]:
@@ -335,15 +360,49 @@ def _optimization_target_error_response(
     )
 
 
+def _candidate_validation_error_response(
+    error: CandidateValidationError,
+) -> JSONResponse:
+    status_by_code = {
+        CandidateValidationErrorCode.EVALUATION_RUN_NOT_FOUND: 404,
+        CandidateValidationErrorCode.CANDIDATE_RUN_NOT_CANDIDATE: 409,
+        CandidateValidationErrorCode.CANDIDATE_RUN_NOT_STARTABLE: 409,
+        CandidateValidationErrorCode.CANDIDATE_BASELINE_INVALID: 409,
+        CandidateValidationErrorCode.CANDIDATE_TARGET_NOT_FROZEN: 409,
+        CandidateValidationErrorCode.CANDIDATE_PLAN_HASH_MISMATCH: 409,
+        CandidateValidationErrorCode.CANDIDATE_EXPOSURE_BEFORE_FREEZE: 409,
+        CandidateValidationErrorCode.CANDIDATE_CASE_SCOPE_INVALID: 400,
+        CandidateValidationErrorCode.CANDIDATE_RESPONSE_PAIR_INVALID: 400,
+        CandidateValidationErrorCode.CANDIDATE_COMPARISON_NOT_READY: 409,
+        CandidateValidationErrorCode.CANDIDATE_COMPARISON_PERSISTENCE_FAILED: 500,
+        CandidateValidationErrorCode.CANDIDATE_VALIDATION_SUMMARY_NOT_FOUND: 404,
+    }
+    return _error_response(
+        status_code=status_by_code[error.code],
+        code=error.code.value,
+        message=str(error),
+    )
+
+
 @app.post(
     "/api/evaluation-runs",
     response_model=EvaluationRunRead,
     status_code=201,
 )
 def create_evaluation_run(
-    request: EvaluationRunCreateRequest,
+    request: EvaluationRunCreateRequest | CandidateRunCreateRequest,
     db_session: Annotated[Session, Depends(get_db_session)],
+    candidate_service: Annotated[
+        CandidateRunService,
+        Depends(get_candidate_run_service),
+    ],
 ) -> EvaluationRun | JSONResponse:
+    if isinstance(request, CandidateRunCreateRequest):
+        try:
+            return candidate_service.create(request, db_session)
+        except CandidateValidationError as error:
+            return _candidate_validation_error_response(error)
+
     if db_session.get(Dataset, request.dataset_id) is None:
         return _dataset_not_found(request.dataset_id)
 
@@ -387,6 +446,77 @@ def get_evaluation_run(
     if evaluation_run is None:
         return _evaluation_run_not_found(run_id)
     return evaluation_run
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/execute-candidate",
+    response_model=EvaluationRunRead,
+)
+def execute_candidate_evaluation_run(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    runner: Annotated[CandidateRunner, Depends(get_candidate_runner)],
+) -> EvaluationRun | JSONResponse:
+    try:
+        return runner.execute(run_id, db_session)
+    except CandidateValidationError as error:
+        return _candidate_validation_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/case-comparisons",
+    response_model=list[CaseComparisonRead],
+    status_code=201,
+)
+def generate_candidate_case_comparisons(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        CandidateComparisonService,
+        Depends(get_candidate_comparison_service),
+    ],
+) -> list[CaseComparisonRead] | JSONResponse:
+    try:
+        comparisons, _summary = service.generate(run_id, db_session)
+        return comparisons
+    except CandidateValidationError as error:
+        return _candidate_validation_error_response(error)
+
+
+@app.get(
+    "/api/evaluation-runs/{run_id}/case-comparisons",
+    response_model=list[CaseComparisonRead],
+)
+def list_candidate_case_comparisons(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        CandidateComparisonService,
+        Depends(get_candidate_comparison_service),
+    ],
+) -> list[CaseComparisonRead] | JSONResponse:
+    try:
+        return service.list(run_id, db_session)
+    except CandidateValidationError as error:
+        return _candidate_validation_error_response(error)
+
+
+@app.get(
+    "/api/evaluation-runs/{run_id}/candidate-validation-summary",
+    response_model=CandidateValidationSummaryRead,
+)
+def get_candidate_validation_summary(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        CandidateComparisonService,
+        Depends(get_candidate_comparison_service),
+    ],
+) -> CandidateValidationSummaryRead | JSONResponse:
+    try:
+        return service.get_summary(run_id, db_session)
+    except CandidateValidationError as error:
+        return _candidate_validation_error_response(error)
 
 
 @app.post(
