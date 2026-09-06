@@ -10,6 +10,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -163,6 +164,9 @@ class EvaluationRun(Base):
     )
     problems: Mapped[list[Problem]] = relationship(
         back_populates="evaluation_run"
+    )
+    optimization_targets: Mapped[list[OptimizationTarget]] = relationship(
+        back_populates="baseline_run"
     )
 
 
@@ -331,6 +335,9 @@ class Problem(Base):
     result_links: Mapped[list[ResultProblemLink]] = relationship(
         back_populates="problem"
     )
+    optimization_targets: Mapped[list[OptimizationTarget]] = relationship(
+        back_populates="problem"
+    )
 
 
 class ResultProblemLink(Base):
@@ -368,3 +375,141 @@ class ResultProblemLink(Base):
     evaluation_result: Mapped[EvaluationResult] = relationship(
         back_populates="problem_links"
     )
+
+
+class OptimizationTarget(Base):
+    __tablename__ = "optimization_targets"
+    __table_args__ = (
+        UniqueConstraint(
+            "baseline_run_id",
+            "problem_id",
+            "version",
+            name="uq_optimization_targets_run_problem_version",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_optimization_targets_version_positive",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'confirmed')",
+            name="ck_optimization_targets_status",
+        ),
+        CheckConstraint(
+            "change_status = 'planned'",
+            name="ck_optimization_targets_change_status",
+        ),
+        CheckConstraint(
+            "length(trim(definition)) > 0",
+            name="ck_optimization_targets_definition_not_empty",
+        ),
+        CheckConstraint(
+            "length(trim(inclusion_criteria)) > 0",
+            name="ck_optimization_targets_inclusion_not_empty",
+        ),
+        CheckConstraint(
+            "length(trim(exclusion_criteria)) > 0",
+            name="ck_optimization_targets_exclusion_not_empty",
+        ),
+        CheckConstraint(
+            "length(trim(expected_observable_change)) > 0",
+            name="ck_optimization_targets_expected_change_not_empty",
+        ),
+        CheckConstraint(
+            "failure_mode IN "
+            "('incorrect_information', 'incomplete_unresolved', "
+            "'intent_relevance_failure', 'improper_refusal', "
+            "'policy_procedure_violation', 'other')",
+            name="ck_optimization_targets_failure_mode",
+        ),
+        CheckConstraint(
+            "confirmed_by IS NULL OR length(trim(confirmed_by)) > 0",
+            name="ck_optimization_targets_confirmer_not_empty",
+        ),
+        CheckConstraint(
+            "(status = 'draft' AND confirmed_by IS NULL AND confirmed_at IS NULL) "
+            "OR (status = 'confirmed' AND confirmed_by IS NOT NULL "
+            "AND confirmed_at IS NOT NULL)",
+            name="ck_optimization_targets_confirmation_state",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    baseline_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_runs.id"),
+        nullable=False,
+        index=True,
+    )
+    problem_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("problems.id"),
+        nullable=False,
+        index=True,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    definition: Mapped[str] = mapped_column(Text, nullable=False)
+    inclusion_criteria: Mapped[str] = mapped_column(Text, nullable=False)
+    exclusion_criteria: Mapped[str] = mapped_column(Text, nullable=False)
+    baseline_affected_case_ids: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    reference_basis: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    failure_mode: Mapped[str] = mapped_column(String(64), nullable=False)
+    baseline_metric: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    expected_observable_change: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    hypothesis_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hypothesis_evidence_refs: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False, default=list, server_default="[]"
+    )
+    change_surface: Mapped[str | None] = mapped_column(Text, nullable=True)
+    planned_change: Mapped[str | None] = mapped_column(Text, nullable=True)
+    guardrails: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False, default=list, server_default="[]"
+    )
+    change_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="planned", server_default="planned"
+    )
+    target_case_ids: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    regression_case_ids: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    challenge_case_ids: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    protected_capabilities: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False, default=list, server_default="[]"
+    )
+    baseline_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    evaluation_config_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    baseline_run: Mapped[EvaluationRun] = relationship(
+        back_populates="optimization_targets"
+    )
+    problem: Mapped[Problem] = relationship(back_populates="optimization_targets")

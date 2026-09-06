@@ -28,6 +28,11 @@ from app.import_service import (
 )
 from app.judge_contract import JUDGE_CONTRACT_VERSION
 from app.models import Conversation, Dataset, EvaluationRun, HumanDecision
+from app.optimization_target import (
+    OptimizationTargetError,
+    OptimizationTargetErrorCode,
+    OptimizationTargetService,
+)
 from app.problem_aggregation import (
     ProblemAggregationError,
     ProblemAggregationErrorCode,
@@ -46,6 +51,8 @@ from app.schemas import (
     FinalEffectiveResultRead,
     HumanDecisionRead,
     HumanReviewSubmitRequest,
+    OptimizationTargetCreateRequest,
+    OptimizationTargetRead,
     ProblemRead,
 )
 
@@ -77,6 +84,11 @@ def get_human_review_service() -> HumanReviewService:
 @lru_cache
 def get_problem_aggregation_service() -> ProblemAggregationService:
     return ProblemAggregationService()
+
+
+@lru_cache
+def get_optimization_target_service() -> OptimizationTargetService:
+    return OptimizationTargetService()
 
 
 def get_db_session() -> Iterator[Session]:
@@ -283,6 +295,33 @@ def _problem_aggregation_error_response(
     )
 
 
+def _optimization_target_error_response(
+    error: OptimizationTargetError,
+) -> JSONResponse:
+    status_by_code = {
+        OptimizationTargetErrorCode.EVALUATION_RUN_NOT_FOUND: 404,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_NOT_FOUND: 404,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_NOT_FOUND: 404,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_RUN_NOT_BASELINE: 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_RUN_NOT_COMPLETED: 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_RUN_MISMATCH: 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PENDING_REVIEW: 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_AGGREGATION_NOT_COMPLETED: 409,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_ALREADY_EXISTS: 409,
+        (
+            OptimizationTargetErrorCode
+            .OPTIMIZATION_TARGET_PROBLEM_HAS_NO_AFFECTED_CASES
+        ): 400,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FAILURE_MODE_NOT_UNIQUE: 400,
+        OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PERSISTENCE_FAILED: 500,
+    }
+    return _error_response(
+        status_code=status_by_code[error.code],
+        code=error.code.value,
+        message=str(error),
+    )
+
+
 @app.post(
     "/api/evaluation-runs",
     response_model=EvaluationRunRead,
@@ -411,6 +450,63 @@ def list_problems(
         return service.list_problems(run_id, db_session)
     except ProblemAggregationError as error:
         return _problem_aggregation_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/problems/{problem_id}/optimization-targets",
+    response_model=OptimizationTargetRead,
+    status_code=201,
+)
+def create_optimization_target(
+    run_id: UUID,
+    problem_id: UUID,
+    request: OptimizationTargetCreateRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.create(run_id, problem_id, request, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.get(
+    "/api/optimization-targets/{target_id}",
+    response_model=OptimizationTargetRead,
+)
+def get_optimization_target(
+    target_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.get(target_id, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.get(
+    "/api/evaluation-runs/{run_id}/optimization-targets",
+    response_model=list[OptimizationTargetRead],
+)
+def list_optimization_targets(
+    run_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> list[OptimizationTargetRead] | JSONResponse:
+    try:
+        return service.list_for_run(run_id, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
 
 
 @app.get(

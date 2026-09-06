@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.business_impact_mapping import BusinessImpact, BusinessImpactLookupStatus
-from app.judge_contract import EvidenceType, JudgeOutput, Severity
+from app.judge_contract import EvidenceType, FailureMode, JudgeOutput, Severity
 
 
 class DatasetSource(StrEnum):
@@ -308,3 +308,116 @@ class ProblemRead(ProblemProfileRead):
     affected_evaluation_result_ids: list[UUID]
     affected_case_ids: list[str]
     evidence: list[ProblemEvidenceRead]
+
+
+class OptimizationTargetStatus(StrEnum):
+    DRAFT = "draft"
+    CONFIRMED = "confirmed"
+
+
+class OptimizationTargetChangeStatus(StrEnum):
+    PLANNED = "planned"
+
+
+class OptimizationTargetCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    definition: str
+    inclusion_criteria: str
+    exclusion_criteria: str
+    expected_observable_change: str
+    hypothesis_statement: str | None = None
+    hypothesis_evidence_refs: list[str] = Field(default_factory=list)
+    change_surface: str | None = None
+    planned_change: str | None = None
+    guardrails: list[str] = Field(default_factory=list)
+    protected_capabilities: list[str] = Field(default_factory=list)
+    policy_version: str | None = None
+
+    @field_validator(
+        "definition",
+        "inclusion_criteria",
+        "exclusion_criteria",
+        "expected_observable_change",
+    )
+    @classmethod
+    def required_text_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("value must not be empty")
+        return value
+
+    @field_validator(
+        "hypothesis_statement",
+        "change_surface",
+        "planned_change",
+        "policy_version",
+    )
+    @classmethod
+    def optional_text_must_not_be_empty(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("value must not be empty when provided")
+        return value
+
+    @field_validator(
+        "hypothesis_evidence_refs",
+        "guardrails",
+        "protected_capabilities",
+    )
+    @classmethod
+    def list_entries_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("list entries must not be empty")
+        return value
+
+
+class OptimizationTargetBaselineMetricRead(BaseModel):
+    affected_core_cases: int = Field(ge=0)
+    core_denominator: int = Field(ge=0)
+    frequency: ProblemFrequencyRead
+
+
+class OptimizationTargetBaselineSnapshotRead(BaseModel):
+    problem_id: UUID
+    definition: str
+    scenario: str
+    priority_severity: Severity | None
+    business_impact: BusinessImpact | None
+    frequency: ProblemFrequencyRead
+    pattern_consistency: PatternConsistency | None
+    evidence_confidence: EvidenceConfidence | None
+    affected_case_ids: list[str]
+
+
+class OptimizationTargetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    baseline_run_id: UUID
+    problem_id: UUID
+    version: int
+    status: OptimizationTargetStatus
+    definition: str
+    inclusion_criteria: str
+    exclusion_criteria: str
+    baseline_affected_case_ids: list[str]
+    reference_basis: list[ProblemEvidenceRead]
+    failure_mode: FailureMode
+    baseline_metric: OptimizationTargetBaselineMetricRead
+    expected_observable_change: str
+    confirmed_by: str | None
+    confirmed_at: datetime | None
+    hypothesis_statement: str | None
+    hypothesis_evidence_refs: list[str]
+    change_surface: str | None
+    planned_change: str | None
+    guardrails: list[str]
+    change_status: OptimizationTargetChangeStatus
+    target_case_ids: list[str]
+    regression_case_ids: list[str]
+    challenge_case_ids: list[str]
+    protected_capabilities: list[str]
+    baseline_snapshot: OptimizationTargetBaselineSnapshotRead
+    evaluation_config_snapshot: dict[str, Any]
+    policy_version: str | None
+    created_at: datetime
+    updated_at: datetime

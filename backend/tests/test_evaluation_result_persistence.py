@@ -349,6 +349,32 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
             )
             for constraint in inspect(engine).get_foreign_keys("human_decisions")
         }
+        target_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("optimization_targets")
+        }
+        target_uniques = {
+            tuple(constraint["column_names"])
+            for constraint in inspect(engine).get_unique_constraints(
+                "optimization_targets"
+            )
+        }
+        target_foreign_keys = {
+            (
+                tuple(constraint["constrained_columns"]),
+                constraint["referred_table"],
+                tuple(constraint["referred_columns"]),
+            )
+            for constraint in inspect(engine).get_foreign_keys(
+                "optimization_targets"
+            )
+        }
+        target_checks = {
+            constraint["name"]: constraint["sqltext"]
+            for constraint in inspect(engine).get_check_constraints(
+                "optimization_targets"
+            )
+        }
         run_checks = {
             constraint["name"]: constraint["sqltext"]
             for constraint in inspect(engine).get_check_constraints(
@@ -365,6 +391,7 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     assert "evaluation_results" in table_names
     assert "human_decisions" in table_names
     assert {"problems", "result_problem_links"} <= set(table_names)
+    assert "optimization_targets" in table_names
     assert {
         "case_errors",
         "business_reference_snapshot",
@@ -420,6 +447,55 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
         "evaluation_results",
         ("id",),
     ) in link_foreign_keys
+    assert target_columns == {
+        "id",
+        "baseline_run_id",
+        "problem_id",
+        "version",
+        "status",
+        "definition",
+        "inclusion_criteria",
+        "exclusion_criteria",
+        "baseline_affected_case_ids",
+        "reference_basis",
+        "failure_mode",
+        "baseline_metric",
+        "expected_observable_change",
+        "confirmed_by",
+        "confirmed_at",
+        "hypothesis_statement",
+        "hypothesis_evidence_refs",
+        "change_surface",
+        "planned_change",
+        "guardrails",
+        "change_status",
+        "target_case_ids",
+        "regression_case_ids",
+        "challenge_case_ids",
+        "protected_capabilities",
+        "baseline_snapshot",
+        "evaluation_config_snapshot",
+        "policy_version",
+        "created_at",
+        "updated_at",
+    }
+    assert (
+        "baseline_run_id",
+        "problem_id",
+        "version",
+    ) in target_uniques
+    assert (("baseline_run_id",), "evaluation_runs", ("id",)) in (
+        target_foreign_keys
+    )
+    assert (("problem_id",), "problems", ("id",)) in target_foreign_keys
+    assert "version >= 1" in target_checks[
+        "ck_optimization_targets_version_positive"
+    ]
+    assert "draft" in target_checks["ck_optimization_targets_status"]
+    assert "confirmed" in target_checks["ck_optimization_targets_status"]
+    assert "planned" in target_checks[
+        "ck_optimization_targets_change_status"
+    ]
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "f4b6d8e0a215"
+    assert revision == "a6c8e0f2b314"
