@@ -390,7 +390,7 @@ function BaselineAnalysisPage() {
           <dl className="s03-metadata">
             <div>
               <dt>数据集</dt>
-              <dd title={`${data.dataset.name} ${data.dataset.version}`}>
+              <dd className="s03-metadata__two-lines" title={`${data.dataset.name} ${data.dataset.version}`}>
                 {data.dataset.name} {data.dataset.version}
               </dd>
             </div>
@@ -410,7 +410,7 @@ function BaselineAnalysisPage() {
             </div>
             <div>
               <dt>声明范围</dt>
-              <dd title={data.dataset.representativeness_statement ?? undefined}>
+              <dd className="s03-metadata__two-lines" title={data.dataset.representativeness_statement ?? undefined}>
                 {data.dataset.representativeness_statement ?? '未提供代表性声明'}
               </dd>
             </div>
@@ -492,7 +492,6 @@ function BaselineAnalysisPage() {
         <section className="s03-pane s03-cases" aria-labelledby="s03-cases-title">
           <header className="s03-pane-header s03-cases-header">
             <h2 id="s03-cases-title">受影响案例（{affectedResults.length}）</h2>
-            <p>{selectedProblem ? `P-${shortId(selectedProblem.problem_id)} 案例下钻` : '暂无 Problem'}</p>
           </header>
 
           <div className="s03-pane-scroll s03-case-list">
