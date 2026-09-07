@@ -491,8 +491,7 @@ class OptimizationTarget(Base):
         CheckConstraint(
             "(status = 'draft' AND (confirmed_by IS NULL "
             "OR hypothesis_confirmed_by IS NULL)) OR "
-            "(status IN ('confirmed', 'frozen') AND confirmed_by IS NOT NULL "
-            "AND hypothesis_confirmed_by IS NOT NULL)",
+            "(status IN ('confirmed', 'frozen') AND confirmed_by IS NOT NULL)",
             name="ck_optimization_targets_confirmation_state",
         ),
         CheckConstraint(

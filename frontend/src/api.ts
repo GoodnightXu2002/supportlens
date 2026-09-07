@@ -623,6 +623,23 @@ export async function createOptimizationTarget(
   )
 }
 
+export async function completeOptimizationTarget(
+  runId: string,
+  problemId: string,
+  input: { actor: string; target: OptimizationTargetCreateInput },
+): Promise<OptimizationTarget> {
+  return requestJson<OptimizationTarget>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/problems/${encodeURIComponent(problemId)}/optimization-targets/complete`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    ),
+  )
+}
+
 export async function patchOptimizationTarget(
   targetId: string,
   input: OptimizationTargetPatchInput,

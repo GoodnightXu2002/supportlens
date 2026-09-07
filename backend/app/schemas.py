@@ -454,6 +454,10 @@ class OptimizationTargetActorRequest(BaseModel):
         return value
 
 
+class OptimizationTargetCompleteRequest(OptimizationTargetActorRequest):
+    target: OptimizationTargetCreateRequest
+
+
 class OptimizationTargetBaselineMetricRead(BaseModel):
     affected_core_cases: int = Field(ge=0)
     core_denominator: int = Field(ge=0)

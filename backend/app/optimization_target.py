@@ -7,7 +7,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.human_review import HumanReviewService
@@ -20,6 +20,7 @@ from app.schemas import (
     FinalEffectiveResultStatus,
     OptimizationTargetActorRequest,
     OptimizationTargetChangeStatus,
+    OptimizationTargetCompleteRequest,
     OptimizationTargetCreateRequest,
     OptimizationTargetPatchRequest,
     OptimizationTargetRead,
@@ -88,6 +89,8 @@ class OptimizationTargetService:
         problem_id: UUID,
         request: OptimizationTargetCreateRequest,
         db_session: Session,
+        *,
+        commit: bool = True,
     ) -> OptimizationTargetRead:
         evaluation_run = self._load_run(evaluation_run_id, db_session)
         self._validate_run(evaluation_run)
@@ -261,7 +264,10 @@ class OptimizationTargetService:
         )
         db_session.add(target)
         try:
-            db_session.commit()
+            if commit:
+                db_session.commit()
+            else:
+                db_session.flush()
         except IntegrityError as error:
             db_session.rollback()
             if self._target_exists(evaluation_run.id, problem.id, db_session):
@@ -285,6 +291,8 @@ class OptimizationTargetService:
         target_id: UUID,
         request: OptimizationTargetPatchRequest,
         db_session: Session,
+        *,
+        commit: bool = True,
     ) -> OptimizationTargetRead:
         target = self._load_target(target_id, db_session)
         self._reject_frozen(target)
@@ -321,13 +329,15 @@ class OptimizationTargetService:
             target.hypothesis_confirmed_at = None
         target.status = self._confirmation_status(target)
 
-        return self._commit_and_read(target, db_session)
+        return self._commit_and_read(target, db_session, commit=commit)
 
     def confirm_target(
         self,
         target_id: UUID,
         request: OptimizationTargetActorRequest,
         db_session: Session,
+        *,
+        commit: bool = True,
     ) -> OptimizationTargetRead:
         target = self._load_target(target_id, db_session)
         self._reject_frozen(target)
@@ -351,7 +361,7 @@ class OptimizationTargetService:
         target.confirmed_by = request.actor.strip()
         target.confirmed_at = datetime.now(UTC)
         target.status = self._confirmation_status(target)
-        return self._commit_and_read(target, db_session)
+        return self._commit_and_read(target, db_session, commit=commit)
 
     def confirm_hypothesis(
         self,
@@ -395,6 +405,8 @@ class OptimizationTargetService:
         target_id: UUID,
         request: OptimizationTargetActorRequest,
         db_session: Session,
+        *,
+        commit: bool = True,
     ) -> OptimizationTargetRead:
         target = self._load_target(target_id, db_session)
         if target.status == OptimizationTargetStatus.FROZEN.value:
@@ -411,7 +423,57 @@ class OptimizationTargetService:
         target.frozen_by = request.actor.strip()
         target.frozen_at = datetime.now(UTC)
         target.status = OptimizationTargetStatus.FROZEN.value
-        return self._commit_and_read(target, db_session)
+        return self._commit_and_read(target, db_session, commit=commit)
+
+    def complete(
+        self,
+        evaluation_run_id: UUID,
+        problem_id: UUID,
+        request: OptimizationTargetCompleteRequest,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
+        """Save, confirm and freeze together; retries reuse the same target."""
+        try:
+            existing = db_session.scalar(
+                select(OptimizationTarget)
+                .where(
+                    OptimizationTarget.baseline_run_id == evaluation_run_id,
+                    OptimizationTarget.problem_id == problem_id,
+                )
+                .with_for_update()
+            )
+            if existing and existing.status == OptimizationTargetStatus.FROZEN.value:
+                return OptimizationTargetRead.model_validate(existing)
+            values = request.target.model_dump(exclude_unset=True)
+            values["policy_version"] = (
+                existing.policy_version if existing and existing.policy_version
+                else "CANDIDATE-DECISION-POLICY-V1"
+            )
+            if existing:
+                target = self.patch(
+                    existing.id, OptimizationTargetPatchRequest(**values),
+                    db_session, commit=False,
+                )
+            else:
+                target = self.create(
+                    evaluation_run_id, problem_id,
+                    OptimizationTargetCreateRequest(**values), db_session,
+                    commit=False,
+                )
+            actor = OptimizationTargetActorRequest(actor=request.actor)
+            self.confirm_target(target.id, actor, db_session, commit=False)
+            frozen = self.freeze(target.id, actor, db_session, commit=False)
+            db_session.commit()
+            return frozen
+        except OptimizationTargetError:
+            db_session.rollback()
+            raise
+        except SQLAlchemyError as error:
+            db_session.rollback()
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PERSISTENCE_FAILED,
+                "Optimization target could not be persisted.",
+            ) from error
 
     def list_for_run(
         self,
@@ -465,8 +527,6 @@ class OptimizationTargetService:
         if (
             target.confirmed_by is not None
             and target.confirmed_at is not None
-            and target.hypothesis_confirmed_by is not None
-            and target.hypothesis_confirmed_at is not None
         ):
             return OptimizationTargetStatus.CONFIRMED.value
         return OptimizationTargetStatus.DRAFT.value
@@ -476,11 +536,6 @@ class OptimizationTargetService:
         failures: list[str] = []
         if target.confirmed_by is None or target.confirmed_at is None:
             failures.append("target_confirmation")
-        if (
-            target.hypothesis_confirmed_by is None
-            or target.hypothesis_confirmed_at is None
-        ):
-            failures.append("hypothesis_confirmation")
         if not target.target_case_ids:
             failures.append("target_case_ids")
         if not target.regression_case_ids:
@@ -499,9 +554,14 @@ class OptimizationTargetService:
     def _commit_and_read(
         target: OptimizationTarget,
         db_session: Session,
+        *,
+        commit: bool = True,
     ) -> OptimizationTargetRead:
         try:
-            db_session.commit()
+            if commit:
+                db_session.commit()
+            else:
+                db_session.flush()
         except IntegrityError as error:
             db_session.rollback()
             raise OptimizationTargetError(

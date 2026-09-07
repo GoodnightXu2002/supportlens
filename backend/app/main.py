@@ -70,6 +70,7 @@ from app.schemas import (
     HumanDecisionRead,
     HumanReviewSubmitRequest,
     OptimizationTargetActorRequest,
+    OptimizationTargetCompleteRequest,
     OptimizationTargetCreateRequest,
     OptimizationTargetPatchRequest,
     OptimizationTargetRead,
@@ -697,6 +698,26 @@ def create_optimization_target(
 ) -> OptimizationTargetRead | JSONResponse:
     try:
         return service.create(run_id, problem_id, request, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/problems/{problem_id}/optimization-targets/complete",
+    response_model=OptimizationTargetRead,
+)
+def complete_optimization_target(
+    run_id: UUID,
+    problem_id: UUID,
+    request: OptimizationTargetCompleteRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.complete(run_id, problem_id, request, db_session)
     except OptimizationTargetError as error:
         return _optimization_target_error_response(error)
 

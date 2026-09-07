@@ -676,7 +676,7 @@ def test_target_and_hypothesis_are_confirmed_separately(api_context) -> None:
     )
     assert target_confirmation.status_code == 200
     target_body = target_confirmation.json()
-    assert target_body["status"] == "draft"
+    assert target_body["status"] == "confirmed"
     assert target_body["confirmed_by"] == "target-owner@example.com"
     assert target_body["confirmed_at"] is not None
     assert target_body["hypothesis_confirmed_by"] is None
@@ -717,7 +717,7 @@ def test_patch_clears_only_affected_confirmations(api_context) -> None:
     )
     assert hypothesis_edit.status_code == 200
     hypothesis_body = hypothesis_edit.json()
-    assert hypothesis_body["status"] == "draft"
+    assert hypothesis_body["status"] == "confirmed"
     assert hypothesis_body["confirmed_by"] == "target-owner@example.com"
     assert hypothesis_body["hypothesis_confirmed_by"] is None
     assert hypothesis_body["hypothesis_confirmed_at"] is None
@@ -869,3 +869,161 @@ def test_confirm_and_freeze_do_not_modify_baseline_lineage(api_context) -> None:
             result.primary_failure_mode,
             result.evidence,
         ) == before["result"]
+
+
+@pytest.mark.parametrize("existing_draft", [False, True])
+def test_complete_target_freezes_without_optional_notes(api_context, existing_draft):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    payload = {key: CREATE_PAYLOAD[key] for key in (
+        "definition", "inclusion_criteria", "exclusion_criteria",
+        "expected_observable_change",
+    )}
+    draft = _create(client, ids, payload).json() if existing_draft else None
+    url = (
+        f"/api/evaluation-runs/{ids['run_id']}/problems/"
+        f"{ids['problem_id']}/optimization-targets/complete"
+    )
+    response = client.post(url, json={"actor": " owner ", "target": payload})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "frozen"
+    assert body["hypothesis_statement"] is None
+    assert body["planned_change"] is None
+    assert body["hypothesis_confirmed_at"] is None
+    assert body["confirmed_by"] == body["frozen_by"] == "owner"
+    assert body["confirmed_at"] and body["frozen_at"]
+    assert body["version"] == 1
+    assert body["baseline_run_id"] == str(ids["run_id"])
+    assert body["problem_id"] == str(ids["problem_id"])
+    assert body["target_case_ids"] == ["CASE-A", "CASE-B"]
+    assert body["regression_case_ids"] == ["CASE-C"]
+    assert body["challenge_case_ids"] == ["CASE-D"]
+    assert body["policy_version"] == "CANDIDATE-DECISION-POLICY-V1"
+    assert body["plan_hash"] == _expected_plan_hash(body)
+    if draft:
+        assert body["id"] == draft["id"]
+    assert client.get(f"/api/optimization-targets/{body['id']}").json() == body
+    assert client.post(url, json={"actor": "other", "target": payload}).json() == body
+    with Session(engine) as session:
+        assert session.scalar(select(func.count()).select_from(OptimizationTarget)) == 1
+
+
+@pytest.mark.parametrize("existing_draft", [False, True])
+@pytest.mark.parametrize("stage", ["confirm_target", "freeze", "commit"])
+def test_complete_failure_rolls_back_all_changes(
+    api_context, monkeypatch, existing_draft, stage,
+):
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.optimization_target import OptimizationTargetService
+
+    client, engine = api_context
+    ids = _seed_run(engine)
+    draft = _create(client, ids).json() if existing_draft else None
+
+    def fail(*args, **kwargs):
+        raise SQLAlchemyError("simulated persistence failure")
+
+    monkeypatch.setattr(
+        Session if stage == "commit" else OptimizationTargetService, stage, fail,
+    )
+    response = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/problems/"
+        f"{ids['problem_id']}/optimization-targets/complete",
+        json={"actor": "owner", "target": {**CREATE_PAYLOAD, "definition": "Edited"}},
+    )
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "optimization_target_persistence_failed"
+    if draft:
+        assert client.get(f"/api/optimization-targets/{draft['id']}").json() == draft
+    else:
+        with Session(engine) as session:
+            assert session.scalar(
+                select(func.count()).select_from(OptimizationTarget)
+            ) == 0
+
+
+@pytest.mark.parametrize("missing_set", ["target", "regression"])
+def test_complete_rejects_missing_cases_and_rolls_back(api_context, missing_set):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    with Session(engine) as session:
+        cases = session.scalars(select(Conversation)).all()
+        for case in cases:
+            if (case.external_id in ["CASE-A", "CASE-B"]) == (missing_set == "target"):
+                case.metadata_ = {
+                    **case.metadata_, "metadata": {"case_set": "challenge"},
+                }
+        session.commit()
+    response = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/problems/"
+        f"{ids['problem_id']}/optimization-targets/complete",
+        json={"actor": "owner", "target": CREATE_PAYLOAD},
+    )
+    assert response.status_code == 409
+    assert missing_set + "_case_ids" in response.json()["error"]["message"]
+    with Session(engine) as session:
+        assert session.scalar(select(func.count()).select_from(OptimizationTarget)) == 0
+
+
+def test_complete_requires_actor_and_reconfirms_changed_target(api_context):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    draft = _create(client, ids).json()
+    client.post(
+        f"/api/optimization-targets/{draft['id']}/confirm-target",
+        json={"actor": "previous"},
+    )
+    url = (
+        f"/api/evaluation-runs/{ids['run_id']}/problems/"
+        f"{ids['problem_id']}/optimization-targets/complete"
+    )
+    payload = {**CREATE_PAYLOAD, "definition": "Updated optimization goal"}
+    assert client.post(url, json={"actor": " ", "target": payload}).status_code == 400
+    response = client.post(url, json={"actor": "new owner", "target": payload})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == draft["id"]
+    assert body["definition"] == payload["definition"]
+    assert body["confirmed_by"] == "new owner"
+    assert body["hypothesis_statement"] == CREATE_PAYLOAD["hypothesis_statement"]
+    assert body["hypothesis_confirmed_by"] is None
+    assert body["plan_hash"] == _expected_plan_hash(body)
+
+
+def test_optional_hypothesis_migration_preserves_existing_records(api_context):
+    from pathlib import Path
+    from runpy import run_path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    client, engine = api_context
+    ids = _seed_run(engine)
+    draft = _create(client, ids).json()
+    frozen = _confirm_and_freeze(client, draft["id"]).json()
+    second_ids = _seed_run(engine)
+    second = _create(client, second_ids).json()
+    migration = run_path(str(
+        Path(__file__).parents[1] / "alembic" / "versions"
+        / "b2d4f6a8c013_optional_target_hypothesis.py"
+    ))
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                migration["downgrade"]()
+                migration["upgrade"]()
+        assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+    assert client.get(f"/api/optimization-targets/{draft['id']}").json() == frozen
+    assert client.get(f"/api/optimization-targets/{second['id']}").json() == second
+    response = client.post(
+        f"/api/evaluation-runs/{second_ids['run_id']}/problems/"
+        f"{second_ids['problem_id']}/optimization-targets/complete",
+        json={"actor": "owner", "target": CREATE_PAYLOAD},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "frozen"
+    assert response.json()["hypothesis_confirmed_at"] is None
