@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   MdCheckCircleOutline,
   MdOpenInNew,
@@ -14,13 +14,19 @@ import {
   createBaselineRun,
   executeBaselineRun,
   generateProblems,
+  getDatasetConversations,
   getDatasetDetail,
   getDatasetEvaluationRuns,
   getDatasets,
   getEvaluationRun,
+  getFinalEffectiveResults,
+  submitHumanReview,
+  type DatasetConversation,
   type DatasetDetail,
   type DatasetListItem,
   type EvaluationRun,
+  type FinalEffectiveResult,
+  type JudgeOutput,
 } from '../api'
 import './StartQualityReviewPage.css'
 
@@ -33,6 +39,12 @@ type PageStatus =
   | 'failed'
   | 'invalid'
   | 'error'
+
+type ReviewData = {
+  runId: string
+  results: FinalEffectiveResult[]
+  conversations: DatasetConversation[]
+}
 
 const statusCopy: Record<PageStatus, { label: string; detail: string }> = {
   loading: { label: '正在读取', detail: '正在从 Backend 读取真实 Dataset 与 Run。' },
@@ -84,11 +96,42 @@ function StartQualityReviewPage() {
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [reviewData, setReviewData] = useState<ReviewData | null>(null)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [reviewer, setReviewer] = useState('')
+  const [reviewBusyId, setReviewBusyId] = useState<string | null>(null)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [correctingId, setCorrectingId] = useState<string | null>(null)
+  const [correctedOutput, setCorrectedOutput] = useState('')
+  const [changeReason, setChangeReason] = useState('')
   const [historyResult, setHistoryResult] = useState<{
     datasetId: string
     runs: EvaluationRun[]
     error: string | null
   } | null>(null)
+
+  const resumeCompletedRun = useCallback(async (
+    completedRun: EvaluationRun,
+    signal?: AbortSignal,
+  ) => {
+    setReviewLoading(true)
+    setMessage(null)
+    try {
+      const [results, conversations] = await Promise.all([
+        getFinalEffectiveResults(completedRun.id, signal),
+        getDatasetConversations(completedRun.dataset_id, signal),
+      ])
+      if (signal?.aborted) return
+      setReviewData({ runId: completedRun.id, results, conversations })
+      if (results.some((result) => result.status === 'pending_review')) return
+      const path = await prepareBaselineAnalysis(completedRun)
+      if (!signal?.aborted) navigate(path, { replace: true })
+    } catch (error) {
+      if (!signal?.aborted) setMessage(errorMessage(error))
+    } finally {
+      if (!signal?.aborted) setReviewLoading(false)
+    }
+  }, [navigate])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -163,20 +206,14 @@ function StartQualityReviewPage() {
         setSelectedDatasetId(storedRun.dataset_id)
         setMessage(null)
         if (storedRun.status === 'completed') {
-          void prepareBaselineAnalysis(storedRun)
-            .then((path) => {
-              if (!controller.signal.aborted) navigate(path, { replace: true })
-            })
-            .catch((error: unknown) => {
-              if (!controller.signal.aborted) setMessage(errorMessage(error))
-            })
+          void resumeCompletedRun(storedRun, controller.signal)
         }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setMessage(errorMessage(error))
       })
     return () => controller.abort()
-  }, [navigate, runId])
+  }, [resumeCompletedRun, runId])
 
   useEffect(() => {
     if (!runId || run?.id !== runId || run.status !== 'running' || working) return
@@ -186,11 +223,8 @@ function StartQualityReviewPage() {
         .then((storedRun) => {
           setRun(storedRun)
           if (storedRun.status === 'completed') {
-            void prepareBaselineAnalysis(storedRun)
-              .then((path) => navigate(path, { replace: true }))
-              .catch((error: unknown) => {
-                if (!controller.signal.aborted) setMessage(errorMessage(error))
-              })
+            window.clearInterval(timer)
+            void resumeCompletedRun(storedRun)
           }
         })
         .catch((error: unknown) => {
@@ -201,7 +235,7 @@ function StartQualityReviewPage() {
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [navigate, run?.id, run?.status, runId, working])
+  }, [resumeCompletedRun, run?.id, run?.status, runId, working])
 
   const pageStatus: PageStatus = (
     loading
@@ -214,7 +248,27 @@ function StartQualityReviewPage() {
       : run?.status === 'pending'
         ? 'ready'
         : (run?.status ?? (dataset?.conversation_count ? 'ready' : 'error'))
-  const currentStatus = statusCopy[pageStatus]
+  const currentReviewData = reviewData?.runId === run?.id ? reviewData : null
+  const pendingReviewResults = currentReviewData?.results.filter(
+    (result) => result.status === 'pending_review',
+  ) ?? []
+  let currentStatus = statusCopy[pageStatus]
+  if (run?.status === 'completed' && reviewLoading && !currentReviewData) {
+    currentStatus = {
+      label: '正在检查人工复核',
+      detail: '正在读取真实 Final Effective Results。',
+    }
+  } else if (run?.status === 'completed' && currentReviewData) {
+    currentStatus = pendingReviewResults.length > 0
+      ? {
+          label: `待人工复核 ${pendingReviewResults.length} 条`,
+          detail: '完成全部真实 Human Review 后才会生成 Problem 并进入 S03。',
+        }
+      : {
+          label: '人工复核完成 · 待复核 0',
+          detail: '正在继续 Problem Aggregation 并进入 S03。',
+        }
+  }
   const runError = run?.error_message ?? message
   const readinessGates = [
     { label: '数据集', status: dataset ? 'VALID' : 'UNAVAILABLE' },
@@ -228,6 +282,9 @@ function StartQualityReviewPage() {
     setSelectedDatasetId(datasetId)
     setDataset(null)
     setRun(null)
+    setReviewData(null)
+    setReviewError(null)
+    setCorrectingId(null)
     setMessage(null)
     setSearchParams({ dataset_id: datasetId })
   }
@@ -251,7 +308,7 @@ function StartQualityReviewPage() {
       const completedRun = await executeBaselineRun(startableRun.id)
       setRun(completedRun)
       if (completedRun.status === 'completed') {
-        navigate(await prepareBaselineAnalysis(completedRun))
+        await resumeCompletedRun(completedRun)
       }
     } catch (error) {
       setMessage(errorMessage(error))
@@ -260,7 +317,7 @@ function StartQualityReviewPage() {
           const storedRun = await getEvaluationRun(startableRun.id)
           setRun(storedRun)
           if (storedRun.status === 'completed') {
-            navigate(await prepareBaselineAnalysis(storedRun))
+            await resumeCompletedRun(storedRun)
           }
         } catch {
           // Keep the actionable request error when the authoritative read also fails.
@@ -271,7 +328,57 @@ function StartQualityReviewPage() {
     }
   }
 
-  const canStart = Boolean(dataset?.conversation_count) && !working && pageStatus !== 'running'
+  async function refreshAfterReview() {
+    if (run?.status === 'completed') await resumeCompletedRun(run)
+  }
+
+  async function confirmMachineResult(result: FinalEffectiveResult) {
+    if (!reviewer.trim() || reviewBusyId) return
+    setReviewBusyId(result.evaluation_result_id)
+    setReviewError(null)
+    try {
+      await submitHumanReview(result.evaluation_result_id, {
+        reviewer: reviewer.trim(),
+        action: 'confirm',
+      })
+      await refreshAfterReview()
+    } catch (error) {
+      setReviewError(errorMessage(error))
+    } finally {
+      setReviewBusyId(null)
+    }
+  }
+
+  async function correctMachineResult(result: FinalEffectiveResult) {
+    if (!reviewer.trim() || !changeReason.trim() || reviewBusyId) return
+    setReviewBusyId(result.evaluation_result_id)
+    setReviewError(null)
+    try {
+      const finalResult = JSON.parse(correctedOutput) as JudgeOutput
+      await submitHumanReview(result.evaluation_result_id, {
+        reviewer: reviewer.trim(),
+        action: 'correct',
+        final_result: finalResult,
+        change_reason: changeReason.trim(),
+      })
+      setCorrectingId(null)
+      setCorrectedOutput('')
+      setChangeReason('')
+      await refreshAfterReview()
+    } catch (error) {
+      setReviewError(error instanceof SyntaxError
+        ? '修正后的 JudgeOutput 必须是有效 JSON。'
+        : errorMessage(error))
+    } finally {
+      setReviewBusyId(null)
+    }
+  }
+
+  const canStart = Boolean(dataset?.conversation_count)
+    && !working
+    && !reviewLoading
+    && pageStatus !== 'running'
+    && run?.status !== 'completed'
   const actionLabel = run && ['partial_failure', 'failed', 'invalid'].includes(run.status)
     ? '重新开始质量复盘'
     : '开始质量复盘'
@@ -283,7 +390,7 @@ function StartQualityReviewPage() {
     <section className="s01-page" aria-label="开始质量复盘">
       <div className="s01-workspace">
         <div className="s01-workspace-content">
-          <div className={`s01-ready-banner s01-ready-banner--${pageStatus}`} role="status">
+          <div className={`s01-ready-banner s01-ready-banner--${pendingReviewResults.length ? 'review' : reviewLoading && run?.status === 'completed' ? 'loading' : pageStatus}`} role="status">
             <MdCheckCircleOutline aria-hidden="true" />
             <div className="s01-ready-copy">
               <strong>{currentStatus.label}</strong>
@@ -383,6 +490,56 @@ function StartQualityReviewPage() {
             </div>
           </section>
 
+          {run?.status === 'completed' && (reviewLoading || currentReviewData) ? (
+            <section className="s01-gates s01-review" aria-labelledby="s01-review-title">
+              <div className="s01-gates-heading">
+                <h2 id="s01-review-title">Human Review</h2>
+                <code>{reviewLoading && !currentReviewData ? 'LOADING' : `待人工复核 ${pendingReviewResults.length} 条`}</code>
+              </div>
+              {reviewLoading && !currentReviewData ? <p className="s01-review-state" role="status">正在读取真实 Final Effective Results…</p> : null}
+              {currentReviewData ? (
+                <>
+                  <label className="s01-reviewer-field">
+                    <span>Reviewer</span>
+                    <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} disabled={Boolean(reviewBusyId)} placeholder="输入真实 reviewer" />
+                  </label>
+                  {reviewError ? <p className="s01-review-error" role="alert">{reviewError}</p> : null}
+                  {pendingReviewResults.length === 0 ? <p className="s01-review-complete">人工复核完成 · 待复核 0</p> : null}
+                  <div className="s01-review-list">
+                    {pendingReviewResults.map((result) => {
+                      const conversation = currentReviewData.conversations.find((item) => item.id === result.conversation_id)
+                      const userMessage = conversation?.messages.filter((item) => item.role === 'user').map((item) => item.content).join('\n') ?? '—'
+                      const assistantAnswer = conversation?.messages.filter((item) => item.role === 'assistant').map((item) => item.content).join('\n') ?? '—'
+                      const correcting = correctingId === result.evaluation_result_id
+                      return (
+                        <article className="s01-review-card" key={result.evaluation_result_id}>
+                          <header><strong>{result.case_id}</strong><code>{result.evaluation_result_id}</code></header>
+                          <dl className="s01-review-copy"><div><dt>用户消息</dt><dd>{userMessage}</dd></div><div><dt>AI 回答</dt><dd>{assistantAnswer}</dd></div></dl>
+                          <dl className="s01-review-machine">
+                            <div><dt>Machine judgment</dt><dd>{result.machine_result.judgment}</dd></div>
+                            <div><dt>Failure mode</dt><dd>{result.machine_result.primary_failure_mode ?? '—'}</dd></div>
+                            <div><dt>Problem</dt><dd>{result.machine_result.problem ?? '—'}</dd></div>
+                            <div><dt>Severity</dt><dd>{result.machine_result.severity ?? '—'}</dd></div>
+                          </dl>
+                          <div className="s01-review-evidence"><strong>Evidence / rationale</strong>{result.machine_result.evidence.length ? <ul>{result.machine_result.evidence.map((item, index) => <li key={`${result.evaluation_result_id}-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul> : <p>无结构化 evidence。</p>}<p>{result.machine_result.rationale}</p></div>
+                          {correcting ? (
+                            <div className="s01-correction-form">
+                              <label><span>修正后的 JudgeOutput JSON</span><textarea value={correctedOutput} onChange={(event) => setCorrectedOutput(event.target.value)} rows={14} spellCheck={false} /></label>
+                              <label><span>Change reason</span><textarea value={changeReason} onChange={(event) => setChangeReason(event.target.value)} rows={3} /></label>
+                              <div><button type="button" onClick={() => { setCorrectingId(null); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>取消</button><button type="button" onClick={() => void correctMachineResult(result)} disabled={!reviewer.trim() || !changeReason.trim() || Boolean(reviewBusyId)}>提交修正</button></div>
+                            </div>
+                          ) : (
+                            <div className="s01-review-actions"><button type="button" onClick={() => void confirmMachineResult(result)} disabled={!reviewer.trim() || Boolean(reviewBusyId)}>确认机器结论</button><button type="button" onClick={() => { setCorrectingId(result.evaluation_result_id); setCorrectedOutput(JSON.stringify(result.machine_result, null, 2)); setChangeReason(''); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>修正结论</button></div>
+                          )}
+                        </article>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : null}
+            </section>
+          ) : null}
+
           <section className="s01-gates s01-history" aria-labelledby="s01-history-title">
             <div className="s01-gates-heading">
               <h2 id="s01-history-title">已完成复盘</h2>
@@ -416,7 +573,11 @@ function StartQualityReviewPage() {
           <span>{run ? `Run ID: ${run.id}` : '启动后生成真实 Run ID；完成后进入 S03 基线分析。'}</span>
         </div>
         <button className="s01-primary-action" type="button" disabled={!canStart} onClick={() => void startBaseline()}>
-          {working || pageStatus === 'running' ? '评测运行中' : actionLabel}<MdPlayArrow aria-hidden="true" />
+          {pendingReviewResults.length > 0
+            ? '完成待处理复核后继续'
+            : working || pageStatus === 'running'
+              ? '评测运行中'
+              : actionLabel}<MdPlayArrow aria-hidden="true" />
         </button>
       </footer>
     </section>

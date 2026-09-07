@@ -147,6 +147,15 @@ export type HumanDecision = {
   change_reason: string | null
 }
 
+export type HumanReviewSubmitInput =
+  | { reviewer: string; action: 'confirm' }
+  | {
+      reviewer: string
+      action: 'correct'
+      final_result: JudgeOutput
+      change_reason: string
+    }
+
 export type FinalEffectiveResult = {
   evaluation_result_id: string
   conversation_id: string
@@ -532,6 +541,22 @@ export async function getFinalEffectiveResults(
     await fetch(
       `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/final-effective-results`,
       { signal },
+    ),
+  )
+}
+
+export async function submitHumanReview(
+  evaluationResultId: string,
+  input: HumanReviewSubmitInput,
+): Promise<HumanDecision> {
+  return requestJson<HumanDecision>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-results/${encodeURIComponent(evaluationResultId)}/human-review`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
     ),
   )
 }
