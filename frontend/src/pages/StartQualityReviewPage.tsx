@@ -15,6 +15,7 @@ import {
   executeBaselineRun,
   generateProblems,
   getDatasetDetail,
+  getDatasetEvaluationRuns,
   getDatasets,
   getEvaluationRun,
   type DatasetDetail,
@@ -57,6 +58,13 @@ function formatScenarioDistribution(distribution: Record<string, number>) {
     : '未提供场景分类'
 }
 
+function formatRunDate(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
 async function prepareBaselineAnalysis(run: EvaluationRun) {
   if (!run.problem_aggregation_completed_at) await generateProblems(run.id)
   return `/baseline?run_id=${encodeURIComponent(run.id)}`
@@ -76,6 +84,11 @@ function StartQualityReviewPage() {
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [historyResult, setHistoryResult] = useState<{
+    datasetId: string
+    runs: EvaluationRun[]
+    error: string | null
+  } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -108,6 +121,34 @@ function StartQualityReviewPage() {
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) setMessage(errorMessage(error))
+      })
+    return () => controller.abort()
+  }, [selectedDatasetId])
+
+  useEffect(() => {
+    if (!selectedDatasetId) return
+    const controller = new AbortController()
+    void getDatasetEvaluationRuns(selectedDatasetId, controller.signal)
+      .then((items) => {
+        if (controller.signal.aborted) return
+        setHistoryResult({
+          datasetId: selectedDatasetId,
+          runs: items.filter((item) => (
+            item.dataset_id === selectedDatasetId
+            && item.run_type === 'baseline'
+            && item.status === 'completed'
+          )),
+          error: null,
+        })
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setHistoryResult({
+            datasetId: selectedDatasetId,
+            runs: [],
+            error: errorMessage(error),
+          })
+        }
       })
     return () => controller.abort()
   }, [selectedDatasetId])
@@ -234,6 +275,9 @@ function StartQualityReviewPage() {
   const actionLabel = run && ['partial_failure', 'failed', 'invalid'].includes(run.status)
     ? '重新开始质量复盘'
     : '开始质量复盘'
+  const historyLoading = Boolean(selectedDatasetId && historyResult?.datasetId !== selectedDatasetId)
+  const historyRuns = historyResult?.datasetId === selectedDatasetId ? historyResult.runs : []
+  const historyError = historyResult?.datasetId === selectedDatasetId ? historyResult.error : null
 
   return (
     <section className="s01-page" aria-label="开始质量复盘">
@@ -337,6 +381,31 @@ function StartQualityReviewPage() {
                 <div className="s01-gate" key={gate.label}><span>{gate.label}</span><code>{gate.status}</code></div>
               ))}
             </div>
+          </section>
+
+          <section className="s01-gates s01-history" aria-labelledby="s01-history-title">
+            <div className="s01-gates-heading">
+              <h2 id="s01-history-title">已完成复盘</h2>
+              <code>{historyLoading ? 'LOADING' : `${historyRuns.length} RUNS`}</code>
+            </div>
+            {historyLoading ? <p className="s01-history-state" role="status">正在读取历史 Baseline Runs…</p> : null}
+            {!historyLoading && historyError ? <p className="s01-history-state s01-history-state--error" role="alert">{historyError}</p> : null}
+            {!historyLoading && !historyError && historyRuns.length === 0 ? <p className="s01-history-state">当前 Dataset 暂无已完成复盘。</p> : null}
+            {!historyLoading && !historyError && historyRuns.length > 0 ? (
+              <div className="s01-history-list">
+                {historyRuns.map((historyRun) => (
+                  <article className="s01-history-run" key={historyRun.id}>
+                    <div><span>Run ID</span><code>{historyRun.id}</code></div>
+                    <div><span>状态</span><strong>completed</strong></div>
+                    <div><span>创建时间</span><time dateTime={historyRun.created_at}>{formatRunDate(historyRun.created_at)}</time></div>
+                    <div><span>Judge model</span><code>{historyRun.judge_model || '—'}</code></div>
+                    <Link className="s01-text-action s01-text-action--info" to={`/baseline?run_id=${encodeURIComponent(historyRun.id)}`}>
+                      查看结果<MdOpenInNew aria-hidden="true" />
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </section>
         </div>
       </div>

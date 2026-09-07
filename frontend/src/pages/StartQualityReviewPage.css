@@ -343,6 +343,60 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.s01-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.s01-history-run {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) auto auto auto auto;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+}
+
+.s01-history-run + .s01-history-run {
+  border-top: 1px solid var(--color-border);
+}
+
+.s01-history-run > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.s01-history-run span,
+.s01-history-state {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.s01-history-run code,
+.s01-history-run strong,
+.s01-history-run time {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s01-history-run strong {
+  color: var(--color-status-success);
+}
+
+.s01-history-state {
+  margin: 0;
+  padding: 24px;
+}
+
+.s01-history-state--error {
+  color: var(--color-status-critical);
+}
+
 .s01-gate {
   display: flex;
   min-width: 0;
@@ -440,7 +494,8 @@
 
   .s01-details-grid--dataset,
   .s01-details-grid--config,
-  .s01-gates-grid {
+  .s01-gates-grid,
+  .s01-history-run {
     grid-template-columns: 1fr;
   }
 
