@@ -246,6 +246,10 @@
   line-height: 18px;
 }
 
+.s04-confirmation-blocker {
+  color: var(--color-status-warning);
+}
+
 .s04-form-grid {
   display: grid;
   gap: 12px;

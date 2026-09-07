@@ -250,6 +250,23 @@ function TargetPlanWorkspace({
   const targetConfirmed = Boolean(target?.confirmed_by && target.confirmed_at)
   const hypothesisConfirmed = Boolean(target?.hypothesis_confirmed_by && target.hypothesis_confirmed_at)
   const requiredTargetFieldsComplete = [form.definition, form.inclusionCriteria, form.exclusionCriteria, form.expectedObservableChange].every((value) => value.trim())
+  const requiredHypothesisFieldsComplete = [form.hypothesisStatement, form.changeSurface, form.plannedChange].every((value) => value.trim())
+  const formRequest = requestFromForm(form)
+  const targetFieldsDirty = Boolean(target && (
+    target.definition !== formRequest.definition
+    || target.inclusion_criteria !== formRequest.inclusion_criteria
+    || target.exclusion_criteria !== formRequest.exclusion_criteria
+    || target.expected_observable_change !== formRequest.expected_observable_change
+  ))
+  const hypothesisFieldsDirty = Boolean(target && (
+    target.hypothesis_statement !== formRequest.hypothesis_statement
+    || JSON.stringify(target.hypothesis_evidence_refs) !== JSON.stringify(formRequest.hypothesis_evidence_refs)
+    || target.change_surface !== formRequest.change_surface
+    || target.planned_change !== formRequest.planned_change
+    || JSON.stringify(target.guardrails) !== JSON.stringify(formRequest.guardrails)
+  ))
+  const targetConfirmationComplete = targetConfirmed && !targetFieldsDirty
+  const hypothesisConfirmationComplete = hypothesisConfirmed && targetConfirmationComplete && !hypothesisFieldsDirty
   const freezeReady = Boolean(
     target
       && targetConfirmed
@@ -260,6 +277,46 @@ function TargetPlanWorkspace({
       && !dirty,
   )
   const busy = pendingAction !== null
+  const targetConfirmationBlocker = !target
+    ? '请先创建优化目标草稿。'
+    : !requiredTargetFieldsComplete
+      ? '请完整填写目标定义、纳入标准、排除标准和预期可观察变化。'
+      : !actor.trim()
+        ? '请先填写操作人。'
+        : busy
+          ? '请等待当前操作完成。'
+          : null
+  const hypothesisConfirmationBlocker = !target
+    ? '请先创建优化目标草稿。'
+    : !targetConfirmationComplete
+      ? targetFieldsDirty ? '目标内容已修改，请先重新确认优化目标。' : '请先确认优化目标。'
+      : !requiredHypothesisFieldsComplete
+        ? '请完整填写假设说明、变更范围和计划变更。'
+        : !actor.trim()
+          ? '请先填写操作人。'
+          : busy
+            ? '请等待当前操作完成。'
+            : null
+  const freezeBlockers: string[] = []
+  if (!target) freezeBlockers.push('请先创建优化目标草稿。')
+  if (dirty) freezeBlockers.push('请先保存最新验证计划。')
+  if (target && !targetConfirmed) freezeBlockers.push('请先确认优化目标。')
+  if (target && !hypothesisConfirmed) freezeBlockers.push('请先确认优化假设。')
+  if (target && target.target_case_ids.length === 0) freezeBlockers.push('当前问题没有可用的目标案例。')
+  if (target && target.regression_case_ids.length === 0) freezeBlockers.push('当前数据集没有可用的回归案例。')
+  if (!form.policyVersion.trim()) freezeBlockers.push('请填写验证规则。')
+  if (!actor.trim()) freezeBlockers.push('请填写操作人。')
+  const saveBlocker = !requiredTargetFieldsComplete
+    ? '请完整填写优化目标的四个必填项。'
+    : !dirty
+      ? '当前草稿已保存。'
+      : null
+  const actionHint = actionError
+    ?? (!target
+      ? saveBlocker ?? freezeBlockers[0]
+      : dirty && saveBlocker
+        ? saveBlocker
+        : freezeBlockers[0] ?? saveBlocker ?? '可以冻结验证计划。')
 
   return (
     <section className={`s04-page s04-page--${state}`} aria-label={frozen ? '目标与计划已冻结状态' : '目标与计划冻结前状态'}>
@@ -280,7 +337,7 @@ function TargetPlanWorkspace({
           {!frozen && (
             <header className="s04-state">
               <div className="s04-state__title"><span aria-hidden="true" /><h1>{target ? '验证计划待冻结' : '尚未创建优化目标'}</h1></div>
-              <dl><div><dt>结论属性:</dt><dd>非最终结论</dd></div><div><dt>当前阻断:</dt><dd>{freezeReady ? '无 · 可冻结验证计划' : '草稿保存及必要确认尚未完成'}</dd></div></dl>
+              <dl><div><dt>结论属性:</dt><dd>非最终结论</dd></div><div><dt>当前阻断:</dt><dd>{freezeReady && actor.trim() ? '无 · 可冻结验证计划' : freezeBlockers[0]}</dd></div></dl>
             </header>
           )}
 
@@ -296,21 +353,21 @@ function TargetPlanWorkspace({
               </div>
 
               <div className={frozen ? 's04-target-column s04-target-column--frozen-human' : 's04-target-column s04-target-column--human'}>
-                <div className="s04-section-heading"><h2><MdPersonOutline aria-hidden="true" />优化目标</h2><span className={targetConfirmed ? 's04-confirmation-status--complete' : undefined}>{targetConfirmed ? '已确认' : '待人工确认'}</span></div>
+                <div className="s04-section-heading"><h2><MdPersonOutline aria-hidden="true" />优化目标</h2><span className={targetConfirmationComplete ? 's04-confirmation-status--complete' : undefined}>{targetConfirmationComplete ? '已确认' : targetConfirmed ? '内容已修改 · 待重新确认' : '待人工确认'}</span></div>
                 {frozen ? (
                   <><MdCheckCircle className="s04-frozen-confirmed-icon" aria-label="已确认" /><p className="s04-frozen-confirmed-target">{target.definition}</p><div className="s04-frozen-confirmation-meta"><span>确认人：{target.confirmed_by}</span><span>确认时间：{formatDate(target.confirmed_at)}</span></div><dl className="s04-contract-readout"><div><dt>纳入标准</dt><dd>{target.inclusion_criteria}</dd></div><div><dt>排除标准</dt><dd>{target.exclusion_criteria}</dd></div><div><dt>预期可观察变化</dt><dd>{target.expected_observable_change}</dd></div></dl></>
                 ) : (
-                  <><div className="s04-form-grid"><EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy} multiline /><EditableField label="纳入标准" value={form.inclusionCriteria} onChange={(value) => onFormChange('inclusionCriteria', value)} disabled={busy} multiline /><EditableField label="排除标准" value={form.exclusionCriteria} onChange={(value) => onFormChange('exclusionCriteria', value)} disabled={busy} multiline /><EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" onClick={onConfirmTarget} disabled={!target || dirty || targetConfirmed || !actor.trim() || busy}>{targetConfirmed ? '优化目标已确认' : '确认优化目标'}</button>{targetConfirmed && target ? <p className="s04-confirmation-meta">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}</p> : null}</>
+                  <><div className="s04-form-grid"><EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy} multiline /><EditableField label="纳入标准" value={form.inclusionCriteria} onChange={(value) => onFormChange('inclusionCriteria', value)} disabled={busy} multiline /><EditableField label="排除标准" value={form.exclusionCriteria} onChange={(value) => onFormChange('exclusionCriteria', value)} disabled={busy} multiline /><EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" title={targetConfirmationBlocker ?? undefined} onClick={onConfirmTarget} disabled={targetConfirmationComplete || Boolean(targetConfirmationBlocker)}>{targetConfirmationComplete ? '优化目标已确认' : targetConfirmed ? '重新确认优化目标' : '确认优化目标'}</button>{targetConfirmationBlocker && !targetConfirmationComplete ? <p className="s04-confirmation-meta s04-confirmation-blocker">{targetConfirmationBlocker}</p> : null}{targetConfirmationComplete && target ? <p className="s04-confirmation-meta">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}</p> : null}</>
                 )}
               </div>
             </section>
 
             <section className={frozen ? 's04-hypothesis s04-hypothesis--frozen' : 's04-hypothesis'} aria-labelledby="s04-hypothesis-title">
-              <div className="s04-section-heading"><h2 id="s04-hypothesis-title"><MdLightbulbOutline aria-hidden="true" />优化假设</h2><span className={hypothesisConfirmed ? 's04-confirmation-status--complete' : undefined}>{hypothesisConfirmed ? '已确认 · 不代表已证明根因' : '待确认 · 不代表已证明根因'}</span></div>
+              <div className="s04-section-heading"><h2 id="s04-hypothesis-title"><MdLightbulbOutline aria-hidden="true" />优化假设</h2><span className={hypothesisConfirmationComplete ? 's04-confirmation-status--complete' : undefined}>{hypothesisConfirmationComplete ? '已确认 · 不代表已证明根因' : hypothesisConfirmed ? '内容已修改 · 待重新确认' : '待确认 · 不代表已证明根因'}</span></div>
               {frozen ? (
                 <><p>{target.hypothesis_statement}</p><dl className="s04-contract-readout"><div><dt>假设证据引用</dt><dd>{target.hypothesis_evidence_refs.join('；') || '未声明'}</dd></div></dl><h3 className="s04-subsection-heading">计划变更</h3><dl className="s04-contract-readout s04-contract-readout--columns"><div><dt>变更范围</dt><dd>{target.change_surface}</dd></div><div><dt>计划变更</dt><dd>{target.planned_change}</dd></div><div><dt>保护规则</dt><dd>{target.guardrails.join('；') || '未声明'}</dd></div></dl><p className="s04-confirmation-meta">确认人：{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p></>
               ) : (
-                <><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="假设说明" value={form.hypothesisStatement} onChange={(value) => onFormChange('hypothesisStatement', value)} disabled={busy} multiline /><EditableField label="假设证据引用（每行一项）" value={form.hypothesisEvidenceRefs} onChange={(value) => onFormChange('hypothesisEvidenceRefs', value)} disabled={busy} multiline /></div><h3 className="s04-subsection-heading">计划变更</h3><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="变更范围" value={form.changeSurface} onChange={(value) => onFormChange('changeSurface', value)} disabled={busy} /><EditableField label="计划变更" value={form.plannedChange} onChange={(value) => onFormChange('plannedChange', value)} disabled={busy} multiline /><EditableField label="保护规则（每行一项）" value={form.guardrails} onChange={(value) => onFormChange('guardrails', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" onClick={onConfirmHypothesis} disabled={!target || dirty || !targetConfirmed || hypothesisConfirmed || !actor.trim() || busy}>{hypothesisConfirmed ? '优化假设已确认' : '确认优化假设'}</button>{hypothesisConfirmed && target ? <p className="s04-confirmation-meta">确认人：{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p> : null}</>
+                <><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="假设说明" value={form.hypothesisStatement} onChange={(value) => onFormChange('hypothesisStatement', value)} disabled={busy} multiline /><EditableField label="假设证据引用（每行一项）" value={form.hypothesisEvidenceRefs} onChange={(value) => onFormChange('hypothesisEvidenceRefs', value)} disabled={busy} multiline /></div><h3 className="s04-subsection-heading">计划变更</h3><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="变更范围" value={form.changeSurface} onChange={(value) => onFormChange('changeSurface', value)} disabled={busy} /><EditableField label="计划变更" value={form.plannedChange} onChange={(value) => onFormChange('plannedChange', value)} disabled={busy} multiline /><EditableField label="保护规则（每行一项）" value={form.guardrails} onChange={(value) => onFormChange('guardrails', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" title={hypothesisConfirmationBlocker ?? undefined} onClick={onConfirmHypothesis} disabled={hypothesisConfirmationComplete || Boolean(hypothesisConfirmationBlocker)}>{hypothesisConfirmationComplete ? '优化假设已确认' : hypothesisConfirmed ? '重新确认优化假设' : '确认优化假设'}</button>{hypothesisConfirmationBlocker && !hypothesisConfirmationComplete ? <p className="s04-confirmation-meta s04-confirmation-blocker">{hypothesisConfirmationBlocker}</p> : null}{hypothesisConfirmationComplete && target ? <p className="s04-confirmation-meta">确认人：{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p> : null}</>
               )}
             </section>
 
@@ -330,8 +387,8 @@ function TargetPlanWorkspace({
               </section>
             ) : (
               <section className="s04-validation" aria-label="验证计划草稿">
-                <div className="s04-validation-plan"><h2><MdRule aria-hidden="true" />验证计划</h2><dl className="s04-plan-grid"><div><dt>目标案例</dt><dd>{target ? `${target.target_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>回归案例</dt><dd>{target ? `${target.regression_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>挑战案例</dt><dd>{target ? `${target.challenge_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>基线频次</dt><dd>{target ? `${target.baseline_metric.affected_core_cases}/${target.baseline_metric.core_denominator}` : '创建后生成'}</dd></div><div className="s04-plan-grid__wide"><EditableField label="需保护的现有能力（可选）" value={form.protectedCapabilities} onChange={(value) => onFormChange('protectedCapabilities', value)} disabled={busy} multiline /></div><div><dt>验证规则</dt><dd>{form.policyVersion || '未配置'}</dd></div><div><dt>失败模式</dt><dd>{target ? failureModeLabels[target.failure_mode] : '创建后生成'}</dd></div></dl></div>
-                <div className="s04-integrity"><h3>冻结确认</h3><ul><li className={targetConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{targetConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化目标：{targetConfirmed ? '已完成' : '未完成'}</li><li className={hypothesisConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{hypothesisConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化假设：{hypothesisConfirmed ? '已完成' : '未完成'}</li><li className={!dirty && target ? 's04-integrity__complete' : 's04-integrity__warning'}>{!dirty && target ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}保存验证计划：{!dirty && target ? '已完成' : '待完成'}</li><li><MdRadioButtonUnchecked aria-hidden="true" />冻结验证计划：未完成</li></ul><p className="s04-lock-note"><MdLockOutline aria-hidden="true" />完成必要确认并保存后，方可冻结验证计划。</p><p className="s04-warning-note"><MdWarningAmber aria-hidden="true" />修改已确认内容后，需要重新确认再冻结。</p></div>
+                <div className="s04-validation-plan"><h2><MdRule aria-hidden="true" />验证计划</h2><dl className="s04-plan-grid"><div><dt>目标案例</dt><dd>{target ? `${target.target_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>回归案例</dt><dd>{target ? `${target.regression_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>挑战案例</dt><dd>{target ? `${target.challenge_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>基线频次</dt><dd>{target ? `${target.baseline_metric.affected_core_cases}/${target.baseline_metric.core_denominator}` : '创建后生成'}</dd></div><div className="s04-plan-grid__wide"><EditableField label="需保护的现有能力（可选）" value={form.protectedCapabilities} onChange={(value) => onFormChange('protectedCapabilities', value)} disabled={busy} multiline /></div><div><EditableField label="验证规则（冻结前必填）" value={form.policyVersion} onChange={(value) => onFormChange('policyVersion', value)} disabled={busy} placeholder="请输入验证规则" /></div><div><dt>失败模式</dt><dd>{target ? failureModeLabels[target.failure_mode] : '创建后生成'}</dd></div></dl></div>
+                <div className="s04-integrity"><h3>冻结确认</h3><ul><li className={targetConfirmationComplete ? 's04-integrity__complete' : 's04-integrity__warning'}>{targetConfirmationComplete ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化目标：{targetConfirmationComplete ? '已完成' : '未完成'}</li><li className={hypothesisConfirmationComplete ? 's04-integrity__complete' : 's04-integrity__warning'}>{hypothesisConfirmationComplete ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化假设：{hypothesisConfirmationComplete ? '已完成' : '未完成'}</li><li className={!dirty && target ? 's04-integrity__complete' : 's04-integrity__warning'}>{!dirty && target ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}保存验证计划：{!dirty && target ? '已完成' : '待完成'}</li><li><MdRadioButtonUnchecked aria-hidden="true" />冻结验证计划：未完成</li></ul><p className="s04-lock-note"><MdLockOutline aria-hidden="true" />完成必要确认并保存后，方可冻结验证计划。</p><p className="s04-warning-note"><MdWarningAmber aria-hidden="true" />修改已确认内容后，需要重新确认再冻结。</p></div>
               </section>
             )}
           </div>
@@ -341,7 +398,7 @@ function TargetPlanWorkspace({
       {frozen ? (
         <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span>计划已锁定，冻结信息已保存。</span></div><button type="button" onClick={onEnterValidation}>进入候选版本验证</button></footer>
       ) : (
-        <footer className="s04-action-rail"><p>{actionError ?? (dirty ? '存在尚未保存的草稿修改。' : '按顺序完成保存与确认后即可冻结。')}</p><div><button className={requiredTargetFieldsComplete && dirty ? 's04-freeze-action--ready' : undefined} type="button" onClick={onSave} disabled={!requiredTargetFieldsComplete || !dirty || busy}>{pendingAction === 'save' ? '保存中…' : target ? '保存草稿' : '创建优化目标草稿'}</button><button className={freezeReady && actor.trim() ? 's04-freeze-action--ready' : undefined} type="button" onClick={onFreeze} disabled={!freezeReady || !actor.trim() || busy}>{pendingAction === 'freeze' ? '冻结中…' : '冻结验证计划'}</button><button type="button" disabled>进入候选版本验证</button></div></footer>
+        <footer className="s04-action-rail"><p>{actionHint}</p><div><button className={requiredTargetFieldsComplete && dirty ? 's04-freeze-action--ready' : undefined} type="button" title={saveBlocker ?? undefined} onClick={onSave} disabled={!requiredTargetFieldsComplete || !dirty || busy}>{pendingAction === 'save' ? '保存中…' : target ? '保存草稿' : '创建优化目标草稿'}</button><button className={freezeReady && actor.trim() ? 's04-freeze-action--ready' : undefined} type="button" title={freezeBlockers[0]} onClick={onFreeze} disabled={!freezeReady || !actor.trim() || busy}>{pendingAction === 'freeze' ? '冻结中…' : '冻结验证计划'}</button><button type="button" disabled>进入候选版本验证</button></div></footer>
       )}
 
       <div className={frozen ? 's04-analyst-dock s04-analyst-dock--frozen' : 's04-analyst-dock'}>
@@ -485,8 +542,22 @@ function TargetPlanPage() {
       onFormChange={(field, value) => { setForm((current) => ({ ...current, [field]: value })); setActionError(null) }}
       onActorChange={setActor}
       onSave={() => { const request = requestFromForm(form); void runAction('save', () => target ? patchOptimizationTarget(target.id, request) : createOptimizationTarget(runId, problemId, request)) }}
-      onConfirmTarget={() => { if (target) void runAction('confirm-target', () => confirmOptimizationTarget(target.id, actor.trim())) }}
-      onConfirmHypothesis={() => { if (target) void runAction('confirm-hypothesis', () => confirmOptimizationHypothesis(target.id, actor.trim())) }}
+      onConfirmTarget={() => {
+        if (!target) return
+        void runAction('confirm-target', async () => {
+          const savedTarget = dirty ? await patchOptimizationTarget(target.id, requestFromForm(form)) : target
+          if (dirty) updateLoadedTarget(savedTarget)
+          return confirmOptimizationTarget(savedTarget.id, actor.trim())
+        })
+      }}
+      onConfirmHypothesis={() => {
+        if (!target) return
+        void runAction('confirm-hypothesis', async () => {
+          const savedTarget = dirty ? await patchOptimizationTarget(target.id, requestFromForm(form)) : target
+          if (dirty) updateLoadedTarget(savedTarget)
+          return confirmOptimizationHypothesis(savedTarget.id, actor.trim())
+        })
+      }}
       onFreeze={() => { if (target) void runAction('freeze', () => freezeOptimizationTarget(target.id, actor.trim())) }}
       onEnterValidation={() => {
         if (!target) return
