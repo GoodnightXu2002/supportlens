@@ -29,6 +29,7 @@ import {
   type OptimizationTarget,
   type Problem,
 } from '../api'
+import { getTargetEntryBlocker } from '../baselineTargetGate'
 import './BaselineAnalysisPage.css'
 
 type LoadedData = {
@@ -249,8 +250,10 @@ function BaselineAnalysisPage() {
       run_id: data.run.id,
       problem_id: selectedProblem.problem_id,
     })
-    if (selectedTarget) params.set('target_id', selectedTarget.id)
-    if (selectedCandidateRun) params.set('candidate_run_id', selectedCandidateRun.id)
+    if (selectedProblem.frequency.numerator > 0 && selectedTarget) {
+      params.set('target_id', selectedTarget.id)
+      if (selectedCandidateRun) params.set('candidate_run_id', selectedCandidateRun.id)
+    }
     return params
   }, [data, selectedCandidateRun, selectedProblem, selectedTarget])
   const currentSearch = searchParams.toString()
@@ -345,28 +348,15 @@ function BaselineAnalysisPage() {
     ? JSON.stringify(selectedResult.human_decision.original_result)
       !== JSON.stringify(selectedResult.human_decision.final_result)
     : false
-  const targetEntryBlocker = selectedTarget ? null
-    : data.run.run_type !== 'baseline'
-      ? '阻塞：目标与计划只接受 Baseline Run。'
-      : data.run.status !== 'completed'
-        ? '阻塞：Baseline Run 尚未 completed。'
-        : pendingReviewCount > 0
-          ? `阻塞：仍有 ${pendingReviewCount} 个案例待人工复核。`
-          : !selectedProblem
-            ? '阻塞：当前没有可进入目标与计划的 Problem。'
-            : selectedProblem.affected_case_ids.length === 0
-              ? '阻塞：当前 Problem 没有受影响案例。'
-              : (() => {
-                  const affectedFinalResults = selectedProblem.affected_evaluation_result_ids
-                    .map((resultId) => finalResultById.get(resultId))
-                  const failureModes = new Set(
-                    affectedFinalResults.map((result) => result?.final_result?.primary_failure_mode),
-                  )
-                  return affectedFinalResults.some((result) => !result?.final_result?.primary_failure_mode)
-                    || failureModes.size !== 1
-                    ? '阻塞：受影响案例没有唯一的 Primary Failure Mode。'
-                    : null
-                })()
+  const targetEntryBlocker = getTargetEntryBlocker({
+    hasExistingTarget: Boolean(selectedTarget),
+    runType: data.run.run_type,
+    runStatus: data.run.status,
+    pendingReviewCount,
+    problem: selectedProblem,
+    affectedFinalResults: selectedProblem?.affected_evaluation_result_ids
+      .map((resultId) => finalResultById.get(resultId)) ?? [],
+  })
 
   return (
     <section className="s03-page" aria-label="基线分析工作区">
