@@ -19,6 +19,7 @@ import {
   confirmOptimizationTarget,
   createOptimizationTarget,
   freezeOptimizationTarget,
+  getDatasetConversations,
   getDatasetDetail,
   getDatasetEvaluationRuns,
   getEvaluationRun,
@@ -31,6 +32,7 @@ import {
   type OptimizationTargetCreateInput,
   type Problem,
 } from '../api'
+import { buildValidationCaseExport } from '../validationHandoff'
 import './TargetPlanPage.css'
 
 type TargetPlanState = 'pre-freeze' | 'frozen'
@@ -226,6 +228,7 @@ type TargetPlanWorkspaceProps = {
   onConfirmTarget: () => void
   onConfirmHypothesis: () => void
   onFreeze: () => void
+  onExportValidationCases: () => void
   onEnterValidation: () => void
 }
 
@@ -242,6 +245,7 @@ function TargetPlanWorkspace({
   onConfirmTarget,
   onConfirmHypothesis,
   onFreeze,
+  onExportValidationCases,
   onEnterValidation,
 }: TargetPlanWorkspaceProps) {
   const { problem, target } = data
@@ -396,7 +400,7 @@ function TargetPlanWorkspace({
       </div>
 
       {frozen ? (
-        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span>计划已锁定，冻结信息已保存。</span></div><button type="button" onClick={onEnterValidation}>进入候选版本验证</button></footer>
+        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span className={actionError ? 's04-export-error' : undefined} role={actionError ? 'alert' : undefined}>{actionError ?? '计划已锁定，冻结信息已保存。'}</span></div><button className="s04-export-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button><button type="button" onClick={onEnterValidation}>进入候选版本验证</button></footer>
       ) : (
         <footer className="s04-action-rail"><p>{actionHint}</p><div><button className={requiredTargetFieldsComplete && dirty ? 's04-freeze-action--ready' : undefined} type="button" title={saveBlocker ?? undefined} onClick={onSave} disabled={!requiredTargetFieldsComplete || !dirty || busy}>{pendingAction === 'save' ? '保存中…' : target ? '保存草稿' : '创建优化目标草稿'}</button><button className={freezeReady && actor.trim() ? 's04-freeze-action--ready' : undefined} type="button" title={freezeBlockers[0]} onClick={onFreeze} disabled={!freezeReady || !actor.trim() || busy}>{pendingAction === 'freeze' ? '冻结中…' : '冻结验证计划'}</button><button type="button" disabled>进入候选版本验证</button></div></footer>
       )}
@@ -524,6 +528,27 @@ function TargetPlanPage() {
     }
   }
 
+  async function exportValidationCases() {
+    if (pageState.kind !== 'ready' || pageState.data.target?.status !== 'frozen') return
+    const { dataset, target: frozenTarget } = pageState.data
+    setPendingAction('export')
+    setActionError(null)
+    try {
+      const conversations = await getDatasetConversations(dataset.dataset_id)
+      const cases = buildValidationCaseExport(frozenTarget, conversations)
+      const url = URL.createObjectURL(new Blob([JSON.stringify(cases, null, 2)], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `validation-cases-${shortId(frozenTarget.id)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : '验证案例导出失败。')
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
   if (pageState.kind === 'missing_parameters') return <PageMessage title="缺少目标上下文" detail="请从基线分析进入目标与计划。" />
   if (pageState.kind === 'loading') return <PageMessage title="正在加载目标与计划" detail="正在读取问题与优化目标…" />
   if (pageState.kind === 'run_not_found') return <PageMessage title="基线运行不存在" detail={`未找到运行 ${runId}。`} />
@@ -559,6 +584,7 @@ function TargetPlanPage() {
         })
       }}
       onFreeze={() => { if (target) void runAction('freeze', () => freezeOptimizationTarget(target.id, actor.trim())) }}
+      onExportValidationCases={() => { void exportValidationCases() }}
       onEnterValidation={() => {
         if (!target) return
         const params = new URLSearchParams({

@@ -39,6 +39,7 @@ import {
   type JudgeOutput,
   type OptimizationTarget,
 } from '../api'
+import { parseCandidateResponsesJson } from '../validationHandoff'
 import './CandidateValidationPage.css'
 
 type BaseData = {
@@ -162,49 +163,45 @@ function CandidateSubmission({
 }) {
   const [label, setLabel] = useState('')
   const [summary, setSummary] = useState('')
-  const [responsesJson, setResponsesJson] = useState('[]')
+  const [responses, setResponses] = useState<CandidateResponseInput[]>([])
+  const [fileName, setFileName] = useState('')
   const [parseError, setParseError] = useState<string | null>(null)
 
-  function submit() {
+  const requiredCaseIds = [
+    ...data.target.target_case_ids,
+    ...data.target.regression_case_ids,
+    ...data.target.challenge_case_ids,
+  ]
+
+  async function loadResponses(file: File | undefined) {
     setParseError(null)
+    setResponses([])
+    setFileName('')
+    if (!file) return
     try {
-      const parsed: unknown = JSON.parse(responsesJson)
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        throw new Error('Candidate responses 必须是非空 JSON 数组。')
-      }
-      const responses = parsed.map((item) => {
-        if (!item || typeof item !== 'object') throw new Error('每条 response 必须是对象。')
-        const value = item as Record<string, unknown>
-        if (![value.conversation_id, value.case_id, value.assistant_content].every((field) => typeof field === 'string' && field.trim())) {
-          throw new Error('每条 response 必须包含非空 conversation_id、case_id、assistant_content。')
-        }
-        return {
-          conversation_id: value.conversation_id as string,
-          case_id: value.case_id as string,
-          assistant_content: value.assistant_content as string,
-        }
-      })
-      onSubmit(label, summary, responses)
+      setResponses(parseCandidateResponsesJson(await file.text(), requiredCaseIds, data.conversations))
+      setFileName(file.name)
     } catch (submissionError) {
-      setParseError(submissionError instanceof Error ? submissionError.message : 'Candidate responses JSON 无效。')
+      setParseError(submissionError instanceof Error ? submissionError.message : '候选回复 JSON 无效。')
     }
   }
 
-  const scopeCount = data.target.target_case_ids.length + data.target.regression_case_ids.length + data.target.challenge_case_ids.length
+  const scopeCount = requiredCaseIds.length
   return (
     <section className="s05-page">
       <div className="s05-canvas s05-submit">
         <header>
           <span className="s05-eyebrow">FROZEN TARGET V{data.target.version}</span>
-          <h1>提交 Candidate Responses</h1>
+          <h1>提交候选版本回复</h1>
           <p>数据集：{data.dataset.name} {data.dataset.version} · 冻结范围 {scopeCount} Cases</p>
         </header>
-        <label><span>Candidate label</span><input value={label} onChange={(event) => setLabel(event.target.value)} disabled={busy} /></label>
-        <label><span>Change summary</span><textarea value={summary} onChange={(event) => setSummary(event.target.value)} disabled={busy} rows={3} /></label>
-        <label><span>Candidate responses JSON</span><textarea className="s05-json-input" value={responsesJson} onChange={(event) => setResponsesJson(event.target.value)} disabled={busy} rows={16} spellCheck={false} /></label>
-        <p className="s05-submit-note">每条仅允许 conversation_id / case_id / assistant_content；Backend 校验完整 Frozen scope 与 Case pairing。</p>
-        {(parseError || error) && <p className="s05-form-error">{parseError ?? error}</p>}
-        <button type="button" onClick={submit} disabled={busy || !label.trim() || !summary.trim()}>{busy ? '正在执行 Candidate Validation…' : '创建并执行 Candidate Validation'}</button>
+        <label><span>候选版本名称</span><input value={label} onChange={(event) => setLabel(event.target.value)} disabled={busy} /></label>
+        <label><span>变更说明</span><textarea value={summary} onChange={(event) => setSummary(event.target.value)} disabled={busy} rows={3} /></label>
+        <label><span>候选回复 JSON</span><input className="s05-file-input" type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void loadResponses(file) }} disabled={busy} /></label>
+        <p className="s05-submit-note">请在 S04 导出的案例中补充非空 assistant_content 后上传；文件必须完整覆盖当前冻结计划。</p>
+        {fileName && <p className="s05-file-status" role="status">{fileName} · 已解析 {responses.length}/{scopeCount} 个案例</p>}
+        {(parseError || error) && <p className="s05-form-error" role="alert">{parseError ?? error}</p>}
+        <button type="button" onClick={() => onSubmit(label, summary, responses)} disabled={busy || !label.trim() || !summary.trim() || responses.length !== scopeCount}>{busy ? '正在执行候选版本验证…' : '开始候选版本验证'}</button>
       </div>
     </section>
   )

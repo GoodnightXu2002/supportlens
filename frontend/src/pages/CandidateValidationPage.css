@@ -768,9 +768,19 @@
   line-height: 20px;
 }
 
-.s05-submit textarea.s05-json-input {
-  font-family: var(--font-code);
-  resize: vertical;
+.s05-submit input.s05-file-input {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.s05-submit input.s05-file-input::file-selector-button {
+  margin-right: 12px;
+  padding: 6px 10px;
+  color: var(--color-text);
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
 }
 
 .s05-submit > button {
@@ -789,8 +799,15 @@
 }
 
 .s05-submit-note,
+.s05-file-status,
 .s05-form-error {
   margin: 0;
+}
+
+.s05-file-status {
+  color: var(--color-status-success);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .s05-form-error {

@@ -1316,6 +1316,10 @@
   white-space: nowrap;
 }
 
+.s04-action-rail--frozen > div > span.s04-export-error {
+  color: var(--color-status-critical);
+}
+
 .s04-action-rail--frozen > button {
   min-height: 36px;
   padding: 8px 24px;
@@ -1332,6 +1336,16 @@
 
 .s04-action-rail--frozen > button:hover {
   background: #2d3133;
+}
+
+.s04-action-rail--frozen > button.s04-export-action {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-color: var(--color-outline);
+}
+
+.s04-action-rail--frozen > button.s04-export-action:hover {
+  background: var(--color-surface-low);
 }
 
 .s04-action-rail--frozen > button:disabled {
