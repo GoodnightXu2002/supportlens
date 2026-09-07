@@ -26,12 +26,21 @@ function AppShell() {
   const workflowParams = new URLSearchParams(location.search)
   const workflowRunId = workflowParams.get('run_id')?.trim() ?? ''
   const workflowProblemId = workflowParams.get('problem_id')?.trim() ?? ''
-  const workflowReturnRoutes = [
-    workflowRunId ? `/baseline?run_id=${encodeURIComponent(workflowRunId)}` : null,
-    workflowRunId && workflowProblemId
-      ? `/target-plan?run_id=${encodeURIComponent(workflowRunId)}&problem_id=${encodeURIComponent(workflowProblemId)}`
+  const workflowTargetId = workflowParams.get('target_id')?.trim() ?? ''
+  const workflowCandidateRunId = workflowParams.get('candidate_run_id')?.trim() ?? ''
+  const workflowContext = new URLSearchParams({ run_id: workflowRunId })
+  if (workflowProblemId) workflowContext.set('problem_id', workflowProblemId)
+  if (workflowTargetId) workflowContext.set('target_id', workflowTargetId)
+  if (workflowCandidateRunId) workflowContext.set('candidate_run_id', workflowCandidateRunId)
+  const workflowContextQuery = workflowContext.toString()
+  const workflowRoutes = [
+    workflowRunId ? `/baseline?${workflowContextQuery}` : null,
+    workflowRunId && workflowProblemId && workflowTargetId
+      ? `/target-plan?${workflowContextQuery}`
       : null,
-    null,
+    workflowRunId && workflowProblemId && workflowTargetId && workflowCandidateRunId
+      ? `/validation?${workflowContextQuery}`
+      : null,
   ]
   const [datasetImportOpen, setDatasetImportOpen] = useState(false)
   const datasetImportButtonRef = useRef<HTMLButtonElement>(null)
@@ -168,11 +177,11 @@ function AppShell() {
               >
                 {workflowNavigationItems.map((item, index) => {
                   const current = index === workflowStepIndex
-                  const returnTo = index < workflowStepIndex ? workflowReturnRoutes[index] : null
+                  const destination = current ? null : workflowRoutes[index]
                   return (
                     <div className="workflow-step" key={item.path}>
-                      {returnTo ? (
-                        <Link className="workflow-link" to={returnTo}>{item.label}</Link>
+                      {destination ? (
+                        <Link className="workflow-link" to={destination}>{item.label}</Link>
                       ) : (
                         <span
                           aria-current={current ? 'step' : undefined}

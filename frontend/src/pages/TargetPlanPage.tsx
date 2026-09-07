@@ -341,9 +341,11 @@ function TargetPlanWorkspace({
 
 function TargetPlanPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const runId = searchParams.get('run_id')?.trim() ?? ''
   const problemId = searchParams.get('problem_id')?.trim() ?? ''
+  const workflowTargetId = searchParams.get('target_id')?.trim() ?? ''
+  const workflowCandidateRunId = searchParams.get('candidate_run_id')?.trim() ?? ''
   const requestKey = `${runId}:${problemId}`
   const [loadResult, setLoadResult] = useState<{
     requestKey: string
@@ -379,6 +381,12 @@ function TargetPlanPage() {
         const candidateRunId = target
           ? runs.find((item) => item.run_type === 'candidate' && item.target_id === target.id)?.id ?? null
           : null
+        if (workflowTargetId !== (target?.id ?? '') || workflowCandidateRunId !== (candidateRunId ?? '')) {
+          const params = new URLSearchParams({ run_id: run.id, problem_id: problem.problem_id })
+          if (target) params.set('target_id', target.id)
+          if (candidateRunId) params.set('candidate_run_id', candidateRunId)
+          setSearchParams(params, { replace: true })
+        }
         setForm(target ? formFromTarget(target) : emptyForm)
         setLoadResult({
           requestKey,
@@ -401,7 +409,7 @@ function TargetPlanPage() {
     }
     void load()
     return () => controller.abort()
-  }, [problemId, requestKey, runId])
+  }, [problemId, requestKey, runId, setSearchParams, workflowCandidateRunId, workflowTargetId])
 
   const pageState: PageState = !runId || !problemId
     ? { kind: 'missing_parameters' }
@@ -424,6 +432,13 @@ function TargetPlanPage() {
         }
       : current)
     setForm(formFromTarget(nextTarget))
+    const params = new URLSearchParams({
+      run_id: runId,
+      problem_id: problemId,
+      target_id: nextTarget.id,
+    })
+    if (workflowCandidateRunId) params.set('candidate_run_id', workflowCandidateRunId)
+    setSearchParams(params, { replace: true })
   }
 
   async function runAction(name: string, action: () => Promise<OptimizationTarget>) {

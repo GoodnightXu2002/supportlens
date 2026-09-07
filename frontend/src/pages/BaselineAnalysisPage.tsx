@@ -16,14 +16,17 @@ import {
   ApiRequestError,
   getDatasetConversations,
   getDatasetDetail,
+  getDatasetEvaluationRuns,
   getEvaluationRun,
   getFinalEffectiveResults,
+  getOptimizationTargets,
   getProblems,
   type DatasetConversation,
   type DatasetDetail,
   type EvaluationRun,
   type FinalEffectiveResult,
   type JudgeOutput,
+  type OptimizationTarget,
   type Problem,
 } from '../api'
 import './BaselineAnalysisPage.css'
@@ -34,6 +37,8 @@ type LoadedData = {
   conversations: DatasetConversation[]
   finalResults: FinalEffectiveResult[]
   problems: Problem[]
+  targets: OptimizationTarget[]
+  runs: EvaluationRun[]
 }
 
 type PageState =
@@ -147,7 +152,7 @@ function sortProblems(problems: Problem[]) {
 
 function BaselineAnalysisPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const runId = searchParams.get('run_id')?.trim() ?? ''
   const [loadResult, setLoadResult] = useState<{
     runId: string
@@ -182,17 +187,19 @@ function BaselineAnalysisPage() {
           return
         }
 
-        const [dataset, conversations, finalResults, problems] = await Promise.all([
+        const [dataset, conversations, finalResults, problems, targets, runs] = await Promise.all([
           getDatasetDetail(run.dataset_id, controller.signal),
           getDatasetConversations(run.dataset_id, controller.signal),
           getFinalEffectiveResults(run.id, controller.signal),
           getProblems(run.id, controller.signal),
+          getOptimizationTargets(run.id, controller.signal),
+          getDatasetEvaluationRuns(run.dataset_id, controller.signal),
         ])
         setLoadResult({
           runId,
           state: {
             kind: 'ready',
-            data: { run, dataset, conversations, finalResults, problems },
+            data: { run, dataset, conversations, finalResults, problems, targets, runs },
           },
         })
       } catch (error) {
@@ -225,8 +232,34 @@ function BaselineAnalysisPage() {
   )
   const selectedProblem = (
     problems.find((problem) => problem.problem_id === selectedProblemId)
+    ?? problems.find((problem) => problem.problem_id === searchParams.get('problem_id'))
     ?? problems[0]
   )
+  const selectedTarget = selectedProblem
+    ? data?.targets
+      .filter((target) => target.problem_id === selectedProblem.problem_id)
+      .sort((left, right) => right.version - left.version)[0] ?? null
+    : null
+  const selectedCandidateRun = selectedTarget
+    ? data?.runs.find((run) => run.run_type === 'candidate' && run.target_id === selectedTarget.id) ?? null
+    : null
+  const workflowSearchParams = useMemo(() => {
+    if (!data || !selectedProblem) return null
+    const params = new URLSearchParams({
+      run_id: data.run.id,
+      problem_id: selectedProblem.problem_id,
+    })
+    if (selectedTarget) params.set('target_id', selectedTarget.id)
+    if (selectedCandidateRun) params.set('candidate_run_id', selectedCandidateRun.id)
+    return params
+  }, [data, selectedCandidateRun, selectedProblem, selectedTarget])
+  const currentSearch = searchParams.toString()
+
+  useEffect(() => {
+    if (workflowSearchParams && workflowSearchParams.toString() !== currentSearch) {
+      setSearchParams(workflowSearchParams, { replace: true })
+    }
+  }, [currentSearch, setSearchParams, workflowSearchParams])
   const finalResultById = useMemo(
     () => new Map(
       data?.finalResults.map((result) => [result.evaluation_result_id, result])
@@ -312,6 +345,28 @@ function BaselineAnalysisPage() {
     ? JSON.stringify(selectedResult.human_decision.original_result)
       !== JSON.stringify(selectedResult.human_decision.final_result)
     : false
+  const targetEntryBlocker = selectedTarget ? null
+    : data.run.run_type !== 'baseline'
+      ? '阻塞：目标与计划只接受 Baseline Run。'
+      : data.run.status !== 'completed'
+        ? '阻塞：Baseline Run 尚未 completed。'
+        : pendingReviewCount > 0
+          ? `阻塞：仍有 ${pendingReviewCount} 个案例待人工复核。`
+          : !selectedProblem
+            ? '阻塞：当前没有可进入目标与计划的 Problem。'
+            : selectedProblem.affected_case_ids.length === 0
+              ? '阻塞：当前 Problem 没有受影响案例。'
+              : (() => {
+                  const affectedFinalResults = selectedProblem.affected_evaluation_result_ids
+                    .map((resultId) => finalResultById.get(resultId))
+                  const failureModes = new Set(
+                    affectedFinalResults.map((result) => result?.final_result?.primary_failure_mode),
+                  )
+                  return affectedFinalResults.some((result) => !result?.final_result?.primary_failure_mode)
+                    || failureModes.size !== 1
+                    ? '阻塞：受影响案例没有唯一的 Primary Failure Mode。'
+                    : null
+                })()
 
   return (
     <section className="s03-page" aria-label="基线分析工作区">
@@ -362,9 +417,6 @@ function BaselineAnalysisPage() {
           </dl>
         </div>
 
-        <button className="s03-review-action" type="button" disabled>
-          {pendingReviewCount === 0 ? '无需人工复核' : `待复核 ${pendingReviewCount}`}
-        </button>
       </div>
 
       <div className="s03-workspace">
@@ -614,17 +666,13 @@ function BaselineAnalysisPage() {
       <footer className="s03-bottom-bar">
         <div className="s03-analyst"><strong title={data.run.id}>Run {shortId(data.run.id)}</strong></div>
         <div className="s03-bottom-actions">
-          <span>{pendingReviewCount === 0 ? `${data.finalResults.length} 个 Final Effective Results` : `剩余 ${pendingReviewCount} 个案例待复核`}</span>
+          <span>{targetEntryBlocker ?? `${data.finalResults.length} 个 Final Effective Results`}</span>
           <button
             type="button"
-            disabled={!selectedProblem}
+            disabled={Boolean(targetEntryBlocker)}
             onClick={() => {
-              if (!selectedProblem) return
-              const params = new URLSearchParams({
-                run_id: data.run.id,
-                problem_id: selectedProblem.problem_id,
-              })
-              navigate(`/target-plan?${params.toString()}`)
+              if (!workflowSearchParams) return
+              navigate(`/target-plan?${workflowSearchParams.toString()}`)
             }}
           >
             进入目标与计划
