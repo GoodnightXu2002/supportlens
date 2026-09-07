@@ -369,6 +369,8 @@
 }
 
 .s01-reviewer-field input,
+.s01-correction-form select,
+.s01-correction-form input,
 .s01-correction-form textarea {
   padding: 8px 10px;
   color: var(--color-text);
@@ -488,9 +490,14 @@
   margin-top: 16px;
 }
 
-.s01-correction-form label:first-child textarea {
-  font-family: var(--font-code);
-  font-size: 12px;
+.s01-correction-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.s01-correction-wide {
+  grid-column: 1 / -1;
 }
 
 .s01-review-state,
@@ -664,6 +671,14 @@
   .s01-review-copy,
   .s01-review-machine {
     grid-template-columns: 1fr;
+  }
+
+  .s01-correction-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .s01-correction-wide {
+    grid-column: auto;
   }
 
   .s01-details-wide {

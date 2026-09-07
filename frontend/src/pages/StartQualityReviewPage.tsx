@@ -46,6 +46,25 @@ type ReviewData = {
   conversations: DatasetConversation[]
 }
 
+type CorrectionDraft = {
+  resultId: string
+  judgment: JudgeOutput['judgment']
+  primaryFailureMode: JudgeOutput['primary_failure_mode']
+  problem: string
+  severity: JudgeOutput['severity']
+  reviewRequired: JudgeOutput['review_required']
+  changeReason: string
+}
+
+const failureModes = [
+  'incorrect_information',
+  'incomplete_unresolved',
+  'intent_relevance_failure',
+  'improper_refusal',
+  'policy_procedure_violation',
+  'other',
+] as const
+
 const statusCopy: Record<PageStatus, { label: string; detail: string }> = {
   loading: { label: '正在读取', detail: '正在从 Backend 读取真实 Dataset 与 Run。' },
   ready: { label: '已就绪 READY', detail: '可以创建并启动真实 Baseline EvaluationRun。' },
@@ -101,9 +120,7 @@ function StartQualityReviewPage() {
   const [reviewer, setReviewer] = useState('')
   const [reviewBusyId, setReviewBusyId] = useState<string | null>(null)
   const [reviewError, setReviewError] = useState<string | null>(null)
-  const [correctingId, setCorrectingId] = useState<string | null>(null)
-  const [correctedOutput, setCorrectedOutput] = useState('')
-  const [changeReason, setChangeReason] = useState('')
+  const [correctionDraft, setCorrectionDraft] = useState<CorrectionDraft | null>(null)
   const [historyResult, setHistoryResult] = useState<{
     datasetId: string
     runs: EvaluationRun[]
@@ -284,7 +301,7 @@ function StartQualityReviewPage() {
     setRun(null)
     setReviewData(null)
     setReviewError(null)
-    setCorrectingId(null)
+    setCorrectionDraft(null)
     setMessage(null)
     setSearchParams({ dataset_id: datasetId })
   }
@@ -350,25 +367,33 @@ function StartQualityReviewPage() {
   }
 
   async function correctMachineResult(result: FinalEffectiveResult) {
-    if (!reviewer.trim() || !changeReason.trim() || reviewBusyId) return
+    if (
+      !reviewer.trim()
+      || !correctionDraft?.changeReason.trim()
+      || correctionDraft.resultId !== result.evaluation_result_id
+      || reviewBusyId
+    ) return
     setReviewBusyId(result.evaluation_result_id)
     setReviewError(null)
     try {
-      const finalResult = JSON.parse(correctedOutput) as JudgeOutput
+      const finalResult: JudgeOutput = {
+        ...result.machine_result,
+        judgment: correctionDraft.judgment,
+        primary_failure_mode: correctionDraft.primaryFailureMode,
+        problem: correctionDraft.problem.trim() || null,
+        severity: correctionDraft.severity,
+        review_required: correctionDraft.reviewRequired,
+      }
       await submitHumanReview(result.evaluation_result_id, {
         reviewer: reviewer.trim(),
         action: 'correct',
         final_result: finalResult,
-        change_reason: changeReason.trim(),
+        change_reason: correctionDraft.changeReason.trim(),
       })
-      setCorrectingId(null)
-      setCorrectedOutput('')
-      setChangeReason('')
+      setCorrectionDraft(null)
       await refreshAfterReview()
     } catch (error) {
-      setReviewError(error instanceof SyntaxError
-        ? '修正后的 JudgeOutput 必须是有效 JSON。'
-        : errorMessage(error))
+      setReviewError(errorMessage(error))
     } finally {
       setReviewBusyId(null)
     }
@@ -500,8 +525,8 @@ function StartQualityReviewPage() {
               {currentReviewData ? (
                 <>
                   <label className="s01-reviewer-field">
-                    <span>Reviewer</span>
-                    <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} disabled={Boolean(reviewBusyId)} placeholder="输入真实 reviewer" />
+                    <span>复核人</span>
+                    <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} disabled={Boolean(reviewBusyId)} placeholder="输入复核人" />
                   </label>
                   {reviewError ? <p className="s01-review-error" role="alert">{reviewError}</p> : null}
                   {pendingReviewResults.length === 0 ? <p className="s01-review-complete">人工复核完成 · 待复核 0</p> : null}
@@ -510,7 +535,7 @@ function StartQualityReviewPage() {
                       const conversation = currentReviewData.conversations.find((item) => item.id === result.conversation_id)
                       const userMessage = conversation?.messages.filter((item) => item.role === 'user').map((item) => item.content).join('\n') ?? '—'
                       const assistantAnswer = conversation?.messages.filter((item) => item.role === 'assistant').map((item) => item.content).join('\n') ?? '—'
-                      const correcting = correctingId === result.evaluation_result_id
+                      const correcting = correctionDraft?.resultId === result.evaluation_result_id
                       return (
                         <article className="s01-review-card" key={result.evaluation_result_id}>
                           <header><strong>{result.case_id}</strong><code>{result.evaluation_result_id}</code></header>
@@ -522,14 +547,20 @@ function StartQualityReviewPage() {
                             <div><dt>Severity</dt><dd>{result.machine_result.severity ?? '—'}</dd></div>
                           </dl>
                           <div className="s01-review-evidence"><strong>Evidence / rationale</strong>{result.machine_result.evidence.length ? <ul>{result.machine_result.evidence.map((item, index) => <li key={`${result.evaluation_result_id}-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul> : <p>无结构化 evidence。</p>}<p>{result.machine_result.rationale}</p></div>
-                          {correcting ? (
+                          {correcting && correctionDraft ? (
                             <div className="s01-correction-form">
-                              <label><span>修正后的 JudgeOutput JSON</span><textarea value={correctedOutput} onChange={(event) => setCorrectedOutput(event.target.value)} rows={14} spellCheck={false} /></label>
-                              <label><span>Change reason</span><textarea value={changeReason} onChange={(event) => setChangeReason(event.target.value)} rows={3} /></label>
-                              <div><button type="button" onClick={() => { setCorrectingId(null); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>取消</button><button type="button" onClick={() => void correctMachineResult(result)} disabled={!reviewer.trim() || !changeReason.trim() || Boolean(reviewBusyId)}>提交修正</button></div>
+                              <div className="s01-correction-fields">
+                                <label><span>Judgment</span><select value={correctionDraft.judgment} onChange={(event) => { const judgment = event.target.value as JudgeOutput['judgment']; setCorrectionDraft((current) => current ? { ...current, judgment, severity: judgment === 'failure' ? (current.severity ?? result.machine_result.severity ?? 'low') : null } : current) }}><option value="success">success</option><option value="warning">warning</option><option value="failure">failure</option><option value="uncertain">uncertain</option></select></label>
+                                <label><span>Primary failure mode</span><select value={correctionDraft.primaryFailureMode ?? ''} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, primaryFailureMode: (event.target.value || null) as JudgeOutput['primary_failure_mode'] } : current)}><option value="">null</option>{failureModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}</select></label>
+                                <label className="s01-correction-wide"><span>Problem</span><textarea value={correctionDraft.problem} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, problem: event.target.value } : current)} rows={3} /></label>
+                                <label><span>Severity</span><select value={correctionDraft.severity ?? ''} disabled={correctionDraft.judgment !== 'failure'} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, severity: (event.target.value || null) as JudgeOutput['severity'] } : current)}><option value="">null</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option></select></label>
+                                <label><span>Review required</span><select value={correctionDraft.reviewRequired === null ? 'null' : String(correctionDraft.reviewRequired)} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, reviewRequired: event.target.value === 'null' ? null : event.target.value === 'true' } : current)}><option value="true">true</option><option value="false">false</option><option value="null">null</option></select></label>
+                                <label className="s01-correction-wide"><span>Change reason</span><textarea value={correctionDraft.changeReason} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, changeReason: event.target.value } : current)} rows={3} /></label>
+                              </div>
+                              <div><button type="button" onClick={() => { setCorrectionDraft(null); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>取消</button><button type="button" onClick={() => void correctMachineResult(result)} disabled={!reviewer.trim() || !correctionDraft.changeReason.trim() || (correctionDraft.judgment === 'failure' && !correctionDraft.severity) || Boolean(reviewBusyId)}>提交人工修正</button></div>
                             </div>
                           ) : (
-                            <div className="s01-review-actions"><button type="button" onClick={() => void confirmMachineResult(result)} disabled={!reviewer.trim() || Boolean(reviewBusyId)}>确认机器结论</button><button type="button" onClick={() => { setCorrectingId(result.evaluation_result_id); setCorrectedOutput(JSON.stringify(result.machine_result, null, 2)); setChangeReason(''); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>修正结论</button></div>
+                            <div className="s01-review-actions"><button type="button" onClick={() => void confirmMachineResult(result)} disabled={!reviewer.trim() || Boolean(reviewBusyId)}>确认机器结论</button><button type="button" onClick={() => { setCorrectionDraft({ resultId: result.evaluation_result_id, judgment: result.machine_result.judgment, primaryFailureMode: result.machine_result.primary_failure_mode, problem: result.machine_result.problem ?? '', severity: result.machine_result.severity, reviewRequired: result.machine_result.review_required, changeReason: '' }); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>修正结论</button></div>
                           )}
                         </article>
                       )
