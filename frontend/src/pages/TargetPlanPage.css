@@ -394,6 +394,14 @@
   color: var(--color-status-success);
 }
 
+.s04-subsection-heading {
+  margin: 8px 0 0;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
 .s04-outline-action {
   width: fit-content;
   margin-top: 16px;
@@ -418,8 +426,7 @@
   opacity: 0.6;
 }
 
-.s04-hypothesis,
-.s04-changes {
+.s04-hypothesis {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -439,54 +446,6 @@
 
 .s04-hypothesis .s04-outline-action {
   margin-top: 8px;
-}
-
-.s04-table-frame {
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-}
-
-.s04-table-frame table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  line-height: 20px;
-  text-align: left;
-}
-
-.s04-table-frame th,
-.s04-table-frame td {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.s04-table-frame th {
-  color: #45464d;
-  background: var(--color-surface-low);
-  font-weight: 500;
-}
-
-.s04-table-frame th:first-child,
-.s04-table-frame td:first-child {
-  width: 30%;
-}
-
-.s04-table-frame th:nth-child(2),
-.s04-table-frame td:nth-child(2) {
-  width: 25%;
-}
-
-.s04-table-frame td:last-child {
-  color: #45464d;
-}
-
-.s04-table-frame tr:last-child td {
-  border-bottom: 0;
-}
-
-.s04-table-frame .s04-table-status--warning {
-  color: var(--color-status-warning);
 }
 
 .s04-validation {
@@ -537,15 +496,6 @@
 
 .s04-plan-grid__wide {
   grid-column: span 2;
-}
-
-.s04-mono-value {
-  font-family: var(--font-code);
-}
-
-.s04-plan-pending {
-  color: #45464d;
-  font-style: italic;
 }
 
 .s04-integrity {
@@ -1023,44 +973,6 @@
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 20px;
-}
-
-.s04-changes--frozen {
-  gap: 12px;
-  padding: 24px;
-}
-
-.s04-changes--frozen > h2 {
-  font-family: var(--font-code);
-  font-size: 12px;
-  line-height: 16px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.s04-table-frame--frozen {
-  border-radius: 0;
-}
-
-.s04-table-frame--frozen th,
-.s04-table-frame--frozen td {
-  padding: 10px 12px;
-  border-right: 1px solid var(--color-border);
-}
-
-.s04-table-frame--frozen th:last-child,
-.s04-table-frame--frozen td:last-child {
-  border-right: 0;
-}
-
-.s04-table-frame--frozen th:first-child,
-.s04-table-frame--frozen td:first-child {
-  width: 33.333%;
-}
-
-.s04-table-frame--frozen th:nth-child(2),
-.s04-table-frame--frozen td:nth-child(2) {
-  width: 20%;
 }
 
 .s04-record-badge {

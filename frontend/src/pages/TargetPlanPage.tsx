@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   MdCheckCircle,
   MdError,
-  MdHistory,
   MdInfo,
   MdLightbulbOutline,
   MdLockOutline,
@@ -80,6 +79,30 @@ const emptyForm: TargetForm = {
   policyVersion: '',
 }
 
+const evaluationRunStatusLabels: Record<EvaluationRun['status'], string> = {
+  pending: '待开始',
+  running: '运行中',
+  completed: '已完成',
+  partial_failure: '部分失败',
+  failed: '失败',
+  invalid: '无效',
+}
+
+const targetStatusLabels: Record<OptimizationTarget['status'], string> = {
+  draft: '草稿',
+  confirmed: '已确认',
+  frozen: '已冻结',
+}
+
+const failureModeLabels: Record<OptimizationTarget['failure_mode'], string> = {
+  incorrect_information: '信息错误',
+  incomplete_unresolved: '回答不完整或问题未解决',
+  intent_relevance_failure: '意图理解或相关性不足',
+  improper_refusal: '不当拒答',
+  policy_procedure_violation: '政策或流程违规',
+  other: '其他问题',
+}
+
 function joinEntries(values: string[]) {
   return values.join('\n')
 }
@@ -147,8 +170,8 @@ function ContextMetadata({ data }: { data: LoadedData }) {
   return (
     <dl className="s04-metadata s04-metadata--prefreeze">
       <div><dt>数据集</dt><dd>{data.dataset.name} {data.dataset.version}</dd></div>
-      <div><dt>Evaluation Run</dt><dd title={data.run.id}>{shortId(data.run.id)} · {data.run.status}</dd></div>
-      <div><dt>Target 状态</dt><dd>{data.target ? `${data.target.status} · V${data.target.version}` : '尚未创建'}</dd></div>
+      <div><dt>基线运行</dt><dd title={data.run.id}>{shortId(data.run.id)} · {evaluationRunStatusLabels[data.run.status]}</dd></div>
+      <div><dt>目标状态</dt><dd>{data.target ? `${targetStatusLabels[data.target.status]} · V${data.target.version}` : '尚未创建'}</dd></div>
     </dl>
   )
 }
@@ -237,18 +260,13 @@ function TargetPlanWorkspace({
       && !dirty,
   )
   const busy = pendingAction !== null
-  const changeRecords = [
-    { scope: '计划变更范围', status: target?.change_status ?? '未创建', detail: target?.change_surface ?? '尚未填写' },
-    { scope: '计划变更内容', status: target?.change_status ?? '未创建', detail: target?.planned_change ?? '尚未填写' },
-    { scope: 'Guardrails', status: target ? `${target.guardrails.length} 项` : '未创建', detail: target?.guardrails.join('；') || '未声明' },
-  ]
 
   return (
     <section className={`s04-page s04-page--${state}`} aria-label={frozen ? '目标与计划已冻结状态' : '目标与计划冻结前状态'}>
       {frozen ? (
         <div className="s04-frozen-header-status" aria-label="当前状态">
           <span><MdLockOutline aria-hidden="true" />主要状态：验证计划已冻结</span>
-          <span><MdInfo aria-hidden="true" />Target V{target.version}</span>
+          <span><MdInfo aria-hidden="true" />目标 V{target.version}</span>
         </div>
       ) : (
         <><div className="s04-header-status" aria-label="当前状态"><span aria-hidden="true" />{target?.status === 'confirmed' ? '确认已完成' : '需要人工确认'}</div><MdLockOutline className="s04-candidate-lock" aria-hidden="true" /></>
@@ -261,7 +279,7 @@ function TargetPlanWorkspace({
           {!frozen && <ContextMetadata data={data} />}
           {!frozen && (
             <header className="s04-state">
-              <div className="s04-state__title"><span aria-hidden="true" /><h1>{target ? '验证计划待冻结' : '尚未创建 Optimization Target'}</h1></div>
+              <div className="s04-state__title"><span aria-hidden="true" /><h1>{target ? '验证计划待冻结' : '尚未创建优化目标'}</h1></div>
               <dl><div><dt>结论属性:</dt><dd>非最终结论</dd></div><div><dt>当前阻断:</dt><dd>{freezeReady ? '无 · 可冻结验证计划' : '草稿保存及必要确认尚未完成'}</dd></div></dl>
             </header>
           )}
@@ -269,56 +287,51 @@ function TargetPlanWorkspace({
           <div className={frozen ? 's04-sections s04-sections--frozen' : 's04-sections'}>
             <section className={frozen ? 's04-targets s04-targets--frozen' : 's04-targets'} aria-label="目标确认">
               <div className="s04-target-column">
-                <h2><MdPsychology aria-hidden="true" />选中 Problem</h2>
+                <h2><MdPsychology aria-hidden="true" />问题依据</h2>
                 <div className="s04-target-value">{problem.definition}</div>
-                <div className="s04-target-tags" aria-label="Problem 信息">
-                  <span>{problem.scenario}</span><span title={problem.problem_id}>P-{shortId(problem.problem_id)}</span><span>{problem.affected_case_count} 个受影响案例</span><span className="s04-target-tags__priority">{problem.rank === null ? '不可排名' : `Rank ${problem.rank}`}</span>
+                <div className="s04-target-tags" aria-label="问题信息">
+                  <span>{problem.scenario}</span><span title={problem.problem_id}>P-{shortId(problem.problem_id)}</span><span>{problem.affected_case_count} 个受影响案例</span><span className="s04-target-tags__priority">{problem.rank === null ? '不可排名' : `排名 ${problem.rank}`}</span>
                 </div>
-                <p className="s04-source-note">来自当前 Baseline Run 的正式 Problem，Evidence {problem.evidence.length} 条。</p>
+                <p className="s04-source-note">关联证据 {problem.evidence.length} 条</p>
               </div>
 
               <div className={frozen ? 's04-target-column s04-target-column--frozen-human' : 's04-target-column s04-target-column--human'}>
-                <div className="s04-section-heading"><h2><MdPersonOutline aria-hidden="true" />人工 Target Contract</h2><span className={targetConfirmed ? 's04-confirmation-status--complete' : undefined}>{targetConfirmed ? '已确认' : '待人工确认'}</span></div>
+                <div className="s04-section-heading"><h2><MdPersonOutline aria-hidden="true" />优化目标</h2><span className={targetConfirmed ? 's04-confirmation-status--complete' : undefined}>{targetConfirmed ? '已确认' : '待人工确认'}</span></div>
                 {frozen ? (
                   <><MdCheckCircle className="s04-frozen-confirmed-icon" aria-label="已确认" /><p className="s04-frozen-confirmed-target">{target.definition}</p><div className="s04-frozen-confirmation-meta"><span>确认人：{target.confirmed_by}</span><span>确认时间：{formatDate(target.confirmed_at)}</span></div><dl className="s04-contract-readout"><div><dt>纳入标准</dt><dd>{target.inclusion_criteria}</dd></div><div><dt>排除标准</dt><dd>{target.exclusion_criteria}</dd></div><div><dt>预期可观察变化</dt><dd>{target.expected_observable_change}</dd></div></dl></>
                 ) : (
-                  <><div className="s04-form-grid"><EditableField label="Target definition" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy} multiline /><EditableField label="Inclusion criteria" value={form.inclusionCriteria} onChange={(value) => onFormChange('inclusionCriteria', value)} disabled={busy} multiline /><EditableField label="Exclusion criteria" value={form.exclusionCriteria} onChange={(value) => onFormChange('exclusionCriteria', value)} disabled={busy} multiline /><EditableField label="Expected observable change" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" onClick={onConfirmTarget} disabled={!target || dirty || targetConfirmed || !actor.trim() || busy}>{targetConfirmed ? 'Target 已确认' : '确认 Target'}</button>{targetConfirmed && target ? <p className="s04-confirmation-meta">{target.confirmed_by} · {formatDate(target.confirmed_at)}</p> : null}</>
+                  <><div className="s04-form-grid"><EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy} multiline /><EditableField label="纳入标准" value={form.inclusionCriteria} onChange={(value) => onFormChange('inclusionCriteria', value)} disabled={busy} multiline /><EditableField label="排除标准" value={form.exclusionCriteria} onChange={(value) => onFormChange('exclusionCriteria', value)} disabled={busy} multiline /><EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" onClick={onConfirmTarget} disabled={!target || dirty || targetConfirmed || !actor.trim() || busy}>{targetConfirmed ? '优化目标已确认' : '确认优化目标'}</button>{targetConfirmed && target ? <p className="s04-confirmation-meta">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}</p> : null}</>
                 )}
               </div>
             </section>
 
             <section className={frozen ? 's04-hypothesis s04-hypothesis--frozen' : 's04-hypothesis'} aria-labelledby="s04-hypothesis-title">
-              <div className="s04-section-heading"><h2 id="s04-hypothesis-title"><MdLightbulbOutline aria-hidden="true" />优化假设与计划变更</h2><span className={hypothesisConfirmed ? 's04-confirmation-status--complete' : undefined}>{hypothesisConfirmed ? '已确认 · 不代表已证明根因' : '待确认 · 不代表已证明根因'}</span></div>
+              <div className="s04-section-heading"><h2 id="s04-hypothesis-title"><MdLightbulbOutline aria-hidden="true" />优化假设</h2><span className={hypothesisConfirmed ? 's04-confirmation-status--complete' : undefined}>{hypothesisConfirmed ? '已确认 · 不代表已证明根因' : '待确认 · 不代表已证明根因'}</span></div>
               {frozen ? (
-                <><p>{target.hypothesis_statement}</p><dl className="s04-contract-readout s04-contract-readout--columns"><div><dt>Change surface</dt><dd>{target.change_surface}</dd></div><div><dt>Planned change</dt><dd>{target.planned_change}</dd></div><div><dt>Hypothesis evidence refs</dt><dd>{target.hypothesis_evidence_refs.join('；') || '未声明'}</dd></div><div><dt>Guardrails</dt><dd>{target.guardrails.join('；') || '未声明'}</dd></div></dl><p className="s04-confirmation-meta">假设确认：{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p></>
+                <><p>{target.hypothesis_statement}</p><dl className="s04-contract-readout"><div><dt>假设证据引用</dt><dd>{target.hypothesis_evidence_refs.join('；') || '未声明'}</dd></div></dl><h3 className="s04-subsection-heading">计划变更</h3><dl className="s04-contract-readout s04-contract-readout--columns"><div><dt>变更范围</dt><dd>{target.change_surface}</dd></div><div><dt>计划变更</dt><dd>{target.planned_change}</dd></div><div><dt>保护规则</dt><dd>{target.guardrails.join('；') || '未声明'}</dd></div></dl><p className="s04-confirmation-meta">确认人：{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p></>
               ) : (
-                <><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="Hypothesis statement" value={form.hypothesisStatement} onChange={(value) => onFormChange('hypothesisStatement', value)} disabled={busy} multiline /><EditableField label="Hypothesis evidence refs（每行一项）" value={form.hypothesisEvidenceRefs} onChange={(value) => onFormChange('hypothesisEvidenceRefs', value)} disabled={busy} multiline /><EditableField label="Change surface" value={form.changeSurface} onChange={(value) => onFormChange('changeSurface', value)} disabled={busy} /><EditableField label="Planned change" value={form.plannedChange} onChange={(value) => onFormChange('plannedChange', value)} disabled={busy} multiline /><EditableField label="Guardrails（每行一项）" value={form.guardrails} onChange={(value) => onFormChange('guardrails', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" onClick={onConfirmHypothesis} disabled={!target || dirty || !targetConfirmed || hypothesisConfirmed || !actor.trim() || busy}>{hypothesisConfirmed ? '优化假设已确认' : '确认优化假设'}</button>{hypothesisConfirmed && target ? <p className="s04-confirmation-meta">{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p> : null}</>
+                <><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="假设说明" value={form.hypothesisStatement} onChange={(value) => onFormChange('hypothesisStatement', value)} disabled={busy} multiline /><EditableField label="假设证据引用（每行一项）" value={form.hypothesisEvidenceRefs} onChange={(value) => onFormChange('hypothesisEvidenceRefs', value)} disabled={busy} multiline /></div><h3 className="s04-subsection-heading">计划变更</h3><div className="s04-form-grid s04-form-grid--two-columns"><EditableField label="变更范围" value={form.changeSurface} onChange={(value) => onFormChange('changeSurface', value)} disabled={busy} /><EditableField label="计划变更" value={form.plannedChange} onChange={(value) => onFormChange('plannedChange', value)} disabled={busy} multiline /><EditableField label="保护规则（每行一项）" value={form.guardrails} onChange={(value) => onFormChange('guardrails', value)} disabled={busy} multiline /></div><button className="s04-outline-action" type="button" onClick={onConfirmHypothesis} disabled={!target || dirty || !targetConfirmed || hypothesisConfirmed || !actor.trim() || busy}>{hypothesisConfirmed ? '优化假设已确认' : '确认优化假设'}</button>{hypothesisConfirmed && target ? <p className="s04-confirmation-meta">确认人：{target.hypothesis_confirmed_by} · {formatDate(target.hypothesis_confirmed_at)}</p> : null}</>
               )}
-            </section>
-
-            <section className={frozen ? 's04-changes s04-changes--frozen' : 's04-changes'} aria-labelledby="s04-changes-title">
-              <h2 id="s04-changes-title"><MdHistory aria-hidden="true" />计划内容</h2>
-              <div className={frozen ? 's04-table-frame s04-table-frame--frozen' : 's04-table-frame'}><table><thead><tr><th>范围</th><th>状态</th><th>真实内容</th></tr></thead><tbody>{changeRecords.map((record) => <tr key={record.scope}><td>{record.scope}</td><td>{record.status}</td><td>{record.detail}</td></tr>)}</tbody></table></div>
             </section>
 
             {frozen ? (
               <section className="s04-frozen-validation" aria-label="已冻结验证计划">
                 <div className="s04-frozen-plan">
-                  <header className="s04-frozen-plan__header"><div><h2><MdLockOutline aria-hidden="true" />验证计划</h2><span>原始冻结计划：只读</span></div><div><p><strong>VALIDATION-PLAN-V{target.version}</strong><span title={target.plan_hash ?? undefined}>计划哈希：{target.plan_hash}</span></p></div></header>
-                  <p className="s04-frozen-plan__notice">Frozen Target 不可覆盖；本轮不提供创建新版本能力。</p>
+                  <header className="s04-frozen-plan__header"><div><h2><MdLockOutline aria-hidden="true" />验证计划</h2><span>已冻结 · 只读</span></div><div><p><strong>验证计划 V{target.version}</strong><span title={target.plan_hash ?? undefined}>计划已锁定</span></p></div></header>
+                  <p className="s04-frozen-plan__notice">冻结后计划不可修改。</p>
                   <div className="s04-frozen-plan__body">
-                    <div className="s04-frozen-count"><span>目标案例</span><strong>{target.target_case_ids.length} 个案例</strong></div><div className="s04-frozen-count"><span>回归案例</span><strong>{target.regression_case_ids.length} 个案例</strong></div><div className="s04-frozen-count"><span>Challenge 案例</span><strong>{target.challenge_case_ids.length} 个案例</strong></div>
-                    <div className="s04-frozen-capabilities"><div><span>受保护能力</span></div><p>{target.protected_capabilities.length > 0 ? target.protected_capabilities.map((capability) => <span key={capability}>{capability}</span>) : <span>未声明</span>}</p></div>
-                    <div className="s04-frozen-config"><span>技术配置</span><ul><li>Judge Contract：{readSnapshotValue(target.evaluation_config_snapshot, 'judge_contract_version')}</li><li>Judge Model：{readSnapshotValue(target.evaluation_config_snapshot, 'judge_model')}</li><li>策略：{target.policy_version}</li><li>基线快照 Problem：<code>{target.baseline_snapshot.problem_id}</code></li></ul></div>
+                    <div className="s04-frozen-count"><span>目标案例</span><strong>{target.target_case_ids.length} 个案例</strong></div><div className="s04-frozen-count"><span>回归案例</span><strong>{target.regression_case_ids.length} 个案例</strong></div><div className="s04-frozen-count"><span>挑战案例</span><strong>{target.challenge_case_ids.length} 个案例</strong></div>
+                    <div className="s04-frozen-capabilities"><div><span>需保护的现有能力（可选）</span></div><p>{target.protected_capabilities.length > 0 ? target.protected_capabilities.map((capability) => <span key={capability}>{capability}</span>) : <span>未声明</span>}</p></div>
+                    <div className="s04-frozen-config"><span>技术详情</span><ul><li>评审规则版本：{readSnapshotValue(target.evaluation_config_snapshot, 'judge_contract_version')}</li><li>评审模型：{readSnapshotValue(target.evaluation_config_snapshot, 'judge_model')}</li><li>验证规则：{target.policy_version}</li><li>失败模式：{failureModeLabels[target.failure_mode]}</li><li>基线快照问题：<code>{target.baseline_snapshot.problem_id}</code></li><li>计划标识：<code>{target.plan_hash}</code></li></ul></div>
                   </div>
-                  <footer className="s04-frozen-plan__footer"><span>冻结人：{target.frozen_by}</span><span>{formatDate(target.frozen_at)}</span></footer>
+                  <footer className="s04-frozen-plan__footer"><span>确认人：{target.frozen_by}</span><span>{formatDate(target.frozen_at)}</span></footer>
                 </div>
-                <aside className="s04-frozen-integrity"><div><h3><MdRule aria-hidden="true" />实验完整性规则</h3><p>Baseline 与 Candidate 必须使用相同的生成机制和运行环境，仅允许声明的计划变更不同。</p><div className="s04-frozen-warning"><MdWarningAmber aria-hidden="true" /><p>本页只恢复真实 Frozen Target；Candidate 暴露与实际变更状态不在 S04 伪造。</p></div></div><footer><span>计划状态</span><strong><MdCheckCircle aria-hidden="true" />{target.status} · hash 已持久化</strong></footer></aside>
+                <aside className="s04-frozen-integrity"><div><h3><MdRule aria-hidden="true" />冻结确认</h3><p>基线与候选版本必须使用相同的生成机制和运行环境，仅允许声明的计划变更不同。</p><div className="s04-frozen-warning"><MdWarningAmber aria-hidden="true" /><p>候选版本的实际变更将在下一步验证。</p></div></div><footer><span>计划状态</span><strong title={target.plan_hash ?? undefined}><MdCheckCircle aria-hidden="true" />计划已锁定</strong></footer></aside>
               </section>
             ) : (
               <section className="s04-validation" aria-label="验证计划草稿">
-                <div className="s04-validation-plan"><h2><MdRule aria-hidden="true" />验证计划草稿</h2><dl className="s04-plan-grid"><div><dt>目标案例</dt><dd>{target ? `${target.target_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>回归案例</dt><dd>{target ? `${target.regression_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>Challenge 案例</dt><dd>{target ? `${target.challenge_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>Baseline Frequency</dt><dd>{target ? `${target.baseline_metric.affected_core_cases}/${target.baseline_metric.core_denominator}` : '创建后快照'}</dd></div><div className="s04-plan-grid__wide"><EditableField label="受保护能力（每行一项）" value={form.protectedCapabilities} onChange={(value) => onFormChange('protectedCapabilities', value)} disabled={busy} multiline /></div><div><EditableField label="Policy version" value={form.policyVersion} onChange={(value) => onFormChange('policyVersion', value)} disabled={busy} placeholder="冻结前必填" /></div><div><dt>Failure Mode</dt><dd>{target?.failure_mode ?? '创建后由系统派生'}</dd></div><div className="s04-plan-grid__wide"><dt>基线快照</dt><dd className="s04-mono-value">{target?.baseline_snapshot.problem_id ?? '创建后由系统派生'}</dd></div><div className="s04-plan-grid__wide"><dt>计划哈希</dt><dd className="s04-plan-pending">冻结成功后由 Backend 生成</dd></div></dl></div>
-                <div className="s04-integrity"><h3>实验完整性规则</h3><ul><li className={targetConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{targetConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}人工确认 Target：{targetConfirmed ? '已完成' : '未完成'}</li><li className={hypothesisConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{hypothesisConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化假设：{hypothesisConfirmed ? '已完成' : '未完成'}</li><li className={!dirty && target ? 's04-integrity__complete' : 's04-integrity__warning'}>{!dirty && target ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}保存验证计划：{!dirty && target ? '已完成' : '待完成'}</li><li><MdRadioButtonUnchecked aria-hidden="true" />冻结验证计划：未完成</li></ul><p className="s04-lock-note"><MdLockOutline aria-hidden="true" />只有 Backend Freeze Gate 成功后，本页才进入只读 Frozen 状态。</p><p className="s04-warning-note"><MdWarningAmber aria-hidden="true" />修改已确认内容会按 Backend 规则清除相应确认，必须重新确认后再冻结。</p></div>
+                <div className="s04-validation-plan"><h2><MdRule aria-hidden="true" />验证计划</h2><dl className="s04-plan-grid"><div><dt>目标案例</dt><dd>{target ? `${target.target_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>回归案例</dt><dd>{target ? `${target.regression_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>挑战案例</dt><dd>{target ? `${target.challenge_case_ids.length} 个` : '创建后由系统派生'}</dd></div><div><dt>基线频次</dt><dd>{target ? `${target.baseline_metric.affected_core_cases}/${target.baseline_metric.core_denominator}` : '创建后生成'}</dd></div><div className="s04-plan-grid__wide"><EditableField label="需保护的现有能力（可选）" value={form.protectedCapabilities} onChange={(value) => onFormChange('protectedCapabilities', value)} disabled={busy} multiline /></div><div><dt>验证规则</dt><dd>{form.policyVersion || '未配置'}</dd></div><div><dt>失败模式</dt><dd>{target ? failureModeLabels[target.failure_mode] : '创建后生成'}</dd></div></dl></div>
+                <div className="s04-integrity"><h3>冻结确认</h3><ul><li className={targetConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{targetConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化目标：{targetConfirmed ? '已完成' : '未完成'}</li><li className={hypothesisConfirmed ? 's04-integrity__complete' : 's04-integrity__warning'}>{hypothesisConfirmed ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}确认优化假设：{hypothesisConfirmed ? '已完成' : '未完成'}</li><li className={!dirty && target ? 's04-integrity__complete' : 's04-integrity__warning'}>{!dirty && target ? <MdCheckCircle aria-hidden="true" /> : <MdRadioButtonUnchecked aria-hidden="true" />}保存验证计划：{!dirty && target ? '已完成' : '待完成'}</li><li><MdRadioButtonUnchecked aria-hidden="true" />冻结验证计划：未完成</li></ul><p className="s04-lock-note"><MdLockOutline aria-hidden="true" />完成必要确认并保存后，方可冻结验证计划。</p><p className="s04-warning-note"><MdWarningAmber aria-hidden="true" />修改已确认内容后，需要重新确认再冻结。</p></div>
               </section>
             )}
           </div>
@@ -326,14 +339,14 @@ function TargetPlanWorkspace({
       </div>
 
       {frozen ? (
-        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span>真实 plan hash、冻结人和冻结时间已从 Backend 恢复。</span></div><button type="button" onClick={onEnterValidation}>进入候选版本验证</button></footer>
+        <footer className="s04-action-rail s04-action-rail--frozen"><div><strong>验证计划：已冻结</strong><span>计划已锁定，冻结信息已保存。</span></div><button type="button" onClick={onEnterValidation}>进入候选版本验证</button></footer>
       ) : (
-        <footer className="s04-action-rail"><p>{actionError ?? (dirty ? '存在尚未保存的草稿修改。' : '所有状态均来自 Backend。')}</p><div><button className={requiredTargetFieldsComplete && dirty ? 's04-freeze-action--ready' : undefined} type="button" onClick={onSave} disabled={!requiredTargetFieldsComplete || !dirty || busy}>{pendingAction === 'save' ? '保存中…' : target ? '保存草稿' : '创建 Target 草稿'}</button><button className={freezeReady && actor.trim() ? 's04-freeze-action--ready' : undefined} type="button" onClick={onFreeze} disabled={!freezeReady || !actor.trim() || busy}>{pendingAction === 'freeze' ? '冻结中…' : '冻结验证计划'}</button><button type="button" disabled>进入候选版本验证</button></div></footer>
+        <footer className="s04-action-rail"><p>{actionError ?? (dirty ? '存在尚未保存的草稿修改。' : '按顺序完成保存与确认后即可冻结。')}</p><div><button className={requiredTargetFieldsComplete && dirty ? 's04-freeze-action--ready' : undefined} type="button" onClick={onSave} disabled={!requiredTargetFieldsComplete || !dirty || busy}>{pendingAction === 'save' ? '保存中…' : target ? '保存草稿' : '创建优化目标草稿'}</button><button className={freezeReady && actor.trim() ? 's04-freeze-action--ready' : undefined} type="button" onClick={onFreeze} disabled={!freezeReady || !actor.trim() || busy}>{pendingAction === 'freeze' ? '冻结中…' : '冻结验证计划'}</button><button type="button" disabled>进入候选版本验证</button></div></footer>
       )}
 
       <div className={frozen ? 's04-analyst-dock s04-analyst-dock--frozen' : 's04-analyst-dock'}>
         <span className="s04-actor-icon"><MdPersonOutline aria-hidden="true" /></span>
-        <div>{frozen ? <><strong>{target.frozen_by}</strong><span>Frozen actor</span></> : <label className="s04-actor-field"><span>操作人</span><input value={actor} onChange={(event) => onActorChange(event.target.value)} placeholder="输入真实 actor" disabled={busy} /></label>}</div>
+        <div>{frozen ? <><strong>{target.frozen_by}</strong><span>确认人</span></> : <label className="s04-actor-field"><span>操作人</span><input value={actor} onChange={(event) => onActorChange(event.target.value)} placeholder="请输入姓名" disabled={busy} /></label>}</div>
       </div>
     </section>
   )
@@ -402,7 +415,7 @@ function TargetPlanPage() {
           requestKey,
           state: {
             kind: 'error',
-            message: error instanceof Error ? error.message : '无法加载 Target 与 Plan。',
+            message: error instanceof Error ? error.message : '无法加载目标与计划。',
           },
         })
       }
@@ -448,17 +461,16 @@ function TargetPlanPage() {
       updateLoadedTarget(await action())
     } catch (error) {
       const message = error instanceof Error ? error.message : '操作失败。'
-      const code = error instanceof ApiRequestError ? ` (${error.code})` : ''
-      setActionError(`${message}${code}`)
+      setActionError(message)
     } finally {
       setPendingAction(null)
     }
   }
 
-  if (pageState.kind === 'missing_parameters') return <PageMessage title="缺少 Target 上下文" detail="请从 S03 使用 run_id 与 problem_id 进入目标与计划。" />
-  if (pageState.kind === 'loading') return <PageMessage title="正在加载目标与计划" detail="正在读取真实 Problem 与 OptimizationTarget…" />
-  if (pageState.kind === 'run_not_found') return <PageMessage title="Evaluation Run 不存在" detail={`未找到 run_id=${runId}。`} />
-  if (pageState.kind === 'problem_not_found') return <PageMessage title="Problem 不存在" detail="该 Problem 不属于当前 Evaluation Run。" />
+  if (pageState.kind === 'missing_parameters') return <PageMessage title="缺少目标上下文" detail="请从基线分析进入目标与计划。" />
+  if (pageState.kind === 'loading') return <PageMessage title="正在加载目标与计划" detail="正在读取问题与优化目标…" />
+  if (pageState.kind === 'run_not_found') return <PageMessage title="基线运行不存在" detail={`未找到运行 ${runId}。`} />
+  if (pageState.kind === 'problem_not_found') return <PageMessage title="问题不存在" detail="该问题不属于当前基线运行。" />
   if (pageState.kind === 'error') return <PageMessage title="目标与计划加载失败" detail={pageState.message} />
 
   const { data } = pageState
