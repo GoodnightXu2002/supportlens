@@ -548,6 +548,15 @@ export async function getProblems(
   )
 }
 
+export async function generateProblems(runId: string): Promise<Problem[]> {
+  return requestJson<Problem[]>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/problems`,
+      { method: 'POST' },
+    ),
+  )
+}
+
 export async function getOptimizationTarget(
   targetId: string,
   signal?: AbortSignal,

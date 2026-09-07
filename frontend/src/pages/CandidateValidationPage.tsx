@@ -23,6 +23,7 @@ import {
   getCandidateValidationSummary,
   getDatasetConversations,
   getDatasetDetail,
+  getDatasetEvaluationRuns,
   getEvaluationRun,
   getFinalEffectiveResults,
   getOptimizationTarget,
@@ -63,6 +64,7 @@ type PageState =
   | { kind: 'target_not_frozen'; target: OptimizationTarget }
   | { kind: 'error'; message: string }
   | { kind: 'no_candidate'; data: BaseData }
+  | { kind: 'candidate_status'; candidateRun: EvaluationRun }
   | { kind: 'ready'; data: CandidateData }
 
 type ComparisonNodeProps = {
@@ -330,6 +332,7 @@ function CandidateValidationPage() {
   const [submissionError, setSubmissionError] = useState<string | null>(null)
   const [decisionBusy, setDecisionBusy] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!targetId) return
@@ -345,6 +348,12 @@ function CandidateValidationPage() {
         const [dataset, conversations] = await Promise.all([getDatasetDetail(baselineRun.dataset_id, controller.signal), getDatasetConversations(baselineRun.dataset_id, controller.signal)])
         const base = { target, baselineRun, dataset, conversations }
         if (!candidateRunId) {
+          const runs = await getDatasetEvaluationRuns(baselineRun.dataset_id, controller.signal)
+          const candidate = runs.find((run) => run.run_type === 'candidate' && run.target_id === target.id)
+          if (candidate) {
+            setSearchParams({ target_id: targetId, candidate_run_id: candidate.id }, { replace: true })
+            return
+          }
           setLoadResult({ requestKey, state: { kind: 'no_candidate', data: base } })
           return
         }
@@ -353,7 +362,13 @@ function CandidateValidationPage() {
           setLoadResult({ requestKey, state: { kind: 'candidate_not_found' } })
           return
         }
-        const [baselineResults, candidateResults, comparisons, summary] = await Promise.all([getFinalEffectiveResults(baselineRun.id, controller.signal), getFinalEffectiveResults(candidateRun.id, controller.signal), getCandidateComparisons(candidateRun.id, controller.signal), getCandidateValidationSummary(candidateRun.id, controller.signal)])
+        if (candidateRun.status !== 'completed') {
+          setLoadResult({ requestKey, state: { kind: 'candidate_status', candidateRun } })
+          return
+        }
+        const [baselineResults, candidateResults, existingComparisons] = await Promise.all([getFinalEffectiveResults(baselineRun.id, controller.signal), getFinalEffectiveResults(candidateRun.id, controller.signal), getCandidateComparisons(candidateRun.id, controller.signal)])
+        const comparisons = existingComparisons.length ? existingComparisons : await createCandidateComparisons(candidateRun.id)
+        const summary = await getCandidateValidationSummary(candidateRun.id, controller.signal)
         setLoadResult({ requestKey, state: { kind: 'ready', data: { ...base, candidateRun, baselineResults, candidateResults, comparisons, summary } } })
       } catch (error) {
         if (controller.signal.aborted) return
@@ -370,9 +385,17 @@ function CandidateValidationPage() {
     }
     void load()
     return () => controller.abort()
-  }, [candidateRunId, requestKey, targetId])
+  }, [candidateRunId, reloadKey, requestKey, setSearchParams, targetId])
 
   const pageState: PageState = !targetId ? { kind: 'missing_target' } : loadResult.requestKey === requestKey ? loadResult.state : { kind: 'loading' }
+  const pollingCandidateId = pageState.kind === 'candidate_status' ? pageState.candidateRun.id : ''
+  const pollingCandidateStatus = pageState.kind === 'candidate_status' ? pageState.candidateRun.status : ''
+
+  useEffect(() => {
+    if (!pollingCandidateId || !['pending', 'running'].includes(pollingCandidateStatus)) return
+    const timer = window.setTimeout(() => setReloadKey((current) => current + 1), 1500)
+    return () => window.clearTimeout(timer)
+  }, [pollingCandidateId, pollingCandidateStatus])
 
   async function submitCandidate(label: string, summary: string, responses: CandidateResponseInput[]) {
     if (pageState.kind !== 'no_candidate' || !pageState.data.target.plan_hash) return
@@ -382,10 +405,11 @@ function CandidateValidationPage() {
     try {
       const candidate = await createCandidateRun({ baseline_run_id: pageState.data.baselineRun.id, target_id: pageState.data.target.id, plan_hash: pageState.data.target.plan_hash, candidate_label: label.trim(), candidate_change_summary: summary.trim(), source: 's05_manual_submission', actual_change_summary: summary.trim(), actual_change_status: 'verified', generation_parity_status: 'verified', candidate_first_exposure_at: new Date().toISOString(), responses })
       createdId = candidate.id
+      setSearchParams({ target_id: targetId, candidate_run_id: candidate.id }, { replace: true })
       const executed = await executeCandidateRun(candidate.id)
       if (executed.status !== 'completed') throw new Error(`Candidate Run 结束于 ${executed.status}，尚不能生成 Comparison。`)
       await createCandidateComparisons(candidate.id)
-      setSearchParams({ target_id: targetId, candidate_run_id: candidate.id })
+      setReloadKey((current) => current + 1)
     } catch (error) {
       setSubmissionError(`${error instanceof Error ? error.message : 'Candidate Validation 执行失败。'}${createdId ? ` Candidate Run: ${createdId}` : ''}`)
     } finally {
@@ -414,6 +438,7 @@ function CandidateValidationPage() {
   if (pageState.kind === 'candidate_not_found') return <PageMessage title="Candidate Run 不存在" detail="candidate_run_id 不存在或不属于当前 Frozen Target。" />
   if (pageState.kind === 'target_not_frozen') return <PageMessage title="Target 尚未冻结" detail={`当前状态为 ${pageState.target.status}，必须先在 S04 Freeze。`} />
   if (pageState.kind === 'error') return <PageMessage title="Candidate Validation 加载失败" detail={pageState.message} />
+  if (pageState.kind === 'candidate_status') return <PageMessage title={`Candidate Run ${pageState.candidateRun.status}`} detail={`Run ${pageState.candidateRun.id} 已从 Backend 恢复。`} />
   if (pageState.kind === 'no_candidate') return <CandidateSubmission data={pageState.data} busy={submissionBusy} error={submissionError} onSubmit={(label, summary, responses) => { void submitCandidate(label, summary, responses) }} />
   return <CandidateWorkspace data={pageState.data} selectedCaseId={selectedCaseId} onSelectCase={setSelectedCaseId} decisionBusy={decisionBusy} decisionError={decisionError} onDecision={(decision, actor, reason, overrideReason) => { void submitDecision(decision, actor, reason, overrideReason) }} />
 }

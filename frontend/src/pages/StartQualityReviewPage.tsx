@@ -13,6 +13,7 @@ import {
   ApiRequestError,
   createBaselineRun,
   executeBaselineRun,
+  generateProblems,
   getDatasetDetail,
   getDatasets,
   getEvaluationRun,
@@ -54,6 +55,11 @@ function formatScenarioDistribution(distribution: Record<string, number>) {
   return entries.length
     ? entries.map(([scenario, count]) => `${scenario} ${count}`).join(' / ')
     : '未提供场景分类'
+}
+
+async function prepareBaselineAnalysis(run: EvaluationRun) {
+  if (!run.problem_aggregation_completed_at) await generateProblems(run.id)
+  return `/baseline?run_id=${encodeURIComponent(run.id)}`
 }
 
 function StartQualityReviewPage() {
@@ -116,9 +122,13 @@ function StartQualityReviewPage() {
         setSelectedDatasetId(storedRun.dataset_id)
         setMessage(null)
         if (storedRun.status === 'completed') {
-          navigate(`/baseline?run_id=${encodeURIComponent(storedRun.id)}`, {
-            replace: true,
-          })
+          void prepareBaselineAnalysis(storedRun)
+            .then((path) => {
+              if (!controller.signal.aborted) navigate(path, { replace: true })
+            })
+            .catch((error: unknown) => {
+              if (!controller.signal.aborted) setMessage(errorMessage(error))
+            })
         }
       })
       .catch((error: unknown) => {
@@ -128,16 +138,18 @@ function StartQualityReviewPage() {
   }, [navigate, runId])
 
   useEffect(() => {
-    if (!runId || run?.id !== runId || run.status !== 'running') return
+    if (!runId || run?.id !== runId || run.status !== 'running' || working) return
     const controller = new AbortController()
     const timer = window.setInterval(() => {
       void getEvaluationRun(runId, controller.signal)
         .then((storedRun) => {
           setRun(storedRun)
           if (storedRun.status === 'completed') {
-            navigate(`/baseline?run_id=${encodeURIComponent(storedRun.id)}`, {
-              replace: true,
-            })
+            void prepareBaselineAnalysis(storedRun)
+              .then((path) => navigate(path, { replace: true }))
+              .catch((error: unknown) => {
+                if (!controller.signal.aborted) setMessage(errorMessage(error))
+              })
           }
         })
         .catch((error: unknown) => {
@@ -148,7 +160,7 @@ function StartQualityReviewPage() {
       controller.abort()
       window.clearInterval(timer)
     }
-  }, [navigate, run?.id, run?.status, runId])
+  }, [navigate, run?.id, run?.status, runId, working])
 
   const pageStatus: PageStatus = (
     loading
@@ -198,7 +210,7 @@ function StartQualityReviewPage() {
       const completedRun = await executeBaselineRun(startableRun.id)
       setRun(completedRun)
       if (completedRun.status === 'completed') {
-        navigate(`/baseline?run_id=${encodeURIComponent(completedRun.id)}`)
+        navigate(await prepareBaselineAnalysis(completedRun))
       }
     } catch (error) {
       setMessage(errorMessage(error))
@@ -207,7 +219,7 @@ function StartQualityReviewPage() {
           const storedRun = await getEvaluationRun(startableRun.id)
           setRun(storedRun)
           if (storedRun.status === 'completed') {
-            navigate(`/baseline?run_id=${encodeURIComponent(storedRun.id)}`)
+            navigate(await prepareBaselineAnalysis(storedRun))
           }
         } catch {
           // Keep the actionable request error when the authoritative read also fails.
