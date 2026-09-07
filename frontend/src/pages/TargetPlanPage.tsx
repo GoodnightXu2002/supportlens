@@ -463,7 +463,11 @@ function TargetPlanPage() {
       onFreeze={() => { if (target) void runAction('freeze', () => freezeOptimizationTarget(target.id, actor.trim())) }}
       onEnterValidation={() => {
         if (!target) return
-        const params = new URLSearchParams({ target_id: target.id })
+        const params = new URLSearchParams({
+          target_id: target.id,
+          run_id: data.run.id,
+          problem_id: data.problem.problem_id,
+        })
         if (data.candidateRunId) params.set('candidate_run_id', data.candidateRunId)
         navigate(`/validation?${params.toString()}`)
       }}

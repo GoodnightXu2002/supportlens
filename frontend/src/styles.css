@@ -329,6 +329,12 @@ textarea {
   border-bottom-color: var(--color-primary);
 }
 
+.workflow-link--locked,
+.workflow-link--locked:hover {
+  color: var(--color-text-secondary);
+  opacity: 0.5;
+}
+
 .workflow-separator {
   color: var(--color-text-secondary);
   font-size: 20px;

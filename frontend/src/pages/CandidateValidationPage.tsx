@@ -325,6 +325,8 @@ function CandidateValidationPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const targetId = searchParams.get('target_id')?.trim() ?? ''
   const candidateRunId = searchParams.get('candidate_run_id')?.trim() ?? ''
+  const workflowRunId = searchParams.get('run_id')?.trim() ?? ''
+  const workflowProblemId = searchParams.get('problem_id')?.trim() ?? ''
   const requestKey = `${targetId}:${candidateRunId}`
   const [loadResult, setLoadResult] = useState<{ requestKey: string; state: PageState }>(() => ({ requestKey, state: targetId ? { kind: 'loading' } : { kind: 'missing_target' } }))
   const [selectedCaseId, setSelectedCaseId] = useState('')
@@ -340,6 +342,15 @@ function CandidateValidationPage() {
     async function load() {
       try {
         const target = await getOptimizationTarget(targetId, controller.signal)
+        if (workflowRunId !== target.baseline_run_id || workflowProblemId !== target.problem_id) {
+          const params = new URLSearchParams({
+            target_id: target.id,
+            run_id: target.baseline_run_id,
+            problem_id: target.problem_id,
+          })
+          if (candidateRunId) params.set('candidate_run_id', candidateRunId)
+          setSearchParams(params, { replace: true })
+        }
         if (target.status !== 'frozen') {
           setLoadResult({ requestKey, state: { kind: 'target_not_frozen', target } })
           return
@@ -351,7 +362,12 @@ function CandidateValidationPage() {
           const runs = await getDatasetEvaluationRuns(baselineRun.dataset_id, controller.signal)
           const candidate = runs.find((run) => run.run_type === 'candidate' && run.target_id === target.id)
           if (candidate) {
-            setSearchParams({ target_id: targetId, candidate_run_id: candidate.id }, { replace: true })
+            setSearchParams({
+              target_id: targetId,
+              candidate_run_id: candidate.id,
+              run_id: target.baseline_run_id,
+              problem_id: target.problem_id,
+            }, { replace: true })
             return
           }
           setLoadResult({ requestKey, state: { kind: 'no_candidate', data: base } })
@@ -385,7 +401,7 @@ function CandidateValidationPage() {
     }
     void load()
     return () => controller.abort()
-  }, [candidateRunId, reloadKey, requestKey, setSearchParams, targetId])
+  }, [candidateRunId, reloadKey, requestKey, setSearchParams, targetId, workflowProblemId, workflowRunId])
 
   const pageState: PageState = !targetId ? { kind: 'missing_target' } : loadResult.requestKey === requestKey ? loadResult.state : { kind: 'loading' }
   const pollingCandidateId = pageState.kind === 'candidate_status' ? pageState.candidateRun.id : ''
@@ -405,7 +421,12 @@ function CandidateValidationPage() {
     try {
       const candidate = await createCandidateRun({ baseline_run_id: pageState.data.baselineRun.id, target_id: pageState.data.target.id, plan_hash: pageState.data.target.plan_hash, candidate_label: label.trim(), candidate_change_summary: summary.trim(), source: 's05_manual_submission', actual_change_summary: summary.trim(), actual_change_status: 'verified', generation_parity_status: 'verified', candidate_first_exposure_at: new Date().toISOString(), responses })
       createdId = candidate.id
-      setSearchParams({ target_id: targetId, candidate_run_id: candidate.id }, { replace: true })
+      setSearchParams({
+        target_id: targetId,
+        candidate_run_id: candidate.id,
+        run_id: pageState.data.target.baseline_run_id,
+        problem_id: pageState.data.target.problem_id,
+      }, { replace: true })
       const executed = await executeCandidateRun(candidate.id)
       if (executed.status !== 'completed') throw new Error(`Candidate Run 结束于 ${executed.status}，尚不能生成 Comparison。`)
       await createCandidateComparisons(candidate.id)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MdAddCircleOutline, MdHistory, MdMenuBook } from 'react-icons/md'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { API_BASE_URL } from '../api'
 
@@ -12,9 +12,9 @@ const qualityReviewPaths = new Set([
 ])
 
 const workflowNavigationItems = [
-  { label: '基线分析', to: '/baseline' },
-  { label: '目标与计划', to: '/target-plan' },
-  { label: '候选版本验证', to: '/validation' },
+  { label: '基线分析', path: '/baseline' },
+  { label: '目标与计划', path: '/target-plan' },
+  { label: '候选版本验证', path: '/validation' },
 ]
 
 function AppShell() {
@@ -22,6 +22,17 @@ function AppShell() {
   const isReviewRoute = location.pathname === '/review'
   const isQualityReviewRoute = qualityReviewPaths.has(location.pathname)
   const isDatasetRoute = location.pathname === '/dataset'
+  const workflowStepIndex = workflowNavigationItems.findIndex((item) => item.path === location.pathname)
+  const workflowParams = new URLSearchParams(location.search)
+  const workflowRunId = workflowParams.get('run_id')?.trim() ?? ''
+  const workflowProblemId = workflowParams.get('problem_id')?.trim() ?? ''
+  const workflowReturnRoutes = [
+    workflowRunId ? `/baseline?run_id=${encodeURIComponent(workflowRunId)}` : null,
+    workflowRunId && workflowProblemId
+      ? `/target-plan?run_id=${encodeURIComponent(workflowRunId)}&problem_id=${encodeURIComponent(workflowProblemId)}`
+      : null,
+    null,
+  ]
   const [datasetImportOpen, setDatasetImportOpen] = useState(false)
   const datasetImportButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -155,25 +166,28 @@ function AppShell() {
                 className="workflow-navigation"
                 aria-label="Evidence workflow stages"
               >
-                {workflowNavigationItems.map((item, index) => (
-                  <div className="workflow-step" key={item.to}>
-                    <NavLink
-                      className={({ isActive }) =>
-                        isActive
-                          ? 'workflow-link workflow-link--active'
-                          : 'workflow-link'
-                      }
-                      to={item.to}
-                    >
-                      {item.label}
-                    </NavLink>
-                    {index < workflowNavigationItems.length - 1 ? (
-                      <span className="workflow-separator" aria-hidden="true">
-                        ›
-                      </span>
-                    ) : null}
-                  </div>
-                ))}
+                {workflowNavigationItems.map((item, index) => {
+                  const current = index === workflowStepIndex
+                  const returnTo = index < workflowStepIndex ? workflowReturnRoutes[index] : null
+                  return (
+                    <div className="workflow-step" key={item.path}>
+                      {returnTo ? (
+                        <Link className="workflow-link" to={returnTo}>{item.label}</Link>
+                      ) : (
+                        <span
+                          aria-current={current ? 'step' : undefined}
+                          aria-disabled={current ? undefined : true}
+                          className={current ? 'workflow-link workflow-link--active' : 'workflow-link workflow-link--locked'}
+                        >
+                          {item.label}
+                        </span>
+                      )}
+                      {index < workflowNavigationItems.length - 1 ? (
+                        <span className="workflow-separator" aria-hidden="true">›</span>
+                      ) : null}
+                    </div>
+                  )
+                })}
               </nav>
             </>
           )}

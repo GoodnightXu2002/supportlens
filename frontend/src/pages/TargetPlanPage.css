@@ -30,13 +30,6 @@
   pointer-events: none;
 }
 
-body:has(.s04-page--pre-freeze) .workflow-step:last-child .workflow-link {
-  padding-left: 20px;
-  color: var(--color-text-secondary);
-  pointer-events: none;
-  opacity: 0.5;
-}
-
 .s04-candidate-lock {
   position: fixed;
   top: 24px;
