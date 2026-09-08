@@ -483,13 +483,33 @@
   border-radius: 999px;
 }
 
-.s03-case-summary {
+.s03-case-detail,
+.s03-case-summary,
+.s03-case-problems,
+.s03-case-problems > span {
+  display: block;
+  min-width: 0;
+}
+
+.s03-case-summary,
+.s03-case-problems > span {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s03-case-summary {
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.s03-case-problems {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 10px;
+  line-height: 14px;
 }
 
 .s03-case-row--active .s03-case-summary {

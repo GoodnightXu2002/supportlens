@@ -1,6 +1,7 @@
 import type { EvaluationRun, FinalEffectiveResult, JudgeOutput, Problem } from './api'
 
 export type ProblemSelectionCase = {
+  resultId: string
   caseId: string
   caseSet: unknown
   judgment: JudgeOutput['judgment']
@@ -22,17 +23,21 @@ export function getProblemSelectionBlocker(cases: ProblemSelectionCase[]) {
     : '没有可纳入本轮优化的 Core Warning 或 Core Failure。'
 }
 
-export function countSelectedCoreCases(
+export function getSelectedCoreCases(
   selectedProblemIds: string[],
   casesByProblemId: Map<string, ProblemSelectionCase[]>,
 ) {
-  return new Set(
-    selectedProblemIds.flatMap((problemId) =>
-      (casesByProblemId.get(problemId) ?? [])
-        .filter((item) => item.caseSet === 'core')
-        .map((item) => item.caseId),
-    ),
-  ).size
+  const selectedCases = new Map<string, { resultId: string; problemIds: string[] }>()
+  selectedProblemIds.forEach((problemId) => {
+    (casesByProblemId.get(problemId) ?? [])
+      .filter((item) => item.caseSet === 'core')
+      .forEach((item) => {
+        const selectedCase = selectedCases.get(item.caseId)
+        if (selectedCase) selectedCase.problemIds.push(problemId)
+        else selectedCases.set(item.caseId, { resultId: item.resultId, problemIds: [problemId] })
+      })
+  })
+  return [...selectedCases].map(([caseId, details]) => ({ caseId, ...details }))
 }
 
 type TargetEntryGateInput = {

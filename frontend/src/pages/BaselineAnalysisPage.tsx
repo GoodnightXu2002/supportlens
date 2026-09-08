@@ -30,8 +30,8 @@ import {
   type Problem,
 } from '../api'
 import {
-  countSelectedCoreCases,
   getProblemSelectionBlocker,
+  getSelectedCoreCases,
   getTargetEntryBlocker,
   type ProblemSelectionCase,
 } from '../baselineTargetGate'
@@ -300,6 +300,7 @@ function BaselineAnalysisPage() {
         const result = finalResultById.get(resultId)
         const conversation = result ? conversationById.get(result.conversation_id) : undefined
         return result?.final_result ? [{
+          resultId: result.evaluation_result_id,
           caseId: result.case_id,
           caseSet: caseSet(conversation),
           judgment: result.final_result.judgment,
@@ -316,14 +317,16 @@ function BaselineAnalysisPage() {
   const selectedProblemIds = problemSelection.runId === runId
     ? problemSelection.selected_problem_ids
     : selectableProblemIds
-  const selectedCoreCaseCount = countSelectedCoreCases(
+  const selectedCoreCases = getSelectedCoreCases(
     selectedProblemIds,
     selectionCasesByProblemId,
   )
-  const affectedResults = selectedProblem?.affected_evaluation_result_ids
-    .map((resultId) => finalResultById.get(resultId))
+  const selectedCoreCaseByResultId = new Map(
+    selectedCoreCases.map((item) => [item.resultId, item]),
+  )
+  const affectedResults = selectedCoreCases
+    .map((item) => finalResultById.get(item.resultId))
     .filter((result): result is FinalEffectiveResult => result !== undefined)
-    ?? []
   const selectedResult = (
     affectedResults.find((result) => result.evaluation_result_id === selectedResultId)
     ?? affectedResults[0]
@@ -331,10 +334,12 @@ function BaselineAnalysisPage() {
   const selectedConversation = selectedResult
     ? conversationById.get(selectedResult.conversation_id)
     : undefined
-  const selectedEvidence = selectedProblem && selectedResult
-    ? selectedProblem.evidence.filter(
-        (item) => item.evaluation_result_id === selectedResult.evaluation_result_id,
-      )
+  const selectedEvidence = selectedResult
+    ? (selectedCoreCaseByResultId.get(selectedResult.evaluation_result_id)?.problemIds ?? [])
+      .flatMap((problemId) => problems.find((problem) => problem.problem_id === problemId)
+        ?.evidence.filter(
+          (item) => item.evaluation_result_id === selectedResult.evaluation_result_id,
+        ) ?? [])
     : []
 
   if (pageState.kind === 'missing_run_id') {
@@ -458,7 +463,7 @@ function BaselineAnalysisPage() {
             <div className="s03-problem-heading">
               <h2 id="s03-problems-title">问题聚类（{problems.length}）</h2>
               <p aria-live="polite">
-                已选择 {selectedProblemIds.length} 个问题 · 影响 {selectedCoreCaseCount} 个核心案例
+                已选择 {selectedProblemIds.length} 个问题 · 影响 {selectedCoreCases.length} 个核心案例
                 {selectedProblemIds.length === 0 ? <strong> · 至少选择 1 个</strong> : null}
               </p>
             </div>
@@ -485,10 +490,7 @@ function BaselineAnalysisPage() {
                     ? 's03-problem-card s03-problem-card--active'
                     : 's03-problem-card'}
                   key={problem.problem_id}
-                  onClick={() => {
-                    setActiveProblemId(problem.problem_id)
-                    setSelectedResultId(null)
-                  }}
+                  onClick={() => setActiveProblemId(problem.problem_id)}
                 >
                   <div className="s03-problem-card__topline">
                     <span
@@ -555,11 +557,11 @@ function BaselineAnalysisPage() {
 
         <section className="s03-pane s03-cases" aria-labelledby="s03-cases-title">
           <header className="s03-pane-header s03-cases-header">
-            <h2 id="s03-cases-title">受影响案例（{affectedResults.length}）</h2>
+            <h2 id="s03-cases-title">本轮核心案例（{affectedResults.length}）</h2>
           </header>
 
           <div className="s03-pane-scroll s03-case-list">
-            {selectedProblem ? (
+            {affectedResults.length > 0 ? (
               <>
                 <div className="s03-case-grid s03-case-table-head" aria-hidden="true">
                   <span>案例 ID</span><span>意图摘要</span><span>状态</span>
@@ -567,6 +569,12 @@ function BaselineAnalysisPage() {
                 <div className="s03-case-rows">
                   {affectedResults.map((result) => {
                     const conversation = conversationById.get(result.conversation_id)
+                    const relatedProblems = (
+                      selectedCoreCaseByResultId.get(result.evaluation_result_id)?.problemIds ?? []
+                    ).flatMap((problemId) => {
+                      const problem = problems.find((item) => item.problem_id === problemId)
+                      return problem ? [problem] : []
+                    })
                     const isActive = result.evaluation_result_id === selectedResult?.evaluation_result_id
                     return (
                       <article
@@ -580,7 +588,16 @@ function BaselineAnalysisPage() {
                           {isActive ? <span className="s03-case-id__rail" aria-hidden="true" /> : null}
                           {result.case_id}
                         </span>
-                        <span className="s03-case-summary" title={caseSummary(conversation)}>{caseSummary(conversation)}</span>
+                        <span className="s03-case-detail">
+                          <span className="s03-case-summary" title={caseSummary(conversation)}>{caseSummary(conversation)}</span>
+                          <span className="s03-case-problems">
+                            {relatedProblems.map((problem) => (
+                              <span key={problem.problem_id} title={problem.definition}>
+                                {problem.scenario} · P-{shortId(problem.problem_id)}
+                              </span>
+                            ))}
+                          </span>
+                        </span>
                         <span className="s03-case-status"><CaseStatus result={result} /></span>
                       </article>
                     )
@@ -588,7 +605,7 @@ function BaselineAnalysisPage() {
                 </div>
               </>
             ) : (
-              <p className="s03-empty-message">没有可下钻的受影响案例。</p>
+              <p className="s03-empty-message">选择至少一个可优化 Problem 后查看本轮核心案例。</p>
             )}
           </div>
         </section>
@@ -601,7 +618,7 @@ function BaselineAnalysisPage() {
 
           <div className="s03-pane-scroll s03-evidence-ledger">
             {!selectedResult || !selectedConversation ? (
-              <p className="s03-empty-message">选择一个 Problem 和 Case 后查看证据链。</p>
+              <p className="s03-empty-message">选择一个本轮核心案例后查看证据链。</p>
             ) : (
               <>
                 <div className="s03-evidence-line" aria-hidden="true" />

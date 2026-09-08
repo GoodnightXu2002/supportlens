@@ -3,7 +3,7 @@ import test from 'node:test'
 
 import type { FinalEffectiveResult, Problem } from '../src/api.ts'
 import {
-  countSelectedCoreCases,
+  getSelectedCoreCases,
   getProblemSelectionBlocker,
   getTargetEntryBlocker,
   type ProblemSelectionCase,
@@ -51,7 +51,13 @@ const selectionCase = (
   caseSet: 'core' | 'challenge',
   judgment: 'warning' | 'failure',
   primaryFailureMode: 'incorrect_information' | 'incomplete_unresolved' | null = null,
-): ProblemSelectionCase => ({ caseId, caseSet, judgment, primaryFailureMode })
+): ProblemSelectionCase => ({
+  resultId: `result-${caseId}`,
+  caseId,
+  caseSet,
+  judgment,
+  primaryFailureMode,
+})
 
 test('S03 multi-select accepts eligible core problems and deduplicates their core cases', () => {
   const warning = [selectionCase('CASE-001', 'core', 'warning')]
@@ -79,11 +85,22 @@ test('S03 multi-select accepts eligible core problems and deduplicates their cor
     ]) ?? '',
     /挑战案例/,
   )
-  assert.equal(
-    countSelectedCoreCases(
+  assert.deepEqual(
+    getSelectedCoreCases(
       ['warning', 'failure'],
       new Map([['warning', warning], ['failure', failure]]),
     ),
-    2,
+    [
+      {
+        caseId: 'CASE-001',
+        resultId: 'result-CASE-001',
+        problemIds: ['warning', 'failure'],
+      },
+      {
+        caseId: 'CASE-002',
+        resultId: 'result-CASE-002',
+        problemIds: ['failure'],
+      },
+    ],
   )
 })
