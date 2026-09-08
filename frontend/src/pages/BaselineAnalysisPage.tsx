@@ -29,7 +29,12 @@ import {
   type OptimizationTarget,
   type Problem,
 } from '../api'
-import { getTargetEntryBlocker } from '../baselineTargetGate'
+import {
+  countSelectedCoreCases,
+  getProblemSelectionBlocker,
+  getTargetEntryBlocker,
+  type ProblemSelectionCase,
+} from '../baselineTargetGate'
 import './BaselineAnalysisPage.css'
 
 type LoadedData = {
@@ -93,6 +98,13 @@ function metadataRecord(conversation: DatasetConversation | undefined) {
   return conversation?.metadata && typeof conversation.metadata === 'object'
     ? conversation.metadata
     : {}
+}
+
+function caseSet(conversation: DatasetConversation | undefined) {
+  const metadata = conversation?.metadata?.metadata
+  return metadata && typeof metadata === 'object' && 'case_set' in metadata
+    ? metadata.case_set
+    : undefined
 }
 
 function formatMetadata(value: unknown) {
@@ -164,7 +176,11 @@ function BaselineAnalysisPage() {
       state: runId ? { kind: 'loading' } : { kind: 'missing_run_id' },
     }),
   )
-  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null)
+  const [activeProblemId, setActiveProblemId] = useState<string | null>(null)
+  const [problemSelection, setProblemSelection] = useState<{
+    runId: string
+    selected_problem_ids: string[]
+  }>({ runId: '', selected_problem_ids: [] })
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null)
   const pageState: PageState = !runId
     ? { kind: 'missing_run_id' }
@@ -232,7 +248,7 @@ function BaselineAnalysisPage() {
     [data?.problems],
   )
   const selectedProblem = (
-    problems.find((problem) => problem.problem_id === selectedProblemId)
+    problems.find((problem) => problem.problem_id === activeProblemId)
     ?? problems.find((problem) => problem.problem_id === searchParams.get('problem_id'))
     ?? problems[0]
   )
@@ -276,6 +292,33 @@ function BaselineAnalysisPage() {
       ?? [],
     ),
     [data?.conversations],
+  )
+  const selectionCasesByProblemId = useMemo(() => new Map(
+    problems.map((problem) => [
+      problem.problem_id,
+      problem.affected_evaluation_result_ids.flatMap((resultId): ProblemSelectionCase[] => {
+        const result = finalResultById.get(resultId)
+        const conversation = result ? conversationById.get(result.conversation_id) : undefined
+        return result?.final_result ? [{
+          caseId: result.case_id,
+          caseSet: caseSet(conversation),
+          judgment: result.final_result.judgment,
+          primaryFailureMode: result.final_result.primary_failure_mode,
+        }] : []
+      }),
+    ]),
+  ), [conversationById, finalResultById, problems])
+  const selectableProblemIds = useMemo(() => problems
+    .filter((problem) => !getProblemSelectionBlocker(
+      selectionCasesByProblemId.get(problem.problem_id) ?? [],
+    ))
+    .map((problem) => problem.problem_id), [problems, selectionCasesByProblemId])
+  const selectedProblemIds = problemSelection.runId === runId
+    ? problemSelection.selected_problem_ids
+    : selectableProblemIds
+  const selectedCoreCaseCount = countSelectedCoreCases(
+    selectedProblemIds,
+    selectionCasesByProblemId,
   )
   const affectedResults = selectedProblem?.affected_evaluation_result_ids
     .map((resultId) => finalResultById.get(resultId))
@@ -412,7 +455,13 @@ function BaselineAnalysisPage() {
       <div className="s03-workspace">
         <section className="s03-pane s03-problems" aria-labelledby="s03-problems-title">
           <header className="s03-pane-header">
-            <h2 id="s03-problems-title">问题聚类（{problems.length}）</h2>
+            <div className="s03-problem-heading">
+              <h2 id="s03-problems-title">问题聚类（{problems.length}）</h2>
+              <p aria-live="polite">
+                已选择 {selectedProblemIds.length} 个问题 · 影响 {selectedCoreCaseCount} 个核心案例
+                {selectedProblemIds.length === 0 ? <strong> · 至少选择 1 个</strong> : null}
+              </p>
+            </div>
             <button className="s03-icon-button" type="button" aria-label="筛选问题聚类" disabled>
               <MdFilterList aria-hidden="true" />
             </button>
@@ -423,6 +472,10 @@ function BaselineAnalysisPage() {
               <p className="s03-empty-message">Problem Aggregation 已完成，本 Run 没有可展示的 Problem。</p>
             ) : problems.map((problem) => {
               const isActive = problem.problem_id === selectedProblem?.problem_id
+              const selectionBlocker = getProblemSelectionBlocker(
+                selectionCasesByProblemId.get(problem.problem_id) ?? [],
+              )
+              const isSelected = selectedProblemIds.includes(problem.problem_id)
               const frequencyPercent = problem.frequency.denominator === 0
                 ? null
                 : (problem.frequency.numerator / problem.frequency.denominator) * 100
@@ -433,7 +486,7 @@ function BaselineAnalysisPage() {
                     : 's03-problem-card'}
                   key={problem.problem_id}
                   onClick={() => {
-                    setSelectedProblemId(problem.problem_id)
+                    setActiveProblemId(problem.problem_id)
                     setSelectedResultId(null)
                   }}
                 >
@@ -444,9 +497,30 @@ function BaselineAnalysisPage() {
                     >
                       {problem.scenario} · P-{shortId(problem.problem_id)}
                     </span>
-                    <span className={isActive ? 's03-count-badge s03-count-badge--active' : 's03-count-badge'}>
-                      {problem.affected_case_count} 个案例
-                    </span>
+                    <div className="s03-problem-card__controls">
+                      <span className={isActive ? 's03-count-badge s03-count-badge--active' : 's03-count-badge'}>
+                        {problem.affected_case_count} 个案例
+                      </span>
+                      <label
+                        className="s03-problem-selector"
+                        title={selectionBlocker ?? '纳入本轮优化'}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={Boolean(selectionBlocker)}
+                          aria-label={`${isSelected ? '移出' : '纳入'}本轮优化：${problem.definition}`}
+                          onChange={() => setProblemSelection({
+                            runId,
+                            selected_problem_ids: isSelected
+                              ? selectedProblemIds.filter((problemId) => problemId !== problem.problem_id)
+                              : [...selectedProblemIds, problem.problem_id],
+                          })}
+                        />
+                        <span>{selectionBlocker ? '不可选' : '本轮'}</span>
+                      </label>
+                    </div>
                   </div>
                   <h3>{problem.definition}</h3>
                   {isActive ? (

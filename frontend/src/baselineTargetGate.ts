@@ -1,4 +1,39 @@
-import type { EvaluationRun, FinalEffectiveResult, Problem } from './api'
+import type { EvaluationRun, FinalEffectiveResult, JudgeOutput, Problem } from './api'
+
+export type ProblemSelectionCase = {
+  caseId: string
+  caseSet: unknown
+  judgment: JudgeOutput['judgment']
+  primaryFailureMode: JudgeOutput['primary_failure_mode']
+}
+
+export function getProblemSelectionBlocker(cases: ProblemSelectionCase[]) {
+  const coreCases = cases.filter((item) => item.caseSet === 'core')
+  if (coreCases.length === 0) return '仅出现在挑战案例中，不能纳入本轮优化。'
+
+  const failureModes = coreCases
+    .filter((item) => item.judgment === 'failure')
+    .map((item) => item.primaryFailureMode)
+  if (failureModes.some((mode) => mode === null) || new Set(failureModes).size > 1) {
+    return 'Core Failure 没有唯一的 Primary Failure Mode。'
+  }
+  return coreCases.some((item) => item.judgment === 'warning' || item.judgment === 'failure')
+    ? null
+    : '没有可纳入本轮优化的 Core Warning 或 Core Failure。'
+}
+
+export function countSelectedCoreCases(
+  selectedProblemIds: string[],
+  casesByProblemId: Map<string, ProblemSelectionCase[]>,
+) {
+  return new Set(
+    selectedProblemIds.flatMap((problemId) =>
+      (casesByProblemId.get(problemId) ?? [])
+        .filter((item) => item.caseSet === 'core')
+        .map((item) => item.caseId),
+    ),
+  ).size
+}
 
 type TargetEntryGateInput = {
   hasExistingTarget: boolean
