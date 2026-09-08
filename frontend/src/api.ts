@@ -218,6 +218,7 @@ export type OptimizationTarget = {
   id: string
   baseline_run_id: string
   problem_id: string
+  problem_ids: string[]
   version: number
   status: 'draft' | 'confirmed' | 'frozen'
   definition: string

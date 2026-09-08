@@ -44,6 +44,32 @@ export function getRelatedActiveId(currentId: string | null | undefined, related
   return currentId && relatedIds.includes(currentId) ? currentId : relatedIds[0] ?? null
 }
 
+export function serializeProblemIds(problemIds: string[]) {
+  return [...new Set(problemIds)].sort().join(',')
+}
+
+export function parseProblemIds(value: string) {
+  return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]
+}
+
+export function resolveSelectedProblemIds(
+  serializedProblemIds: string | null,
+  legacyProblemId: string | null,
+  eligibleProblemIds: string[],
+) {
+  if (serializedProblemIds === null && !legacyProblemId) return eligibleProblemIds
+  const requestedIds = new Set(parseProblemIds(serializedProblemIds ?? legacyProblemId ?? ''))
+  return eligibleProblemIds.filter((problemId) => requestedIds.has(problemId))
+}
+
+export function haveSameProblemIds(left: string[], right: string[]) {
+  const leftIds = new Set(left)
+  const rightIds = new Set(right)
+  return leftIds.size > 0
+    && leftIds.size === rightIds.size
+    && [...leftIds].every((problemId) => rightIds.has(problemId))
+}
+
 type TargetEntryGateInput = {
   hasExistingTarget: boolean
   runType: EvaluationRun['run_type']

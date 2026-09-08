@@ -7,6 +7,10 @@ import {
   getRelatedActiveId,
   getSelectedCoreCases,
   getTargetEntryBlocker,
+  haveSameProblemIds,
+  parseProblemIds,
+  resolveSelectedProblemIds,
+  serializeProblemIds,
   type ProblemSelectionCase,
 } from '../src/baselineTargetGate.ts'
 
@@ -106,4 +110,24 @@ test('S03 multi-select accepts eligible core problems and deduplicates their cor
   )
   assert.equal(getRelatedActiveId('failure', ['warning', 'failure']), 'failure')
   assert.equal(getRelatedActiveId('other', ['warning', 'failure']), 'warning')
+  assert.deepEqual(parseProblemIds('failure, warning,failure'), ['failure', 'warning'])
+  assert.equal(
+    serializeProblemIds(['warning', 'failure', 'warning']),
+    'failure,warning',
+  )
+  assert.deepEqual(
+    resolveSelectedProblemIds('failure,warning,failure', 'active', [
+      'warning', 'failure', 'challenge',
+    ]),
+    ['warning', 'failure'],
+  )
+  assert.deepEqual(
+    resolveSelectedProblemIds(null, 'failure', ['warning', 'failure']),
+    ['failure'],
+  )
+  assert.deepEqual(
+    resolveSelectedProblemIds(null, null, ['warning', 'failure']),
+    ['warning', 'failure'],
+  )
+  assert.equal(haveSameProblemIds(['warning', 'failure'], ['failure', 'warning']), true)
 })

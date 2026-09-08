@@ -26,10 +26,12 @@ function AppShell() {
   const workflowParams = new URLSearchParams(location.search)
   const workflowRunId = workflowParams.get('run_id')?.trim() ?? ''
   const workflowProblemId = workflowParams.get('problem_id')?.trim() ?? ''
+  const workflowProblemIds = workflowParams.get('problem_ids')?.trim() ?? ''
   const workflowTargetId = workflowParams.get('target_id')?.trim() ?? ''
   const workflowCandidateRunId = workflowParams.get('candidate_run_id')?.trim() ?? ''
   const workflowContext = new URLSearchParams({ run_id: workflowRunId })
   if (workflowProblemId) workflowContext.set('problem_id', workflowProblemId)
+  if (workflowProblemIds) workflowContext.set('problem_ids', workflowProblemIds)
   if (workflowTargetId) workflowContext.set('target_id', workflowTargetId)
   if (workflowCandidateRunId) workflowContext.set('candidate_run_id', workflowCandidateRunId)
   const workflowContextQuery = workflowContext.toString()

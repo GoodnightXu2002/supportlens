@@ -34,6 +34,9 @@ import {
   getRelatedActiveId,
   getSelectedCoreCases,
   getTargetEntryBlocker,
+  haveSameProblemIds,
+  resolveSelectedProblemIds,
+  serializeProblemIds,
   type ProblemSelectionCase,
 } from '../baselineTargetGate'
 import './BaselineAnalysisPage.css'
@@ -160,10 +163,6 @@ function BaselineAnalysisPage() {
     }),
   )
   const [activeProblemId, setActiveProblemId] = useState<string | null>(null)
-  const [problemSelection, setProblemSelection] = useState<{
-    runId: string
-    selected_problem_ids: string[]
-  }>({ runId: '', selected_problem_ids: [] })
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
   const pageState: PageState = !runId
     ? { kind: 'missing_run_id' }
@@ -265,9 +264,11 @@ function BaselineAnalysisPage() {
       selectionCasesByProblemId.get(problem.problem_id) ?? [],
     ))
     .map((problem) => problem.problem_id), [problems, selectionCasesByProblemId])
-  const selectedProblemIds = problemSelection.runId === runId
-    ? problemSelection.selected_problem_ids
-    : selectableProblemIds
+  const selectedProblemIds = resolveSelectedProblemIds(
+    searchParams.get('problem_ids'),
+    searchParams.get('problem_id'),
+    selectableProblemIds,
+  )
   const selectedCoreCases = getSelectedCoreCases(
     selectedProblemIds,
     selectionCasesByProblemId,
@@ -305,33 +306,35 @@ function BaselineAnalysisPage() {
     ?? problems.find((problem) => problem.problem_id === selectedResultProblemIds[0])
     ?? problems[0]
   )
-  const selectedTarget = selectedProblem
+  const selectedTarget = selectedProblemIds.length
     ? data?.targets
-      .filter((target) => target.problem_id === selectedProblem.problem_id)
+      .filter((target) => haveSameProblemIds(target.problem_ids, selectedProblemIds))
       .sort((left, right) => right.version - left.version)[0] ?? null
     : null
   const selectedCandidateRun = selectedTarget
     ? data?.runs.find((run) => run.run_type === 'candidate' && run.target_id === selectedTarget.id) ?? null
     : null
-  const workflowSearchParams = useMemo(() => {
+  const workflowSearchParams = (() => {
     if (!data || !selectedProblem) return null
     const params = new URLSearchParams({
       run_id: data.run.id,
       problem_id: selectedProblem.problem_id,
+      problem_ids: serializeProblemIds(selectedProblemIds),
     })
-    if (selectedProblem.frequency.numerator > 0 && selectedTarget) {
+    if (selectedTarget) {
       params.set('target_id', selectedTarget.id)
       if (selectedCandidateRun) params.set('candidate_run_id', selectedCandidateRun.id)
     }
     return params
-  }, [data, selectedCandidateRun, selectedProblem, selectedTarget])
+  })()
+  const workflowSearch = workflowSearchParams?.toString() ?? ''
   const currentSearch = searchParams.toString()
 
   useEffect(() => {
-    if (workflowSearchParams && workflowSearchParams.toString() !== currentSearch) {
-      setSearchParams(workflowSearchParams, { replace: true })
+    if (workflowSearch && workflowSearch !== currentSearch) {
+      setSearchParams(workflowSearch, { replace: true })
     }
-  }, [currentSearch, setSearchParams, workflowSearchParams])
+  }, [currentSearch, setSearchParams, workflowSearch])
   const selectedConversation = selectedResult
     ? conversationById.get(selectedResult.conversation_id)
     : undefined
@@ -397,15 +400,20 @@ function BaselineAnalysisPage() {
     ? JSON.stringify(selectedResult.human_decision.original_result)
       !== JSON.stringify(selectedResult.human_decision.final_result)
     : false
-  const targetEntryBlocker = getTargetEntryBlocker({
-    hasExistingTarget: Boolean(selectedTarget),
-    runType: data.run.run_type,
-    runStatus: data.run.status,
-    pendingReviewCount,
-    problem: selectedProblem,
-    affectedFinalResults: selectedProblem?.affected_evaluation_result_ids
-      .map((resultId) => finalResultById.get(resultId)) ?? [],
-  })
+  const selectedProblems = selectedProblemIds
+    .map((problemId) => problems.find((problem) => problem.problem_id === problemId))
+    .filter((problem): problem is Problem => problem !== undefined)
+  const targetEntryBlocker = selectedProblems.length === 0
+    ? '请至少选择 1 个可优化 Problem。'
+    : selectedProblems.map((problem) => getTargetEntryBlocker({
+      hasExistingTarget: Boolean(selectedTarget),
+      runType: data.run.run_type,
+      runStatus: data.run.status,
+      pendingReviewCount,
+      problem,
+      affectedFinalResults: problem.affected_evaluation_result_ids
+        .map((resultId) => finalResultById.get(resultId)),
+    })).find((blocker) => blocker !== null) ?? null
   const activateProblem = (problemId: string) => {
     const relatedCaseIds = selectedCoreCases
       .filter((item) => item.problemIds.includes(problemId))
@@ -528,12 +536,17 @@ function BaselineAnalysisPage() {
                           checked={isSelected}
                           disabled={Boolean(selectionBlocker)}
                           aria-label={`${isSelected ? '移出' : '纳入'}本轮优化：${problem.definition}`}
-                          onChange={() => setProblemSelection({
-                            runId,
-                            selected_problem_ids: isSelected
+                          onChange={() => {
+                            const nextProblemIds = isSelected
                               ? selectedProblemIds.filter((problemId) => problemId !== problem.problem_id)
-                              : [...selectedProblemIds, problem.problem_id],
-                          })}
+                              : [...selectedProblemIds, problem.problem_id]
+                            const params = new URLSearchParams({
+                              run_id: runId,
+                              problem_id: selectedProblem?.problem_id ?? problem.problem_id,
+                              problem_ids: serializeProblemIds(nextProblemIds),
+                            })
+                            setSearchParams(params)
+                          }}
                         />
                         <span>{selectionBlocker ? '不可选' : '本轮'}</span>
                       </label>
