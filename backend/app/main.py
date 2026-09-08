@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,6 +77,15 @@ from app.schemas import (
     OptimizationTargetProblemSetCreateRequest,
     OptimizationTargetRead,
     ProblemRead,
+    ValidationTaskCasesResponse,
+    ValidationTaskCreateResponse,
+    ValidationTaskSubmitRequest,
+    ValidationTaskSubmitResponse,
+)
+from app.validation_task import (
+    ValidationTaskError,
+    ValidationTaskErrorCode,
+    ValidationTaskService,
 )
 
 settings = get_settings()
@@ -112,6 +121,11 @@ def get_problem_aggregation_service() -> ProblemAggregationService:
 @lru_cache
 def get_optimization_target_service() -> OptimizationTargetService:
     return OptimizationTargetService()
+
+
+@lru_cache
+def get_validation_task_service() -> ValidationTaskService:
+    return ValidationTaskService()
 
 
 @lru_cache
@@ -366,6 +380,29 @@ def _optimization_target_error_response(
         ): 400,
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FAILURE_MODE_NOT_UNIQUE: 400,
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PERSISTENCE_FAILED: 500,
+    }
+    return _error_response(
+        status_code=status_by_code[error.code],
+        code=error.code.value,
+        message=str(error),
+    )
+
+
+def _validation_task_error_response(error: ValidationTaskError) -> JSONResponse:
+    status_by_code = {
+        ValidationTaskErrorCode.OPTIMIZATION_TARGET_NOT_FOUND: 404,
+        ValidationTaskErrorCode.VALIDATION_TASK_NOT_FOUND: 404,
+        ValidationTaskErrorCode.RUNNER_TOKEN_INVALID: 401,
+        ValidationTaskErrorCode.RUNNER_TOKEN_EXPIRED: 401,
+        ValidationTaskErrorCode.VALIDATION_TASK_TARGET_NOT_FROZEN: 409,
+        ValidationTaskErrorCode.VALIDATION_TASK_CASE_SCOPE_INVALID: 409,
+        ValidationTaskErrorCode.VALIDATION_TASK_NOT_RUNNABLE: 409,
+        ValidationTaskErrorCode.VALIDATION_TASK_NOT_SUBMITTABLE: 409,
+        ValidationTaskErrorCode.VALIDATION_TASK_RESPONSE_DUPLICATE: 400,
+        ValidationTaskErrorCode.VALIDATION_TASK_RESPONSE_UNKNOWN: 400,
+        ValidationTaskErrorCode.VALIDATION_TASK_RESPONSE_MISSING: 400,
+        ValidationTaskErrorCode.VALIDATION_TASK_RESPONSE_EMPTY: 400,
+        ValidationTaskErrorCode.VALIDATION_TASK_PERSISTENCE_FAILED: 500,
     }
     return _error_response(
         status_code=status_by_code[error.code],
@@ -880,6 +917,64 @@ def list_optimization_targets(
         return service.list_for_run(run_id, db_session)
     except OptimizationTargetError as error:
         return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/optimization-targets/{target_id}/validation-tasks",
+    response_model=ValidationTaskCreateResponse,
+    status_code=201,
+)
+def create_validation_task(
+    target_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ValidationTaskService,
+        Depends(get_validation_task_service),
+    ],
+) -> ValidationTaskCreateResponse | JSONResponse:
+    try:
+        return service.create(target_id, db_session)
+    except ValidationTaskError as error:
+        return _validation_task_error_response(error)
+
+
+@app.get(
+    "/api/validation-tasks/{task_id}/cases",
+    response_model=ValidationTaskCasesResponse,
+)
+def get_validation_task_cases(
+    task_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ValidationTaskService,
+        Depends(get_validation_task_service),
+    ],
+    authorization: Annotated[str | None, Header()] = None,
+) -> ValidationTaskCasesResponse | JSONResponse:
+    try:
+        return service.get_cases(task_id, authorization, db_session)
+    except ValidationTaskError as error:
+        return _validation_task_error_response(error)
+
+
+@app.post(
+    "/api/validation-tasks/{task_id}/responses",
+    response_model=ValidationTaskSubmitResponse,
+)
+def submit_validation_task_responses(
+    task_id: UUID,
+    request: ValidationTaskSubmitRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ValidationTaskService,
+        Depends(get_validation_task_service),
+    ],
+    authorization: Annotated[str | None, Header()] = None,
+) -> ValidationTaskSubmitResponse | JSONResponse:
+    try:
+        return service.submit(task_id, authorization, request, db_session)
+    except ValidationTaskError as error:
+        return _validation_task_error_response(error)
 
 
 @app.get(

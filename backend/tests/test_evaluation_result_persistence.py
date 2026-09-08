@@ -563,7 +563,7 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     ]
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "c7e9a1b3d524"
+    assert revision == "f1a2c3d4e5f6"
 
 
 def test_candidate_migration_preserves_populated_evaluation_run_references(
@@ -683,7 +683,7 @@ def test_candidate_migration_preserves_populated_evaluation_run_references(
             )
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                == "c7e9a1b3d524"
+                    == "f1a2c3d4e5f6"
             )
     finally:
         engine.dispose()

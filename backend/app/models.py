@@ -619,6 +619,67 @@ class OptimizationTarget(Base):
     )
 
 
+class ValidationTask(Base):
+    __tablename__ = "validation_tasks"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'submitted', 'failed')",
+            name="ck_validation_tasks_status",
+        ),
+        CheckConstraint(
+            "length(runner_token_hash) = 64",
+            name="ck_validation_tasks_runner_token_hash_length",
+        ),
+        CheckConstraint(
+            "(status = 'submitted' AND submitted_at IS NOT NULL "
+            "AND candidate_responses IS NOT NULL) OR "
+            "(status <> 'submitted' AND submitted_at IS NULL)",
+            name="ck_validation_tasks_submission_state",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    optimization_target_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("optimization_targets.id"),
+        nullable=False,
+        index=True,
+    )
+    baseline_run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("evaluation_runs.id"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    case_scope_snapshot: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON(none_as_null=True), nullable=False
+    )
+    candidate_responses: Mapped[list[dict[str, str]] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    runner_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    runner_token_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class CaseComparison(Base):
     __tablename__ = "case_comparisons"
     __table_args__ = (

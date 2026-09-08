@@ -542,6 +542,61 @@ class OptimizationTargetRead(BaseModel):
         return self
 
 
+class ValidationTaskStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUBMITTED = "submitted"
+    FAILED = "failed"
+
+
+class ValidationCaseSet(StrEnum):
+    TARGET = "target"
+    REGRESSION = "regression"
+    CHALLENGE = "challenge"
+
+
+class ValidationTaskCreateResponse(BaseModel):
+    task_id: UUID
+    optimization_target_id: UUID
+    baseline_run_id: UUID
+    status: ValidationTaskStatus
+    case_count: int = Field(ge=0)
+    runner_token: str
+    runner_token_expires_at: datetime
+
+
+class RunnerCaseRead(BaseModel):
+    case_id: str
+    set: ValidationCaseSet
+    messages: list[dict[str, Any]]
+
+
+class ValidationTaskCasesResponse(BaseModel):
+    task_id: UUID
+    status: ValidationTaskStatus
+    cases: list[RunnerCaseRead]
+
+
+class RunnerCandidateResponseInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: str
+    assistant_content: str
+
+
+class ValidationTaskSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    responses: list[RunnerCandidateResponseInput]
+
+
+class ValidationTaskSubmitResponse(BaseModel):
+    task_id: UUID
+    status: ValidationTaskStatus
+    response_count: int = Field(ge=0)
+    submitted_at: datetime
+
+
 class CandidateResponseInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

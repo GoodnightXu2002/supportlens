@@ -1,7 +1,7 @@
 import hashlib
 import json
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,6 +22,7 @@ from app.models import (
     OptimizationTarget,
     Problem,
     ResultProblemLink,
+    ValidationTask,
 )
 from app.problem_aggregation import (
     PROBLEM_MAPPING_VERSION,
@@ -288,6 +289,25 @@ def _expected_plan_hash(body: dict[str, object]) -> str:
         separators=(",", ":"),
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _create_frozen_multi_target(
+    client: TestClient,
+    engine,
+    ids: dict[str, UUID],
+) -> dict[str, object]:
+    second_problem_id = _add_problem_for_case(engine, ids, "CASE-C")
+    response = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/optimization-targets",
+        json={
+            **CREATE_PAYLOAD,
+            "problem_ids": [str(ids["problem_id"]), str(second_problem_id)],
+        },
+    )
+    assert response.status_code == 201
+    frozen = _confirm_and_freeze(client, response.json()["id"])
+    assert frozen.status_code == 200
+    return frozen.json()
 
 
 def test_create_derives_case_sets_metric_snapshot_and_lineage(api_context) -> None:
@@ -1182,3 +1202,188 @@ def test_optional_hypothesis_migration_preserves_existing_records(api_context):
     assert response.status_code == 200
     assert response.json()["status"] == "frozen"
     assert response.json()["hypothesis_confirmed_at"] is None
+
+
+def test_validation_task_freezes_scope_and_stores_only_token_hash(api_context):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target = _create_frozen_multi_target(client, engine, ids)
+
+    created = client.post(
+        f"/api/optimization-targets/{target['id']}/validation-tasks"
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["optimization_target_id"] == target["id"]
+    assert body["baseline_run_id"] == str(ids["run_id"])
+    assert body["status"] == "pending"
+    assert body["case_count"] == 4
+    token = body["runner_token"]
+    with Session(engine) as session:
+        task = session.get(ValidationTask, UUID(body["task_id"]))
+        assert task is not None
+        assert task.runner_token_hash == hashlib.sha256(token.encode()).hexdigest()
+        assert token not in json.dumps(task.case_scope_snapshot)
+
+    cases = client.get(
+        f"/api/validation-tasks/{body['task_id']}/cases",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cases.status_code == 200
+    assert cases.json()["status"] == "running"
+    assert [
+        (item["case_id"], item["set"])
+        for item in cases.json()["cases"]
+    ] == [
+        ("CASE-A", "target"),
+        ("CASE-B", "target"),
+        ("CASE-C", "target"),
+        ("CASE-D", "challenge"),
+    ]
+    assert all(item["messages"] for item in cases.json()["cases"])
+
+
+def test_validation_task_rejects_unfrozen_target_and_bad_tokens(api_context):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    draft = _create(client, ids).json()
+    rejected = client.post(
+        f"/api/optimization-targets/{draft['id']}/validation-tasks"
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "validation_task_target_not_frozen"
+
+    frozen = _confirm_and_freeze(client, draft["id"]).json()
+    first = client.post(
+        f"/api/optimization-targets/{frozen['id']}/validation-tasks"
+    ).json()
+    second = client.post(
+        f"/api/optimization-targets/{frozen['id']}/validation-tasks"
+    ).json()
+    first_url = f"/api/validation-tasks/{first['task_id']}/cases"
+    second_url = f"/api/validation-tasks/{second['task_id']}/cases"
+    assert client.get(first_url).status_code == 401
+    assert client.get(
+        first_url, headers={"Authorization": "Bearer wrong"}
+    ).status_code == 401
+    cross_task = client.get(
+        second_url,
+        headers={"Authorization": f"Bearer {first['runner_token']}"},
+    )
+    assert cross_task.status_code == 401
+    assert cross_task.json()["error"]["code"] == "runner_token_invalid"
+
+    with Session(engine) as session:
+        task = session.get(ValidationTask, UUID(first["task_id"]))
+        assert task is not None
+        task.runner_token_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        session.commit()
+    expired = client.get(
+        first_url,
+        headers={"Authorization": f"Bearer {first['runner_token']}"},
+    )
+    assert expired.status_code == 401
+    assert expired.json()["error"]["code"] == "runner_token_expired"
+
+
+def test_validation_task_validates_and_seals_candidate_responses(api_context):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target = _create_frozen_multi_target(client, engine, ids)
+    task = client.post(
+        f"/api/optimization-targets/{target['id']}/validation-tasks"
+    ).json()
+    url = f"/api/validation-tasks/{task['task_id']}/responses"
+    headers = {"Authorization": f"Bearer {task['runner_token']}"}
+    responses = [
+        {"case_id": case_id, "assistant_content": f"Candidate for {case_id}"}
+        for case_id in ("CASE-A", "CASE-B", "CASE-C", "CASE-D")
+    ]
+
+    invalid_payloads = [
+        (
+            [*responses, responses[0]],
+            "validation_task_response_duplicate",
+        ),
+        (
+            [{**responses[0], "assistant_content": "  "}, *responses[1:]],
+            "validation_task_response_empty",
+        ),
+        (
+            [*responses[:3], {**responses[3], "case_id": "CASE-X"}],
+            "validation_task_response_unknown",
+        ),
+        (responses[:-1], "validation_task_response_missing"),
+    ]
+    for invalid_responses, expected_code in invalid_payloads:
+        response = client.post(
+            url,
+            headers=headers,
+            json={"responses": invalid_responses},
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == expected_code
+
+    submitted = client.post(url, headers=headers, json={"responses": responses})
+    assert submitted.status_code == 200
+    assert submitted.json()["status"] == "submitted"
+    assert submitted.json()["response_count"] == 4
+    with Session(engine) as session:
+        persisted = session.get(ValidationTask, UUID(task["task_id"]))
+        assert persisted is not None
+        assert persisted.status == "submitted"
+        assert persisted.candidate_responses == responses
+
+    repeated = client.post(url, headers=headers, json={"responses": responses})
+    assert repeated.status_code == 409
+    assert (
+        repeated.json()["error"]["code"]
+        == "validation_task_not_submittable"
+    )
+
+
+def test_validation_task_migration_round_trip(api_context):
+    from pathlib import Path
+    from runpy import run_path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target = _create_frozen_multi_target(client, engine, ids)
+    migration = run_path(str(
+        Path(__file__).parents[1] / "alembic" / "versions"
+        / "f1a2c3d4e5f6_add_validation_tasks.py"
+    ))
+    with engine.connect() as connection:
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                migration["downgrade"]()
+            tables = {
+                row[0]
+                for row in connection.exec_driver_sql(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            assert "validation_tasks" not in tables
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                migration["upgrade"]()
+            columns = {
+                row[1]
+                for row in connection.exec_driver_sql(
+                    "PRAGMA table_info('validation_tasks')"
+                )
+            }
+            assert {
+                "optimization_target_id",
+                "baseline_run_id",
+                "case_scope_snapshot",
+                "runner_token_hash",
+                "runner_token_expires_at",
+            } <= columns
+        assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+    assert client.post(
+        f"/api/optimization-targets/{target['id']}/validation-tasks"
+    ).status_code == 201
