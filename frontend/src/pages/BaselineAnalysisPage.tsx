@@ -124,24 +124,6 @@ function caseSummary(conversation: DatasetConversation | undefined) {
   )
 }
 
-function CaseStatus({ result }: { result: FinalEffectiveResult }) {
-  if (result.status === 'pending_review') {
-    return (
-      <MdError
-        className="s03-status-icon s03-status-icon--warning"
-        aria-label="需要人工复核"
-      />
-    )
-  }
-
-  return (
-    <MdCheckCircle
-      className="s03-status-icon s03-status-icon--success"
-      aria-label={result.source === 'human' ? '人工复核后生效' : 'Machine Final'}
-    />
-  )
-}
-
 function PageMessage({ title, detail }: { title: string; detail: string }) {
   return (
     <section className="s03-page s03-state" role="status">
@@ -564,7 +546,7 @@ function BaselineAnalysisPage() {
             {affectedResults.length > 0 ? (
               <>
                 <div className="s03-case-grid s03-case-table-head" aria-hidden="true">
-                  <span>案例 ID</span><span>意图摘要</span><span>状态</span>
+                  <span>案例 ID</span><span>意图摘要 / 关联问题</span>
                 </div>
                 <div className="s03-case-rows">
                   {affectedResults.map((result) => {
@@ -575,17 +557,22 @@ function BaselineAnalysisPage() {
                       const problem = problems.find((item) => item.problem_id === problemId)
                       return problem ? [problem] : []
                     })
-                    const isActive = result.evaluation_result_id === selectedResult?.evaluation_result_id
+                    const isSelectedCase = result.evaluation_result_id === selectedResult?.evaluation_result_id
+                    const isRelatedToActiveProblem = relatedProblems.some(
+                      (problem) => problem.problem_id === selectedProblem?.problem_id,
+                    )
                     return (
                       <article
-                        className={isActive
-                          ? 's03-case-grid s03-case-row s03-case-row--active'
-                          : 's03-case-grid s03-case-row'}
+                        className={[
+                          's03-case-grid s03-case-row',
+                          isSelectedCase ? 's03-case-row--selected' : '',
+                          isRelatedToActiveProblem ? 's03-case-row--related' : '',
+                        ].filter(Boolean).join(' ')}
                         key={result.evaluation_result_id}
                         onClick={() => setSelectedResultId(result.evaluation_result_id)}
                       >
                         <span className="s03-case-id">
-                          {isActive ? <span className="s03-case-id__rail" aria-hidden="true" /> : null}
+                          {isSelectedCase ? <span className="s03-case-id__rail" aria-hidden="true" /> : null}
                           {result.case_id}
                         </span>
                         <span className="s03-case-detail">
@@ -598,7 +585,6 @@ function BaselineAnalysisPage() {
                             ))}
                           </span>
                         </span>
-                        <span className="s03-case-status"><CaseStatus result={result} /></span>
                       </article>
                     )
                   })}

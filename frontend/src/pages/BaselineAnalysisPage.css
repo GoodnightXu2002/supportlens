@@ -417,7 +417,7 @@
 
 .s03-case-grid {
   display: grid;
-  grid-template-columns: 100px minmax(0, 1fr) 60px;
+  grid-template-columns: 100px minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -429,10 +429,6 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 16px;
-}
-
-.s03-case-table-head span:last-child {
-  text-align: right;
 }
 
 .s03-case-rows {
@@ -451,7 +447,7 @@
   cursor: pointer;
 }
 
-.s03-case-row--active {
+.s03-case-row--related {
   background: var(--color-surface-subtle);
   border-color: var(--color-border);
 }
@@ -469,7 +465,7 @@
   line-height: 16px;
 }
 
-.s03-case-row--active .s03-case-id {
+.s03-case-row--selected .s03-case-id {
   padding-left: 0;
   color: var(--color-text);
   font-weight: 700;
@@ -512,23 +508,9 @@
   line-height: 14px;
 }
 
-.s03-case-row--active .s03-case-summary {
+.s03-case-row--selected .s03-case-summary {
   color: var(--color-text);
 }
-
-.s03-case-status {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.s03-status-icon {
-  width: 17px;
-  height: 17px;
-}
-
-.s03-status-icon--warning { color: var(--color-status-warning); }
-.s03-status-icon--success { color: var(--color-status-success); }
-.s03-status-icon--pending { color: var(--color-outline); }
 
 .s03-evidence-header {
   padding-right: 24px;
