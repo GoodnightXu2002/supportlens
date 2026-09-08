@@ -29,6 +29,9 @@
 .s04-notes { padding: 24px 0; border-bottom: 1px solid var(--color-border); }
 .s04-confirmation > .s04-form-field { max-width: 420px; margin: 24px 0 8px; }
 .s04-source-note { color: var(--color-text-secondary); font-size: 13px; }
+.s04-problem-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.s04-problem-list li { display: grid; grid-template-columns: minmax(100px, 160px) 1fr; gap: 16px; line-height: 1.6; }
+.s04-problem-list span { min-width: 0; overflow-wrap: anywhere; }
 
 .s04-metadata,
 .s04-plan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 0; }
@@ -80,6 +83,7 @@
 @media (max-width: 720px) {
   .s04-canvas { padding: 20px 16px; }
   .s04-metadata, .s04-plan-grid, .s04-form-grid--two-columns { grid-template-columns: 1fr; gap: 12px; }
+  .s04-problem-list li { grid-template-columns: 1fr; gap: 2px; }
   .s04-action-rail { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px; }
   .s04-confirmation h1 { font-size: 22px; }
 }

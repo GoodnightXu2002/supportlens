@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   ApiRequestError,
-  completeOptimizationTarget,
+  completeProblemSetOptimizationTarget,
   getDatasetConversations,
   getDatasetDetail,
   getDatasetEvaluationRuns,
@@ -12,11 +12,17 @@ import {
   getOptimizationTargets,
   getProblems,
   type DatasetDetail,
+  type DatasetConversation,
   type EvaluationRun,
   type OptimizationTarget,
   type OptimizationTargetCreateInput,
   type Problem,
 } from '../api'
+import {
+  haveSameProblemIds,
+  parseProblemIds,
+  serializeProblemIds,
+} from '../baselineTargetGate'
 import { buildValidationCaseExport } from '../validationHandoff'
 import './TargetPlanPage.css'
 
@@ -36,7 +42,8 @@ type TargetForm = {
 type LoadedData = {
   run: EvaluationRun
   dataset: DatasetDetail
-  problem: Problem
+  conversations: DatasetConversation[]
+  problems: Problem[]
   target: OptimizationTarget | null
   candidateRunId: string | null
 }
@@ -130,6 +137,28 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
+function conversationCaseSet(conversation: DatasetConversation) {
+  const metadata = conversation.metadata?.metadata
+  return metadata && typeof metadata === 'object' && 'case_set' in metadata
+    ? metadata.case_set
+    : undefined
+}
+
+function validationScope(problems: Problem[], conversations: DatasetConversation[]) {
+  const affectedCaseIds = new Set(problems.flatMap((problem) => problem.affected_case_ids))
+  return {
+    targetCaseIds: conversations
+      .filter((item) => conversationCaseSet(item) === 'core' && affectedCaseIds.has(item.external_id))
+      .map((item) => item.external_id),
+    regressionCaseIds: conversations
+      .filter((item) => conversationCaseSet(item) === 'core' && !affectedCaseIds.has(item.external_id))
+      .map((item) => item.external_id),
+    challengeCaseIds: conversations
+      .filter((item) => conversationCaseSet(item) === 'challenge')
+      .map((item) => item.external_id),
+  }
+}
+
 function ContextMetadata({ data, form }: { data: LoadedData; form: TargetForm }) {
   const target = data.target
   const targetEdited = target && target.status !== 'frozen' && (
@@ -197,12 +226,17 @@ type TargetPlanWorkspaceProps = {
 function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
   onFormChange, onActorChange, onExportValidationCases, onEnterValidation,
 }: TargetPlanWorkspaceProps) {
-  const { problem, target } = data
+  const { problems, target } = data
   const frozen = target?.status === 'frozen'
   const busy = pendingAction !== null
-  const missingCases = target && (!target.target_case_ids.length || !target.regression_case_ids.length)
+  const scope = validationScope(problems, data.conversations)
+  const targetCaseCount = target?.target_case_ids.length ?? scope.targetCaseIds.length
+  const regressionCaseCount = target?.regression_case_ids.length ?? scope.regressionCaseIds.length
+  const challengeCaseCount = target?.challenge_case_ids.length ?? scope.challengeCaseIds.length
+  const missingCases = targetCaseCount === 0
   const requiredFields = [form.definition, form.inclusionCriteria, form.exclusionCriteria, form.expectedObservableChange]
   const canEnter = frozen || (requiredFields.every((value) => value.trim()) && actor.trim() && !missingCases)
+  const multiProblem = problems.length > 1
   const notes: [keyof TargetForm, string][] = [
     ['hypothesisStatement', '优化假设'], ['plannedChange', '计划变更'],
     ['changeSurface', '变更范围'], ['hypothesisEvidenceRefs', '证据引用（每行一项）'],
@@ -215,12 +249,18 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           <h1>确认优化目标</h1>
           <ContextMetadata data={data} form={form} />
           <section aria-labelledby="s04-problem-title">
-            <h2 id="s04-problem-title">当前 Problem</h2>
-            <p>{problem.definition}</p>
-            <p className="s04-source-note">{problem.scenario} · {problem.affected_case_count} 个受影响案例 · {problem.evidence.length} 条证据</p>
+            <h2 id="s04-problem-title">本轮优化问题：{problems.length} 个</h2>
+            <ul className="s04-problem-list">
+              {problems.map((problem) => (
+                <li key={problem.problem_id}>
+                  <strong>{problem.scenario}</strong>
+                  <span>{problem.definition}</span>
+                </li>
+              ))}
+            </ul>
           </section>
           <section aria-labelledby="s04-target-title">
-            <h2 id="s04-target-title">优化目标</h2>
+            <h2 id="s04-target-title">本轮优化目标</h2>
             <p className="s04-source-note">{frozen ? '目标和验证范围已冻结，可继续验证。' : '系统已建议优化目标，可直接使用或修改。'}</p>
             <EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy || frozen} multiline />
             <EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy || frozen} multiline />
@@ -234,20 +274,20 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           <section aria-labelledby="s04-scope-title">
             <h2 id="s04-scope-title">验证范围</h2>
             <dl className="s04-plan-grid">
-              <div><dt>目标案例{target ? ' · ' + target.target_case_ids.length + ' 个' : ''}</dt><dd>当前问题涉及的核心案例</dd></div>
-              <div><dt>回归案例{target ? ' · ' + target.regression_case_ids.length + ' 个' : ''}</dt><dd>其余核心案例，用于检查现有表现</dd></div>
-              <div><dt>挑战案例{target ? ' · ' + target.challenge_case_ids.length + ' 个' : ''}</dt><dd>数据集中的挑战案例</dd></div>
+              <div><dt>目标案例 · {targetCaseCount} 个</dt><dd>所选问题涉及的核心案例去重并集</dd></div>
+              <div><dt>回归案例 · {regressionCaseCount} 个</dt><dd>其余核心案例，用于检查现有表现</dd></div>
+              <div><dt>挑战案例 · {challengeCaseCount} 个</dt><dd>数据集中的全部挑战案例</dd></div>
             </dl>
             <p className="s04-source-note">纳入标准：{form.inclusionCriteria}<br />排除标准：{form.exclusionCriteria}</p>
-            {missingCases && <p role="alert">{!target.target_case_ids.length ? '当前问题缺少目标案例。' : '当前数据集缺少回归案例。'}</p>}
+            {missingCases && <p role="alert">所选问题缺少目标案例。</p>}
             {frozen && <><p className="s04-source-note">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />冻结人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p><button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button></>}
           </section>
           <EditableField label="操作人（必填）" value={frozen ? target.frozen_by ?? '' : actor} onChange={onActorChange} disabled={busy || frozen} />
         </div>
       </div>
       <footer className="s04-action-rail">
-        <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? '验证计划已冻结，可继续进入候选版本验证。' : '进入时自动保存、确认目标并冻结验证计划。')}</p>
-        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在准备验证…' : '进入候选版本验证'}</button>
+        <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? (multiProblem ? '版本级验证计划已冻结；S05 多 Problem 接入将在下一步完成。' : '验证计划已冻结，可继续进入候选版本验证。') : '确认时自动保存目标并冻结版本级验证计划。')}</p>
+        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter || (frozen && multiProblem)}>{pendingAction === 'complete' ? '正在保存并冻结…' : frozen ? (multiProblem ? '验证计划已冻结' : '进入候选版本验证') : '确认并冻结验证计划'}</button>
       </footer>
     </section>
   )
@@ -258,15 +298,18 @@ function TargetPlanPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const runId = searchParams.get('run_id')?.trim() ?? ''
   const problemId = searchParams.get('problem_id')?.trim() ?? ''
+  const problemIds = parseProblemIds(searchParams.get('problem_ids') ?? problemId)
+  const problemIdsParam = serializeProblemIds(problemIds)
+  const activeProblemId = problemId || problemIds[0] || ''
   const workflowTargetId = searchParams.get('target_id')?.trim() ?? ''
   const workflowCandidateRunId = searchParams.get('candidate_run_id')?.trim() ?? ''
-  const requestKey = `${runId}:${problemId}`
+  const requestKey = `${runId}:${problemIdsParam}`
   const [loadResult, setLoadResult] = useState<{
     requestKey: string
     state: PageState
   }>(() => ({
     requestKey,
-    state: runId && problemId ? { kind: 'loading' } : { kind: 'missing_parameters' },
+    state: runId && problemIdsParam ? { kind: 'loading' } : { kind: 'missing_parameters' },
   }))
   const [form, setForm] = useState<TargetForm>(emptyForm)
   const [actor, setActor] = useState('')
@@ -274,44 +317,69 @@ function TargetPlanPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!runId || !problemId) return
+    if (!runId || !problemIdsParam) return
 
     const controller = new AbortController()
     async function load() {
       try {
         const run = await getEvaluationRun(runId, controller.signal)
-        const [dataset, problems, targets, runs] = await Promise.all([
+        const [dataset, conversations, problems, targets, runs] = await Promise.all([
           getDatasetDetail(run.dataset_id, controller.signal),
+          getDatasetConversations(run.dataset_id, controller.signal),
           getProblems(run.id, controller.signal),
           getOptimizationTargets(run.id, controller.signal),
           getDatasetEvaluationRuns(run.dataset_id, controller.signal),
         ])
-        const problem = problems.find((item) => item.problem_id === problemId)
-        if (!problem) {
+        const requestedProblemIds = parseProblemIds(problemIdsParam)
+        const selectedProblems = requestedProblemIds
+          .map((selectedProblemId) => problems.find(
+            (problem) => problem.problem_id === selectedProblemId,
+          ))
+          .filter((problem): problem is Problem => problem !== undefined)
+        if (selectedProblems.length !== requestedProblemIds.length) {
           setLoadResult({ requestKey, state: { kind: 'problem_not_found' } })
           return
         }
-        const target = targets.filter((item) => item.problem_id === problem.problem_id).sort((left, right) => right.version - left.version)[0] ?? null
+        const activeProblem = problems.find(
+          (problem) => problem.problem_id === activeProblemId,
+        ) ?? selectedProblems[0]
+        const target = targets
+          .filter((item) => haveSameProblemIds(item.problem_ids, requestedProblemIds))
+          .sort((left, right) => right.version - left.version)[0] ?? null
         const candidateRunId = target
           ? runs.find((item) => item.run_type === 'candidate' && item.target_id === target.id)?.id ?? null
           : null
         if (workflowTargetId !== (target?.id ?? '') || workflowCandidateRunId !== (candidateRunId ?? '')) {
-          const params = new URLSearchParams({ run_id: run.id, problem_id: problem.problem_id })
+          const params = new URLSearchParams({
+            run_id: run.id,
+            problem_id: activeProblem.problem_id,
+            problem_ids: problemIdsParam,
+          })
           if (target) params.set('target_id', target.id)
           if (candidateRunId) params.set('candidate_run_id', candidateRunId)
           setSearchParams(params, { replace: true })
         }
         setForm(target ? formFromTarget(target) : {
           ...emptyForm,
-          definition: '改善当前问题：' + problem.definition,
-          inclusionCriteria: '当前 Problem 涉及的核心案例。',
-          exclusionCriteria: '与当前 Problem 无关的案例不计入目标案例。',
-          expectedObservableChange: '减少当前问题在目标案例中的出现，并保持回归案例表现。',
+          definition: `改善本轮 ${selectedProblems.length} 个问题：\n${selectedProblems.map((problem) => problem.definition).join('\n')}`,
+          inclusionCriteria: '所选 Problems 涉及的核心案例去重并集。',
+          exclusionCriteria: '其余核心案例不计入目标案例，并作为回归案例。',
+          expectedObservableChange: '减少所选问题在目标案例中的出现，并保持回归案例表现。',
         })
         setActor(target?.confirmed_by ?? '')
         setLoadResult({
           requestKey,
-          state: { kind: 'ready', data: { run, dataset, problem, target, candidateRunId } },
+          state: {
+            kind: 'ready',
+            data: {
+              run,
+              dataset,
+              conversations,
+              problems: selectedProblems,
+              target,
+              candidateRunId,
+            },
+          },
         })
       } catch (error) {
         if (controller.signal.aborted) return
@@ -330,9 +398,9 @@ function TargetPlanPage() {
     }
     void load()
     return () => controller.abort()
-  }, [problemId, requestKey, runId, setSearchParams, workflowCandidateRunId, workflowTargetId])
+  }, [activeProblemId, problemIdsParam, requestKey, runId, setSearchParams, workflowCandidateRunId, workflowTargetId])
 
-  const pageState: PageState = !runId || !problemId
+  const pageState: PageState = !runId || !problemIdsParam
     ? { kind: 'missing_parameters' }
     : loadResult.requestKey === requestKey
       ? loadResult.state
@@ -345,15 +413,33 @@ function TargetPlanPage() {
     setPendingAction('complete')
     setActionError(null)
     try {
-      const frozen = target?.status === 'frozen' ? target : await completeOptimizationTarget(
-        runId, problemId, { actor: actor.trim(), target: requestFromForm(form) },
+      const frozen = target?.status === 'frozen' ? target : await completeProblemSetOptimizationTarget(
+        runId, parseProblemIds(problemIdsParam), { actor: actor.trim(), target: requestFromForm(form) },
       )
       if (frozen.status !== 'frozen' || !frozen.plan_hash || !frozen.frozen_at) {
         throw new Error('验证计划尚未完成冻结，请重试。')
       }
-      const params = new URLSearchParams({ target_id: frozen.id, run_id: runId, problem_id: problemId })
+      const params = new URLSearchParams({
+        target_id: frozen.id,
+        run_id: runId,
+        problem_id: activeProblemId,
+        problem_ids: problemIdsParam,
+      })
       if (pageState.data.candidateRunId) params.set('candidate_run_id', pageState.data.candidateRunId)
-      navigate('/validation?' + params.toString())
+      if (problemIds.length === 1) {
+        navigate('/validation?' + params.toString())
+      } else {
+        setLoadResult({
+          requestKey,
+          state: {
+            kind: 'ready',
+            data: { ...pageState.data, target: frozen },
+          },
+        })
+        setForm(formFromTarget(frozen))
+        setActor(frozen.confirmed_by ?? '')
+        setSearchParams(params, { replace: true })
+      }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : '操作失败。')
     } finally {
@@ -363,11 +449,10 @@ function TargetPlanPage() {
 
   async function exportValidationCases() {
     if (pageState.kind !== 'ready' || pageState.data.target?.status !== 'frozen') return
-    const { dataset, target: frozenTarget } = pageState.data
+    const { conversations, target: frozenTarget } = pageState.data
     setPendingAction('export')
     setActionError(null)
     try {
-      const conversations = await getDatasetConversations(dataset.dataset_id)
       const cases = buildValidationCaseExport(frozenTarget, conversations)
       const url = URL.createObjectURL(new Blob([JSON.stringify(cases, null, 2)], { type: 'application/json' }))
       const link = document.createElement('a')
