@@ -31,6 +31,7 @@ import {
 } from '../api'
 import {
   getProblemSelectionBlocker,
+  getRelatedActiveId,
   getSelectedCoreCases,
   getTargetEntryBlocker,
   type ProblemSelectionCase,
@@ -229,38 +230,6 @@ function BaselineAnalysisPage() {
     () => sortProblems(data?.problems ?? []),
     [data?.problems],
   )
-  const selectedProblem = (
-    problems.find((problem) => problem.problem_id === activeProblemId)
-    ?? problems.find((problem) => problem.problem_id === searchParams.get('problem_id'))
-    ?? problems[0]
-  )
-  const selectedTarget = selectedProblem
-    ? data?.targets
-      .filter((target) => target.problem_id === selectedProblem.problem_id)
-      .sort((left, right) => right.version - left.version)[0] ?? null
-    : null
-  const selectedCandidateRun = selectedTarget
-    ? data?.runs.find((run) => run.run_type === 'candidate' && run.target_id === selectedTarget.id) ?? null
-    : null
-  const workflowSearchParams = useMemo(() => {
-    if (!data || !selectedProblem) return null
-    const params = new URLSearchParams({
-      run_id: data.run.id,
-      problem_id: selectedProblem.problem_id,
-    })
-    if (selectedProblem.frequency.numerator > 0 && selectedTarget) {
-      params.set('target_id', selectedTarget.id)
-      if (selectedCandidateRun) params.set('candidate_run_id', selectedCandidateRun.id)
-    }
-    return params
-  }, [data, selectedCandidateRun, selectedProblem, selectedTarget])
-  const currentSearch = searchParams.toString()
-
-  useEffect(() => {
-    if (workflowSearchParams && workflowSearchParams.toString() !== currentSearch) {
-      setSearchParams(workflowSearchParams, { replace: true })
-    }
-  }, [currentSearch, setSearchParams, workflowSearchParams])
   const finalResultById = useMemo(
     () => new Map(
       data?.finalResults.map((result) => [result.evaluation_result_id, result])
@@ -309,10 +278,60 @@ function BaselineAnalysisPage() {
   const affectedResults = selectedCoreCases
     .map((item) => finalResultById.get(item.resultId))
     .filter((result): result is FinalEffectiveResult => result !== undefined)
-  const selectedResult = (
-    affectedResults.find((result) => result.evaluation_result_id === activeCaseId)
-    ?? affectedResults[0]
+  const requestedProblemId = [activeProblemId, searchParams.get('problem_id')]
+    .find((problemId) => problems.some((problem) => problem.problem_id === problemId))
+  const requestedProblemCaseIds = new Set(
+    selectedCoreCases
+      .filter((item) => item.problemIds.includes(requestedProblemId ?? ''))
+      .map((item) => item.resultId),
   )
+  const requestedCase = affectedResults.find(
+    (result) => result.evaluation_result_id === activeCaseId,
+  )
+  const selectedResult = (
+    requestedCase && (
+      !requestedProblemId || requestedProblemCaseIds.has(requestedCase.evaluation_result_id)
+    )
+      ? requestedCase
+      : requestedProblemId
+        ? affectedResults.find((result) => requestedProblemCaseIds.has(result.evaluation_result_id))
+        : affectedResults[0]
+  )
+  const selectedResultProblemIds = selectedResult
+    ? selectedCoreCaseByResultId.get(selectedResult.evaluation_result_id)?.problemIds ?? []
+    : []
+  const selectedProblem = (
+    problems.find((problem) => problem.problem_id === requestedProblemId)
+    ?? problems.find((problem) => problem.problem_id === selectedResultProblemIds[0])
+    ?? problems[0]
+  )
+  const selectedTarget = selectedProblem
+    ? data?.targets
+      .filter((target) => target.problem_id === selectedProblem.problem_id)
+      .sort((left, right) => right.version - left.version)[0] ?? null
+    : null
+  const selectedCandidateRun = selectedTarget
+    ? data?.runs.find((run) => run.run_type === 'candidate' && run.target_id === selectedTarget.id) ?? null
+    : null
+  const workflowSearchParams = useMemo(() => {
+    if (!data || !selectedProblem) return null
+    const params = new URLSearchParams({
+      run_id: data.run.id,
+      problem_id: selectedProblem.problem_id,
+    })
+    if (selectedProblem.frequency.numerator > 0 && selectedTarget) {
+      params.set('target_id', selectedTarget.id)
+      if (selectedCandidateRun) params.set('candidate_run_id', selectedCandidateRun.id)
+    }
+    return params
+  }, [data, selectedCandidateRun, selectedProblem, selectedTarget])
+  const currentSearch = searchParams.toString()
+
+  useEffect(() => {
+    if (workflowSearchParams && workflowSearchParams.toString() !== currentSearch) {
+      setSearchParams(workflowSearchParams, { replace: true })
+    }
+  }, [currentSearch, setSearchParams, workflowSearchParams])
   const selectedConversation = selectedResult
     ? conversationById.get(selectedResult.conversation_id)
     : undefined
@@ -387,6 +406,20 @@ function BaselineAnalysisPage() {
     affectedFinalResults: selectedProblem?.affected_evaluation_result_ids
       .map((resultId) => finalResultById.get(resultId)) ?? [],
   })
+  const activateProblem = (problemId: string) => {
+    const relatedCaseIds = selectedCoreCases
+      .filter((item) => item.problemIds.includes(problemId))
+      .map((item) => item.resultId)
+    const currentCaseId = selectedResult?.evaluation_result_id
+    setActiveProblemId(problemId)
+    setActiveCaseId(getRelatedActiveId(currentCaseId, relatedCaseIds))
+  }
+  const activateCase = (resultId: string) => {
+    const relatedProblemIds = selectedCoreCaseByResultId.get(resultId)?.problemIds ?? []
+    const currentProblemId = selectedProblem?.problem_id
+    setActiveCaseId(resultId)
+    setActiveProblemId(getRelatedActiveId(currentProblemId, relatedProblemIds))
+  }
 
   return (
     <section className="s03-page" aria-label="基线分析工作区">
@@ -472,7 +505,7 @@ function BaselineAnalysisPage() {
                     ? 's03-problem-card s03-problem-card--active'
                     : 's03-problem-card'}
                   key={problem.problem_id}
-                  onClick={() => setActiveProblemId(problem.problem_id)}
+                  onClick={() => activateProblem(problem.problem_id)}
                 >
                   <div className="s03-problem-card__topline">
                     <span
@@ -569,7 +602,7 @@ function BaselineAnalysisPage() {
                           isRelatedToActiveProblem ? 's03-case-row--related' : '',
                         ].filter(Boolean).join(' ')}
                         key={result.evaluation_result_id}
-                        onClick={() => setActiveCaseId(result.evaluation_result_id)}
+                        onClick={() => activateCase(result.evaluation_result_id)}
                       >
                         <span className="s03-case-id">
                           {isSelectedCase ? <span className="s03-case-id__rail" aria-hidden="true" /> : null}

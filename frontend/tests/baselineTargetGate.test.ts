@@ -3,8 +3,9 @@ import test from 'node:test'
 
 import type { FinalEffectiveResult, Problem } from '../src/api.ts'
 import {
-  getSelectedCoreCases,
   getProblemSelectionBlocker,
+  getRelatedActiveId,
+  getSelectedCoreCases,
   getTargetEntryBlocker,
   type ProblemSelectionCase,
 } from '../src/baselineTargetGate.ts'
@@ -103,4 +104,6 @@ test('S03 multi-select accepts eligible core problems and deduplicates their cor
       },
     ],
   )
+  assert.equal(getRelatedActiveId('failure', ['warning', 'failure']), 'failure')
+  assert.equal(getRelatedActiveId('other', ['warning', 'failure']), 'warning')
 })

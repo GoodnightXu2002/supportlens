@@ -40,6 +40,10 @@ export function getSelectedCoreCases(
   return [...selectedCases].map(([caseId, details]) => ({ caseId, ...details }))
 }
 
+export function getRelatedActiveId(currentId: string | null | undefined, relatedIds: string[]) {
+  return currentId && relatedIds.includes(currentId) ? currentId : relatedIds[0] ?? null
+}
+
 type TargetEntryGateInput = {
   hasExistingTarget: boolean
   runType: EvaluationRun['run_type']
