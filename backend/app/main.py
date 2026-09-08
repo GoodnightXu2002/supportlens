@@ -79,6 +79,7 @@ from app.schemas import (
     ProblemRead,
     ValidationTaskCasesResponse,
     ValidationTaskCreateResponse,
+    ValidationTaskReadResponse,
     ValidationTaskSubmitRequest,
     ValidationTaskSubmitResponse,
 )
@@ -934,6 +935,24 @@ def create_validation_task(
 ) -> ValidationTaskCreateResponse | JSONResponse:
     try:
         return service.create(target_id, db_session)
+    except ValidationTaskError as error:
+        return _validation_task_error_response(error)
+
+
+@app.get(
+    "/api/validation-tasks/{task_id}",
+    response_model=ValidationTaskReadResponse,
+)
+def get_validation_task(
+    task_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ValidationTaskService,
+        Depends(get_validation_task_service),
+    ],
+) -> ValidationTaskReadResponse | JSONResponse:
+    try:
+        return service.get_status(task_id, db_session)
     except ValidationTaskError as error:
         return _validation_task_error_response(error)
 

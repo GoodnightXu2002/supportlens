@@ -15,6 +15,7 @@ from app.models import Conversation, OptimizationTarget, ValidationTask
 from app.schemas import (
     ValidationTaskCasesResponse,
     ValidationTaskCreateResponse,
+    ValidationTaskReadResponse,
     ValidationTaskStatus,
     ValidationTaskSubmitRequest,
     ValidationTaskSubmitResponse,
@@ -146,6 +147,25 @@ class ValidationTaskService:
             case_count=len(snapshot),
             runner_token=runner_token,
             runner_token_expires_at=task.runner_token_expires_at,
+        )
+
+    def get_status(
+        self,
+        task_id: UUID,
+        db_session: Session,
+    ) -> ValidationTaskReadResponse:
+        task = db_session.get(ValidationTask, task_id)
+        if task is None:
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_NOT_FOUND,
+                f"Validation task '{task_id}' was not found.",
+            )
+        return ValidationTaskReadResponse(
+            task_id=task.id,
+            target_id=task.optimization_target_id,
+            status=task.status,
+            created_at=task.created_at,
+            submitted_at=task.submitted_at,
         )
 
     def get_cases(

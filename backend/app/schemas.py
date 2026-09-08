@@ -565,6 +565,15 @@ class ValidationTaskCreateResponse(BaseModel):
     runner_token_expires_at: datetime
 
 
+class ValidationTaskReadResponse(BaseModel):
+    task_id: UUID
+    target_id: UUID
+    status: ValidationTaskStatus
+    created_at: datetime
+    submitted_at: datetime | None
+    failed_reason: str | None = None
+
+
 class RunnerCaseRead(BaseModel):
     case_id: str
     set: ValidationCaseSet

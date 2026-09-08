@@ -1243,6 +1243,80 @@ def test_validation_task_freezes_scope_and_stores_only_token_hash(api_context):
     assert all(item["messages"] for item in cases.json()["cases"])
 
 
+def test_validation_task_status_is_read_only_and_omits_secrets(api_context):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    target = _create_frozen_multi_target(client, engine, ids)
+    tasks = [
+        client.post(
+            f"/api/optimization-targets/{target['id']}/validation-tasks"
+        ).json()
+        for _ in range(4)
+    ]
+
+    running = tasks[1]
+    client.get(
+        f"/api/validation-tasks/{running['task_id']}/cases",
+        headers={"Authorization": f"Bearer {running['runner_token']}"},
+    )
+    submitted = tasks[2]
+    responses = [
+        {"case_id": case_id, "assistant_content": f"Candidate for {case_id}"}
+        for case_id in ("CASE-A", "CASE-B", "CASE-C", "CASE-D")
+    ]
+    client.post(
+        f"/api/validation-tasks/{submitted['task_id']}/responses",
+        headers={"Authorization": f"Bearer {submitted['runner_token']}"},
+        json={"responses": responses},
+    )
+    failed = tasks[3]
+    with Session(engine) as session:
+        failed_task = session.get(ValidationTask, UUID(failed["task_id"]))
+        assert failed_task is not None
+        failed_task.status = "failed"
+        session.commit()
+
+    for task, expected_status in zip(
+        tasks,
+        ("pending", "running", "submitted", "failed"),
+        strict=True,
+    ):
+        url = f"/api/validation-tasks/{task['task_id']}"
+        first = client.get(url)
+        second = client.get(url)
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert second.json() == first.json()
+        payload = first.json()
+        assert set(payload) == {
+            "task_id",
+            "target_id",
+            "status",
+            "created_at",
+            "submitted_at",
+            "failed_reason",
+        }
+        assert payload["task_id"] == task["task_id"]
+        assert payload["target_id"] == target["id"]
+        assert payload["status"] == expected_status
+        assert payload["created_at"]
+        assert (payload["submitted_at"] is not None) == (
+            expected_status == "submitted"
+        )
+        assert payload["failed_reason"] is None
+        assert task["runner_token"] not in json.dumps(payload)
+
+    with Session(engine) as session:
+        assert [
+            session.get(ValidationTask, UUID(task["task_id"])).status
+            for task in tasks
+        ] == ["pending", "running", "submitted", "failed"]
+
+    missing = client.get(f"/api/validation-tasks/{uuid4()}")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "validation_task_not_found"
+
+
 def test_validation_task_rejects_unfrozen_target_and_bad_tokens(api_context):
     client, engine = api_context
     ids = _seed_run(engine)
