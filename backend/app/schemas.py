@@ -458,6 +458,25 @@ class OptimizationTargetCompleteRequest(OptimizationTargetActorRequest):
     target: OptimizationTargetCreateRequest
 
 
+class OptimizationTargetProblemSetCreateRequest(OptimizationTargetCreateRequest):
+    problem_ids: list[UUID] = Field(min_length=1)
+
+    @field_validator("problem_ids")
+    @classmethod
+    def problem_ids_must_be_unique(cls, value: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(value))
+
+
+class OptimizationTargetProblemSetCompleteRequest(OptimizationTargetActorRequest):
+    problem_ids: list[UUID] = Field(min_length=1)
+    target: OptimizationTargetCreateRequest
+
+    @field_validator("problem_ids")
+    @classmethod
+    def problem_ids_must_be_unique(cls, value: list[UUID]) -> list[UUID]:
+        return list(dict.fromkeys(value))
+
+
 class OptimizationTargetBaselineMetricRead(BaseModel):
     affected_core_cases: int = Field(ge=0)
     core_denominator: int = Field(ge=0)
@@ -482,6 +501,7 @@ class OptimizationTargetRead(BaseModel):
     id: UUID
     baseline_run_id: UUID
     problem_id: UUID
+    problem_ids: list[UUID]
     version: int
     status: OptimizationTargetStatus
     definition: str
@@ -514,6 +534,12 @@ class OptimizationTargetRead(BaseModel):
     frozen_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def populate_legacy_problem_ids(self) -> Self:
+        if not self.problem_ids:
+            self.problem_ids = [self.problem_id]
+        return self
 
 
 class CandidateResponseInput(BaseModel):

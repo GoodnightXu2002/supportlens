@@ -73,6 +73,8 @@ from app.schemas import (
     OptimizationTargetCompleteRequest,
     OptimizationTargetCreateRequest,
     OptimizationTargetPatchRequest,
+    OptimizationTargetProblemSetCompleteRequest,
+    OptimizationTargetProblemSetCreateRequest,
     OptimizationTargetRead,
     ProblemRead,
 )
@@ -718,6 +720,52 @@ def complete_optimization_target(
 ) -> OptimizationTargetRead | JSONResponse:
     try:
         return service.complete(run_id, problem_id, request, db_session)
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/optimization-targets",
+    response_model=OptimizationTargetRead,
+    status_code=201,
+)
+def create_problem_set_optimization_target(
+    run_id: UUID,
+    request: OptimizationTargetProblemSetCreateRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        target = OptimizationTargetCreateRequest.model_validate(
+            request.model_dump(exclude={"problem_ids"})
+        )
+        return service.create_for_problems(
+            run_id, request.problem_ids, target, db_session
+        )
+    except OptimizationTargetError as error:
+        return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/evaluation-runs/{run_id}/optimization-targets/complete",
+    response_model=OptimizationTargetRead,
+)
+def complete_problem_set_optimization_target(
+    run_id: UUID,
+    request: OptimizationTargetProblemSetCompleteRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationTargetService,
+        Depends(get_optimization_target_service),
+    ],
+) -> OptimizationTargetRead | JSONResponse:
+    try:
+        return service.complete_for_problems(
+            run_id, request.problem_ids, request.target, request.actor, db_session
+        )
     except OptimizationTargetError as error:
         return _optimization_target_error_response(error)
 

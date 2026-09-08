@@ -92,24 +92,53 @@ class OptimizationTargetService:
         *,
         commit: bool = True,
     ) -> OptimizationTargetRead:
+        return self.create_for_problems(
+            evaluation_run_id,
+            [problem_id],
+            request,
+            db_session,
+            commit=commit,
+        )
+
+    def create_for_problems(
+        self,
+        evaluation_run_id: UUID,
+        problem_ids: list[UUID],
+        request: OptimizationTargetCreateRequest,
+        db_session: Session,
+        *,
+        commit: bool = True,
+    ) -> OptimizationTargetRead:
         evaluation_run = self._load_run(evaluation_run_id, db_session)
         self._validate_run(evaluation_run)
-
-        problem = db_session.get(Problem, problem_id)
-        if problem is None:
+        unique_problem_ids = list(dict.fromkeys(problem_ids))
+        if not unique_problem_ids:
             raise OptimizationTargetError(
                 OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_NOT_FOUND,
-                f"Problem '{problem_id}' was not found.",
+                "Optimization target requires at least one problem.",
             )
-        if problem.evaluation_run_id != evaluation_run.id:
-            raise OptimizationTargetError(
-                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_RUN_MISMATCH,
-                "Problem does not belong to the requested baseline run.",
-            )
-        if self._target_exists(evaluation_run.id, problem.id, db_session):
+        problems: list[Problem] = []
+        for problem_id in unique_problem_ids:
+            problem = db_session.get(Problem, problem_id)
+            if problem is None:
+                raise OptimizationTargetError(
+                    OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_NOT_FOUND,
+                    f"Problem '{problem_id}' was not found.",
+                )
+            if problem.evaluation_run_id != evaluation_run.id:
+                raise OptimizationTargetError(
+                    (
+                        OptimizationTargetErrorCode
+                        .OPTIMIZATION_TARGET_PROBLEM_RUN_MISMATCH
+                    ),
+                    "Problem does not belong to the requested baseline run.",
+                )
+            problems.append(problem)
+        problem_set_key = _problem_set_key(unique_problem_ids)
+        if self._target_exists(evaluation_run.id, problem_set_key, db_session):
             raise OptimizationTargetError(
                 OptimizationTargetErrorCode.OPTIMIZATION_TARGET_ALREADY_EXISTS,
-                "An optimization target already exists for this run and problem.",
+                "An optimization target already exists for this run and problem set.",
             )
 
         effective_results = self._final_result_service.list_final_effective_results(
@@ -125,59 +154,19 @@ class OptimizationTargetService:
                 "All evaluation results must be final before creating a target.",
             )
 
-        problem_read = self._load_problem_read(
-            evaluation_run.id,
-            problem.id,
-            db_session,
-        )
-        if not problem_read.affected_case_ids:
-            raise OptimizationTargetError(
-                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_HAS_NO_AFFECTED_CASES,
-                "Optimization target requires at least one affected case.",
-            )
-
+        problem_reads = [
+            self._load_problem_read(evaluation_run.id, problem.id, db_session)
+            for problem in problems
+        ]
         reference_basis = [
             evidence.model_dump(mode="json")
+            for problem_read in problem_reads
             for evidence in problem_read.evidence
             if evidence.evidence_type is EvidenceType.REFERENCE
         ]
         effective_result_by_id = {
             result.evaluation_result_id: result for result in effective_results
         }
-        affected_effective_results = [
-            effective_result_by_id.get(result_id)
-            for result_id in problem_read.affected_evaluation_result_ids
-        ]
-        if any(
-            effective is None
-            or effective.final_result is None
-            or effective.final_result.primary_failure_mode is None
-            for effective in affected_effective_results
-        ):
-            raise OptimizationTargetError(
-                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FAILURE_MODE_NOT_UNIQUE,
-                (
-                    "Affected final results do not provide one unique primary "
-                    "failure mode."
-                ),
-            )
-        failure_modes = {
-            effective.final_result.primary_failure_mode.value
-            for effective in affected_effective_results
-            if effective is not None
-            and effective.final_result is not None
-            and effective.final_result.primary_failure_mode is not None
-        }
-        if len(failure_modes) != 1:
-            raise OptimizationTargetError(
-                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FAILURE_MODE_NOT_UNIQUE,
-                (
-                    "Affected final results do not provide one unique primary "
-                    "failure mode."
-                ),
-            )
-        failure_mode = next(iter(failure_modes))
-
         all_cases = list(
             db_session.scalars(
                 select(Conversation)
@@ -189,8 +178,76 @@ class OptimizationTargetService:
                 )
             ).all()
         )
-        affected_case_ids = list(problem_read.affected_case_ids)
-        affected_case_id_set = set(affected_case_ids)
+        case_set_by_id = {
+            case.external_id: _case_set(case.metadata_) for case in all_cases
+        }
+        legacy_failure_modes: list[str] = []
+        for problem_read in problem_reads:
+            core_results = [
+                effective_result_by_id.get(result_id)
+                for result_id in problem_read.affected_evaluation_result_ids
+                if case_set_by_id.get(
+                    effective_result_by_id[result_id].case_id
+                    if result_id in effective_result_by_id
+                    else ""
+                )
+                == "core"
+            ]
+            eligible_results = [
+                result
+                for result in core_results
+                if result is not None
+                and result.final_result is not None
+                and result.final_result.judgment.value in {"warning", "failure"}
+            ]
+            if not eligible_results:
+                raise OptimizationTargetError(
+                    (
+                        OptimizationTargetErrorCode
+                        .OPTIMIZATION_TARGET_PROBLEM_HAS_NO_AFFECTED_CASES
+                    ),
+                    "Optimization target requires an affected Core case.",
+                )
+            failure_results = [
+                result
+                for result in eligible_results
+                if result is not None
+                and result.final_result is not None
+                and result.final_result.judgment.value == "failure"
+            ]
+            failure_modes = {
+                result.final_result.primary_failure_mode.value
+                for result in failure_results
+                if result.final_result is not None
+                and result.final_result.primary_failure_mode is not None
+            }
+            if any(
+                result.final_result is None
+                or result.final_result.primary_failure_mode is None
+                for result in failure_results
+            ) or len(failure_modes) > 1:
+                raise OptimizationTargetError(
+                    (
+                        OptimizationTargetErrorCode
+                        .OPTIMIZATION_TARGET_FAILURE_MODE_NOT_UNIQUE
+                    ),
+                    (
+                        "Affected Core failures do not provide one unique primary "
+                        "failure mode."
+                    ),
+                )
+            legacy_failure_modes.append(next(iter(failure_modes), "other"))
+
+        affected_case_id_set = {
+            case_id
+            for problem_read in problem_reads
+            for case_id in problem_read.affected_case_ids
+        }
+        affected_case_ids = [
+            case.external_id
+            for case in all_cases
+            if case.external_id in affected_case_id_set
+        ]
         core_case_ids = [
             case.external_id
             for case in all_cases
@@ -208,10 +265,13 @@ class OptimizationTargetService:
             if _case_set(case.metadata_) == "challenge"
         ]
 
-        frequency = problem_read.frequency.model_dump(mode="json")
+        primary_problem_read = problem_reads[0]
+        primary_frequency = primary_problem_read.frequency.model_dump(mode="json")
         target = OptimizationTarget(
             baseline_run_id=evaluation_run.id,
-            problem_id=problem.id,
+            problem_id=problems[0].id,
+            problem_ids=[str(problem_id) for problem_id in unique_problem_ids],
+            problem_set_key=problem_set_key,
             version=1,
             status=OptimizationTargetStatus.DRAFT.value,
             definition=request.definition,
@@ -219,11 +279,14 @@ class OptimizationTargetService:
             exclusion_criteria=request.exclusion_criteria,
             baseline_affected_case_ids=affected_case_ids,
             reference_basis=reference_basis,
-            failure_mode=failure_mode,
+            failure_mode=legacy_failure_modes[0],
             baseline_metric={
-                "affected_core_cases": problem_read.frequency.numerator,
-                "core_denominator": problem_read.frequency.denominator,
-                "frequency": frequency,
+                "affected_core_cases": len(target_case_ids),
+                "core_denominator": len(core_case_ids),
+                "frequency": {
+                    "numerator": len(target_case_ids),
+                    "denominator": len(core_case_ids),
+                },
             },
             expected_observable_change=request.expected_observable_change,
             confirmed_by=None,
@@ -239,14 +302,14 @@ class OptimizationTargetService:
             challenge_case_ids=challenge_case_ids,
             protected_capabilities=list(request.protected_capabilities),
             baseline_snapshot={
-                "problem_id": str(problem_read.problem_id),
-                "definition": problem_read.definition,
-                "scenario": problem_read.scenario,
-                "priority_severity": problem_read.priority_severity,
-                "business_impact": problem_read.business_impact,
-                "frequency": frequency,
-                "pattern_consistency": problem_read.pattern_consistency,
-                "evidence_confidence": problem_read.evidence_confidence,
+                "problem_id": str(primary_problem_read.problem_id),
+                "definition": primary_problem_read.definition,
+                "scenario": primary_problem_read.scenario,
+                "priority_severity": primary_problem_read.priority_severity,
+                "business_impact": primary_problem_read.business_impact,
+                "frequency": primary_frequency,
+                "pattern_consistency": primary_problem_read.pattern_consistency,
+                "evidence_confidence": primary_problem_read.evidence_confidence,
                 "affected_case_ids": affected_case_ids,
             },
             evaluation_config_snapshot={
@@ -270,10 +333,13 @@ class OptimizationTargetService:
                 db_session.flush()
         except IntegrityError as error:
             db_session.rollback()
-            if self._target_exists(evaluation_run.id, problem.id, db_session):
+            if self._target_exists(evaluation_run.id, problem_set_key, db_session):
                 raise OptimizationTargetError(
                     OptimizationTargetErrorCode.OPTIMIZATION_TARGET_ALREADY_EXISTS,
-                    "An optimization target already exists for this run and problem.",
+                    (
+                        "An optimization target already exists for this run and "
+                        "problem set."
+                    ),
                 ) from error
             raise OptimizationTargetError(
                 OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PERSISTENCE_FAILED,
@@ -432,19 +498,42 @@ class OptimizationTargetService:
         request: OptimizationTargetCompleteRequest,
         db_session: Session,
     ) -> OptimizationTargetRead:
+        return self.complete_for_problems(
+            evaluation_run_id,
+            [problem_id],
+            request.target,
+            request.actor,
+            db_session,
+        )
+
+    def complete_for_problems(
+        self,
+        evaluation_run_id: UUID,
+        problem_ids: list[UUID],
+        request: OptimizationTargetCreateRequest,
+        actor_name: str,
+        db_session: Session,
+    ) -> OptimizationTargetRead:
         """Save, confirm and freeze together; retries reuse the same target."""
+        unique_problem_ids = list(dict.fromkeys(problem_ids))
+        if not unique_problem_ids:
+            raise OptimizationTargetError(
+                OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PROBLEM_NOT_FOUND,
+                "Optimization target requires at least one problem.",
+            )
+        problem_set_key = _problem_set_key(unique_problem_ids)
         try:
             existing = db_session.scalar(
                 select(OptimizationTarget)
                 .where(
                     OptimizationTarget.baseline_run_id == evaluation_run_id,
-                    OptimizationTarget.problem_id == problem_id,
+                    OptimizationTarget.problem_set_key == problem_set_key,
                 )
                 .with_for_update()
             )
             if existing and existing.status == OptimizationTargetStatus.FROZEN.value:
                 return OptimizationTargetRead.model_validate(existing)
-            values = request.target.model_dump(exclude_unset=True)
+            values = request.model_dump(exclude_unset=True)
             values["policy_version"] = (
                 existing.policy_version if existing and existing.policy_version
                 else "CANDIDATE-DECISION-POLICY-V1"
@@ -455,12 +544,14 @@ class OptimizationTargetService:
                     db_session, commit=False,
                 )
             else:
-                target = self.create(
-                    evaluation_run_id, problem_id,
-                    OptimizationTargetCreateRequest(**values), db_session,
+                target = self.create_for_problems(
+                    evaluation_run_id,
+                    unique_problem_ids,
+                    OptimizationTargetCreateRequest(**values),
+                    db_session,
                     commit=False,
                 )
-            actor = OptimizationTargetActorRequest(actor=request.actor)
+            actor = OptimizationTargetActorRequest(actor=actor_name)
             self.confirm_target(target.id, actor, db_session, commit=False)
             frozen = self.freeze(target.id, actor, db_session, commit=False)
             db_session.commit()
@@ -538,8 +629,6 @@ class OptimizationTargetService:
             failures.append("target_confirmation")
         if not target.target_case_ids:
             failures.append("target_case_ids")
-        if not target.regression_case_ids:
-            failures.append("regression_case_ids")
         if not target.baseline_snapshot:
             failures.append("baseline_snapshot")
         if not target.evaluation_config_snapshot:
@@ -609,14 +698,14 @@ class OptimizationTargetService:
     @staticmethod
     def _target_exists(
         evaluation_run_id: UUID,
-        problem_id: UUID,
+        problem_set_key: str,
         db_session: Session,
     ) -> bool:
         return (
             db_session.scalar(
                 select(OptimizationTarget.id).where(
                     OptimizationTarget.baseline_run_id == evaluation_run_id,
-                    OptimizationTarget.problem_id == problem_id,
+                    OptimizationTarget.problem_set_key == problem_set_key,
                 )
             )
             is not None
@@ -633,8 +722,14 @@ def _case_set(metadata: object) -> str | None:
     return case_set if isinstance(case_set, str) else None
 
 
+def _problem_set_key(problem_ids: list[UUID]) -> str:
+    canonical = ",".join(sorted(str(problem_id) for problem_id in problem_ids))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def build_optimization_target_plan_hash(target: OptimizationTarget) -> str:
     payload = {
+        "problem_ids": target.problem_ids or [str(target.problem_id)],
         "target_contract": {
             "definition": target.definition,
             "inclusion_criteria": target.inclusion_criteria,

@@ -430,9 +430,9 @@ class OptimizationTarget(Base):
     __table_args__ = (
         UniqueConstraint(
             "baseline_run_id",
-            "problem_id",
+            "problem_set_key",
             "version",
-            name="uq_optimization_targets_run_problem_version",
+            name="uq_optimization_targets_run_problem_set_version",
         ),
         CheckConstraint(
             "version >= 1",
@@ -530,6 +530,12 @@ class OptimizationTarget(Base):
         ForeignKey("problems.id"),
         nullable=False,
         index=True,
+    )
+    problem_ids: Mapped[list[str]] = mapped_column(
+        JSON(none_as_null=True), nullable=False, default=list, server_default="[]"
+    )
+    problem_set_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default=""
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)

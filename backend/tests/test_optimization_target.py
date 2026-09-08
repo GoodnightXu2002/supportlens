@@ -198,6 +198,35 @@ def _create(client: TestClient, ids: dict[str, UUID], payload=None):
     )
 
 
+def _add_problem_for_case(engine, ids: dict[str, UUID], case_id: str) -> UUID:
+    with Session(engine) as session:
+        result = session.scalar(
+            select(EvaluationResult)
+            .join(Conversation)
+            .where(Conversation.external_id == case_id)
+        )
+        assert result is not None
+        definition = f"A second problem affects {case_id}."
+        problem = Problem(
+            evaluation_run_id=ids["run_id"],
+            scenario="Product",
+            definition=definition,
+            mapping_key=build_problem_mapping_key("Product", definition),
+            mapping_version=PROBLEM_MAPPING_VERSION,
+        )
+        session.add(problem)
+        session.flush()
+        session.add(
+            ResultProblemLink(
+                problem=problem,
+                evaluation_result=result,
+                role="primary",
+            )
+        )
+        session.commit()
+        return problem.id
+
+
 def _confirm_and_freeze(
     client: TestClient,
     target_id: str,
@@ -222,6 +251,7 @@ def _confirm_and_freeze(
 
 def _expected_plan_hash(body: dict[str, object]) -> str:
     payload = {
+        "problem_ids": body["problem_ids"],
         "target_contract": {
             "definition": body["definition"],
             "inclusion_criteria": body["inclusion_criteria"],
@@ -270,6 +300,7 @@ def test_create_derives_case_sets_metric_snapshot_and_lineage(api_context) -> No
     body = response.json()
     assert body["baseline_run_id"] == str(ids["run_id"])
     assert body["problem_id"] == str(ids["problem_id"])
+    assert body["problem_ids"] == [str(ids["problem_id"])]
     assert body["version"] == 1
     assert body["status"] == "draft"
     assert body["change_status"] == "planned"
@@ -944,14 +975,13 @@ def test_complete_failure_rolls_back_all_changes(
             ) == 0
 
 
-@pytest.mark.parametrize("missing_set", ["target", "regression"])
-def test_complete_rejects_missing_cases_and_rolls_back(api_context, missing_set):
+def test_complete_rejects_missing_target_cases_and_rolls_back(api_context):
     client, engine = api_context
     ids = _seed_run(engine)
     with Session(engine) as session:
         cases = session.scalars(select(Conversation)).all()
         for case in cases:
-            if (case.external_id in ["CASE-A", "CASE-B"]) == (missing_set == "target"):
+            if case.external_id in ["CASE-A", "CASE-B"]:
                 case.metadata_ = {
                     **case.metadata_, "metadata": {"case_set": "challenge"},
                 }
@@ -961,8 +991,10 @@ def test_complete_rejects_missing_cases_and_rolls_back(api_context, missing_set)
         f"{ids['problem_id']}/optimization-targets/complete",
         json={"actor": "owner", "target": CREATE_PAYLOAD},
     )
-    assert response.status_code == 409
-    assert missing_set + "_case_ids" in response.json()["error"]["message"]
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == (
+        "optimization_target_problem_has_no_affected_cases"
+    )
     with Session(engine) as session:
         assert session.scalar(select(func.count()).select_from(OptimizationTarget)) == 0
 
@@ -990,6 +1022,129 @@ def test_complete_requires_actor_and_reconfirms_changed_target(api_context):
     assert body["hypothesis_statement"] == CREATE_PAYLOAD["hypothesis_statement"]
     assert body["hypothesis_confirmed_by"] is None
     assert body["plan_hash"] == _expected_plan_hash(body)
+
+
+def test_problem_set_target_deduplicates_union_and_refreshes_draft(api_context):
+    client, engine = api_context
+    ids = _seed_run(engine)
+    second_problem_id = _add_problem_for_case(engine, ids, "CASE-C")
+    single = _create(client, ids)
+    assert single.status_code == 201
+    problem_ids = [ids["problem_id"], second_problem_id, ids["problem_id"]]
+    draft = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/optimization-targets",
+        json={**CREATE_PAYLOAD, "problem_ids": [str(item) for item in problem_ids]},
+    )
+    assert draft.status_code == 201
+    draft_body = draft.json()
+    assert draft_body["problem_id"] == str(ids["problem_id"])
+    assert draft_body["problem_ids"] == [
+        str(ids["problem_id"]), str(second_problem_id),
+    ]
+    assert draft_body["target_case_ids"] == ["CASE-A", "CASE-B", "CASE-C"]
+    assert draft_body["regression_case_ids"] == []
+    assert draft_body["challenge_case_ids"] == ["CASE-D"]
+
+    completed = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/optimization-targets/complete",
+        json={
+            "actor": "owner",
+            "problem_ids": [str(ids["problem_id"]), str(second_problem_id)],
+            "target": CREATE_PAYLOAD,
+        },
+    )
+    assert completed.status_code == 200
+    frozen = completed.json()
+    assert frozen["id"] == draft_body["id"]
+    assert frozen["status"] == "frozen"
+    assert frozen["plan_hash"] == _expected_plan_hash(frozen)
+    assert client.get(f"/api/optimization-targets/{frozen['id']}").json() == frozen
+    duplicate = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/optimization-targets",
+        json={
+            **CREATE_PAYLOAD,
+            "problem_ids": [str(second_problem_id), str(ids["problem_id"])],
+        },
+    )
+    assert duplicate.status_code == 409
+
+
+def test_problem_set_migration_round_trip_backfills_single_problem(api_context):
+    from pathlib import Path
+    from runpy import run_path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    client, engine = api_context
+    ids = _seed_run(engine)
+    original = _create(client, ids).json()
+    migration = run_path(str(
+        Path(__file__).parents[1] / "alembic" / "versions"
+        / "c7e9a1b3d524_add_optimization_target_problem_sets.py"
+    ))
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                migration["downgrade"]()
+            columns = {
+                row[1]
+                for row in connection.exec_driver_sql(
+                    "PRAGMA table_info('optimization_targets')"
+                )
+            }
+            assert "problem_ids" not in columns
+            assert "problem_set_key" not in columns
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                migration["upgrade"]()
+            row = connection.execute(
+                select(
+                    OptimizationTarget.problem_id,
+                    OptimizationTarget.problem_ids,
+                    OptimizationTarget.problem_set_key,
+                ).where(OptimizationTarget.id == UUID(original["id"]))
+            ).one()
+            assert row.problem_ids == [str(row.problem_id)]
+            assert row.problem_set_key == hashlib.sha256(
+                str(row.problem_id).encode()
+            ).hexdigest()
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
+    assert client.get(f"/api/optimization-targets/{original['id']}").json() == original
+
+
+def test_problem_set_migration_refuses_lossy_downgrade(api_context):
+    from pathlib import Path
+    from runpy import run_path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    client, engine = api_context
+    ids = _seed_run(engine)
+    second_problem_id = _add_problem_for_case(engine, ids, "CASE-C")
+    response = client.post(
+        f"/api/evaluation-runs/{ids['run_id']}/optimization-targets",
+        json={
+            **CREATE_PAYLOAD,
+            "problem_ids": [str(ids["problem_id"]), str(second_problem_id)],
+        },
+    )
+    assert response.status_code == 201
+    migration = run_path(str(
+        Path(__file__).parents[1] / "alembic" / "versions"
+        / "c7e9a1b3d524_add_optimization_target_problem_sets.py"
+    ))
+    with engine.connect() as connection:
+        with Operations.context(MigrationContext.configure(connection)):
+            with pytest.raises(RuntimeError, match="without data loss"):
+                migration["downgrade"]()
+    assert client.get(
+        f"/api/optimization-targets/{response.json()['id']}"
+    ).status_code == 200
 
 
 def test_optional_hypothesis_migration_preserves_existing_records(api_context):
