@@ -163,7 +163,7 @@ function BaselineAnalysisPage() {
     runId: string
     selected_problem_ids: string[]
   }>({ runId: '', selected_problem_ids: [] })
-  const [selectedResultId, setSelectedResultId] = useState<string | null>(null)
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
   const pageState: PageState = !runId
     ? { kind: 'missing_run_id' }
     : loadResult.runId === runId
@@ -310,7 +310,7 @@ function BaselineAnalysisPage() {
     .map((item) => finalResultById.get(item.resultId))
     .filter((result): result is FinalEffectiveResult => result !== undefined)
   const selectedResult = (
-    affectedResults.find((result) => result.evaluation_result_id === selectedResultId)
+    affectedResults.find((result) => result.evaluation_result_id === activeCaseId)
     ?? affectedResults[0]
   )
   const selectedConversation = selectedResult
@@ -569,7 +569,7 @@ function BaselineAnalysisPage() {
                           isRelatedToActiveProblem ? 's03-case-row--related' : '',
                         ].filter(Boolean).join(' ')}
                         key={result.evaluation_result_id}
-                        onClick={() => setSelectedResultId(result.evaluation_result_id)}
+                        onClick={() => setActiveCaseId(result.evaluation_result_id)}
                       >
                         <span className="s03-case-id">
                           {isSelectedCase ? <span className="s03-case-id__rail" aria-hidden="true" /> : null}

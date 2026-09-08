@@ -448,6 +448,10 @@
 }
 
 .s03-case-row--related {
+  background: var(--color-background);
+}
+
+.s03-case-row--selected {
   background: var(--color-surface-subtle);
   border-color: var(--color-border);
 }
@@ -510,6 +514,7 @@
 
 .s03-case-row--selected .s03-case-summary {
   color: var(--color-text);
+  font-weight: 600;
 }
 
 .s03-evidence-header {
