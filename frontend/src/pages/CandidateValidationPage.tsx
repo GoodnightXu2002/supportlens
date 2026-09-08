@@ -15,20 +15,19 @@ import {
 import { useSearchParams } from 'react-router-dom'
 
 import {
+  API_BASE_URL,
   ApiRequestError,
   createCandidateComparisons,
-  createCandidateRun,
-  executeCandidateRun,
+  createValidationTask,
   getCandidateComparisons,
   getCandidateValidationSummary,
   getDatasetConversations,
   getDatasetDetail,
-  getDatasetEvaluationRuns,
   getEvaluationRun,
   getFinalEffectiveResults,
   getOptimizationTarget,
+  getValidationTask,
   submitCandidateFinalDecision,
-  type CandidateResponseInput,
   type CandidateValidationSummary,
   type CaseComparison,
   type DatasetConversation,
@@ -38,8 +37,12 @@ import {
   type JudgeEvidence,
   type JudgeOutput,
   type OptimizationTarget,
+  type ValidationTaskReadResponse,
 } from '../api'
-import { parseCandidateResponsesJson } from '../validationHandoff'
+import {
+  buildLocalRunnerCommand,
+  withValidationTaskId,
+} from '../validationTaskHandoff'
 import './CandidateValidationPage.css'
 
 type BaseData = {
@@ -62,9 +65,11 @@ type PageState =
   | { kind: 'loading' }
   | { kind: 'target_not_found' }
   | { kind: 'candidate_not_found' }
+  | { kind: 'task_not_found' }
   | { kind: 'target_not_frozen'; target: OptimizationTarget }
   | { kind: 'error'; message: string }
-  | { kind: 'no_candidate'; data: BaseData }
+  | { kind: 'runner_setup'; data: BaseData }
+  | { kind: 'runner_task'; data: BaseData; task: ValidationTaskReadResponse }
   | { kind: 'candidate_status'; candidateRun: EvaluationRun }
   | { kind: 'ready'; data: CandidateData }
 
@@ -150,58 +155,113 @@ function PageMessage({ title, detail }: { title: string; detail: string }) {
   )
 }
 
-function CandidateSubmission({
+type RunnerAccess = {
+  taskId: string
+  runnerToken: string
+}
+
+const runnerStatusLabels = {
+  pending: 'pending · 等待 Runner',
+  running: 'running · Runner 执行中',
+  submitted: 'submitted · 回答已提交',
+  failed: 'failed · 执行失败',
+}
+
+function RunnerSubmission({
   data,
+  task,
+  runnerAccess,
   busy,
   error,
-  onSubmit,
+  onCreate,
 }: {
   data: BaseData
+  task: ValidationTaskReadResponse | null
+  runnerAccess: RunnerAccess | null
   busy: boolean
   error: string | null
-  onSubmit: (label: string, summary: string, responses: CandidateResponseInput[]) => void
+  onCreate: () => void
 }) {
-  const [label, setLabel] = useState('')
+  const [label, setLabel] = useState(`Candidate V${data.target.version}`)
   const [summary, setSummary] = useState('')
-  const [responses, setResponses] = useState<CandidateResponseInput[]>([])
-  const [fileName, setFileName] = useState('')
-  const [parseError, setParseError] = useState<string | null>(null)
+  const [copyStatus, setCopyStatus] = useState<string | null>(null)
+  const access = task && runnerAccess?.taskId === task.task_id ? runnerAccess : null
+  const runnerCommand = access
+    ? buildLocalRunnerCommand({
+        baseUrl: API_BASE_URL,
+        taskId: access.taskId,
+        runnerToken: access.runnerToken,
+      })
+    : ''
 
-  const requiredCaseIds = [
-    ...data.target.target_case_ids,
-    ...data.target.regression_case_ids,
-    ...data.target.challenge_case_ids,
-  ]
-
-  async function loadResponses(file: File | undefined) {
-    setParseError(null)
-    setResponses([])
-    setFileName('')
-    if (!file) return
+  async function copyValue(value: string, label: string) {
     try {
-      setResponses(parseCandidateResponsesJson(await file.text(), requiredCaseIds, data.conversations))
-      setFileName(file.name)
-    } catch (submissionError) {
-      setParseError(submissionError instanceof Error ? submissionError.message : '候选回复 JSON 无效。')
+      await navigator.clipboard.writeText(value)
+      setCopyStatus(`${label}已复制。`)
+    } catch {
+      setCopyStatus(`${label}复制失败，请手动选择复制。`)
     }
   }
 
-  const scopeCount = requiredCaseIds.length
   return (
     <section className="s05-page">
       <div className="s05-canvas s05-submit">
         <header>
-          <span className="s05-eyebrow">FROZEN TARGET V{data.target.version}</span>
-          <h1>提交候选版本回复</h1>
-          <p>数据集：{data.dataset.name} {data.dataset.version} · 冻结范围 {scopeCount} Cases</p>
+          <h1>候选版本验证</h1>
+          <p>Frozen Target V{data.target.version} · {data.dataset.name} {data.dataset.version}</p>
         </header>
-        <label><span>候选版本名称</span><input value={label} onChange={(event) => setLabel(event.target.value)} disabled={busy} /></label>
-        <label><span>变更说明</span><textarea value={summary} onChange={(event) => setSummary(event.target.value)} disabled={busy} rows={3} /></label>
-        <label><span>候选回复 JSON</span><input className="s05-file-input" type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void loadResponses(file) }} disabled={busy} /></label>
-        <p className="s05-submit-note">请在 S04 导出的案例中补充非空 assistant_content 后上传；文件必须完整覆盖当前冻结计划。</p>
-        {fileName && <p className="s05-file-status" role="status">{fileName} · 已解析 {responses.length}/{scopeCount} 个案例</p>}
-        {(parseError || error) && <p className="s05-form-error" role="alert">{parseError ?? error}</p>}
-        <button type="button" onClick={() => onSubmit(label, summary, responses)} disabled={busy || !label.trim() || !summary.trim() || responses.length !== scopeCount}>{busy ? '正在执行候选版本验证…' : '开始候选版本验证'}</button>
+        <dl className="s05-runner-scope" aria-label="冻结验证范围">
+          <div><dt>本轮优化问题</dt><dd>{new Set(data.target.problem_ids).size || 1}</dd></div>
+          <div><dt>Target</dt><dd>{data.target.target_case_ids.length}</dd></div>
+          <div><dt>Regression</dt><dd>{data.target.regression_case_ids.length}</dd></div>
+          <div><dt>Challenge</dt><dd>{data.target.challenge_case_ids.length}</dd></div>
+        </dl>
+        <label>
+          <span>候选版本名称</span>
+          <input value={label} maxLength={120} onChange={(event) => setLabel(event.target.value)} disabled={busy || Boolean(task)} />
+        </label>
+        <label>
+          <span>变更说明（可选）</span>
+          <textarea value={summary} maxLength={1000} onChange={(event) => setSummary(event.target.value)} disabled={busy || Boolean(task)} rows={3} />
+        </label>
+        {error && <p className="s05-form-error" role="alert">{error}</p>}
+        {!task ? (
+          <button type="button" onClick={onCreate} disabled={busy || !label.trim()}>
+            {busy ? '正在创建验证任务…' : '创建验证任务'}
+          </button>
+        ) : (
+          <section className="s05-runner-task" aria-label="Local Runner 任务" aria-live="polite">
+            <header>
+              <h2>Local Runner</h2>
+              <span className={`s05-runner-status s05-runner-status--${task.status}`}>
+                {runnerStatusLabels[task.status]}
+              </span>
+            </header>
+            <div className="s05-runner-value">
+              <span>task_id</span>
+              <code>{task.task_id}</code>
+            </div>
+            {task.status === 'submitted' ? (
+              <p className="s05-runner-success"><MdCheckCircle aria-hidden="true" />候选版本回答已收集</p>
+            ) : task.status === 'failed' ? (
+              <p className="s05-form-error">{task.failed_reason ?? '验证任务执行失败，Backend 未提供失败原因。'}</p>
+            ) : access ? (
+              <>
+                <div className="s05-runner-value">
+                  <span>一次性 token</span>
+                  <code>{access.runnerToken}</code>
+                  <button type="button" onClick={() => { void copyValue(access.runnerToken, 'Token') }}>复制</button>
+                </div>
+                <p className="s05-submit-note">在 SupportLens/backend 目录执行；先替换命令中的三项 AGENT_* 本地配置。Agent API Key 仅保留在本机。</p>
+                <pre className="s05-runner-command">{runnerCommand}</pre>
+                <button className="s05-runner-copy" type="button" onClick={() => { void copyValue(runnerCommand, 'Runner 命令') }}>复制 Runner 命令</button>
+              </>
+            ) : (
+              <p className="s05-submit-note">Runner token 已按安全规则不再显示；页面将继续恢复并同步此任务的真实状态。</p>
+            )}
+            {copyStatus && <p className="s05-copy-status" role="status">{copyStatus}</p>}
+          </section>
+        )}
       </div>
     </section>
   )
@@ -322,13 +382,16 @@ function CandidateValidationPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const targetId = searchParams.get('target_id')?.trim() ?? ''
   const candidateRunId = searchParams.get('candidate_run_id')?.trim() ?? ''
+  const validationTaskId = searchParams.get('validation_task_id')?.trim() ?? ''
   const workflowRunId = searchParams.get('run_id')?.trim() ?? ''
   const workflowProblemId = searchParams.get('problem_id')?.trim() ?? ''
-  const requestKey = `${targetId}:${candidateRunId}`
+  const workflowProblemIds = searchParams.get('problem_ids')?.trim() ?? ''
+  const requestKey = `${targetId}:${candidateRunId}:${validationTaskId}`
   const [loadResult, setLoadResult] = useState<{ requestKey: string; state: PageState }>(() => ({ requestKey, state: targetId ? { kind: 'loading' } : { kind: 'missing_target' } }))
   const [selectedCaseId, setSelectedCaseId] = useState('')
-  const [submissionBusy, setSubmissionBusy] = useState(false)
-  const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const [taskCreationBusy, setTaskCreationBusy] = useState(false)
+  const [taskError, setTaskError] = useState<string | null>(null)
+  const [runnerAccess, setRunnerAccess] = useState<RunnerAccess | null>(null)
   const [decisionBusy, setDecisionBusy] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -339,13 +402,21 @@ function CandidateValidationPage() {
     async function load() {
       try {
         const target = await getOptimizationTarget(targetId, controller.signal)
-        if (workflowRunId !== target.baseline_run_id || workflowProblemId !== target.problem_id) {
+        const targetProblemIds = target.problem_ids.length ? target.problem_ids : [target.problem_id]
+        const problemIdsParam = targetProblemIds.join(',')
+        if (
+          workflowRunId !== target.baseline_run_id
+          || workflowProblemId !== target.problem_id
+          || workflowProblemIds !== problemIdsParam
+        ) {
           const params = new URLSearchParams({
             target_id: target.id,
             run_id: target.baseline_run_id,
             problem_id: target.problem_id,
+            problem_ids: problemIdsParam,
           })
           if (candidateRunId) params.set('candidate_run_id', candidateRunId)
+          if (validationTaskId) params.set('validation_task_id', validationTaskId)
           setSearchParams(params, { replace: true })
         }
         if (target.status !== 'frozen') {
@@ -356,18 +427,16 @@ function CandidateValidationPage() {
         const [dataset, conversations] = await Promise.all([getDatasetDetail(baselineRun.dataset_id, controller.signal), getDatasetConversations(baselineRun.dataset_id, controller.signal)])
         const base = { target, baselineRun, dataset, conversations }
         if (!candidateRunId) {
-          const runs = await getDatasetEvaluationRuns(baselineRun.dataset_id, controller.signal)
-          const candidate = runs.find((run) => run.run_type === 'candidate' && run.target_id === target.id)
-          if (candidate) {
-            setSearchParams({
-              target_id: targetId,
-              candidate_run_id: candidate.id,
-              run_id: target.baseline_run_id,
-              problem_id: target.problem_id,
-            }, { replace: true })
+          if (!validationTaskId) {
+            setLoadResult({ requestKey, state: { kind: 'runner_setup', data: base } })
             return
           }
-          setLoadResult({ requestKey, state: { kind: 'no_candidate', data: base } })
+          const task = await getValidationTask(validationTaskId, controller.signal)
+          if (task.target_id !== target.id) {
+            setLoadResult({ requestKey, state: { kind: 'task_not_found' } })
+            return
+          }
+          setLoadResult({ requestKey, state: { kind: 'runner_task', data: base, task } })
           return
         }
         const candidateRun = await getEvaluationRun(candidateRunId, controller.signal)
@@ -393,16 +462,22 @@ function CandidateValidationPage() {
           setLoadResult({ requestKey, state: { kind: 'candidate_not_found' } })
           return
         }
+        if (error instanceof ApiRequestError && error.code === 'validation_task_not_found' && validationTaskId) {
+          setLoadResult({ requestKey, state: { kind: 'task_not_found' } })
+          return
+        }
         setLoadResult({ requestKey, state: { kind: 'error', message: error instanceof Error ? error.message : '无法加载 Candidate Validation。' } })
       }
     }
     void load()
     return () => controller.abort()
-  }, [candidateRunId, reloadKey, requestKey, setSearchParams, targetId, workflowProblemId, workflowRunId])
+  }, [candidateRunId, reloadKey, requestKey, setSearchParams, targetId, validationTaskId, workflowProblemId, workflowProblemIds, workflowRunId])
 
   const pageState: PageState = !targetId ? { kind: 'missing_target' } : loadResult.requestKey === requestKey ? loadResult.state : { kind: 'loading' }
   const pollingCandidateId = pageState.kind === 'candidate_status' ? pageState.candidateRun.id : ''
   const pollingCandidateStatus = pageState.kind === 'candidate_status' ? pageState.candidateRun.status : ''
+  const pollingTaskId = pageState.kind === 'runner_task' ? pageState.task.task_id : ''
+  const pollingTaskStatus = pageState.kind === 'runner_task' ? pageState.task.status : ''
 
   useEffect(() => {
     if (!pollingCandidateId || !['pending', 'running'].includes(pollingCandidateStatus)) return
@@ -410,28 +485,50 @@ function CandidateValidationPage() {
     return () => window.clearTimeout(timer)
   }, [pollingCandidateId, pollingCandidateStatus])
 
-  async function submitCandidate(label: string, summary: string, responses: CandidateResponseInput[]) {
-    if (pageState.kind !== 'no_candidate' || !pageState.data.target.plan_hash) return
-    setSubmissionBusy(true)
-    setSubmissionError(null)
-    let createdId = ''
+  useEffect(() => {
+    if (!pollingTaskId || !['pending', 'running'].includes(pollingTaskStatus)) return
+    const controller = new AbortController()
+    let requestPending = false
+    const timer = window.setInterval(() => {
+      if (requestPending) return
+      requestPending = true
+      void getValidationTask(pollingTaskId, controller.signal)
+        .then((task) => {
+          setTaskError(null)
+          setLoadResult((current) => (
+            current.requestKey === requestKey && current.state.kind === 'runner_task'
+              ? { requestKey, state: { ...current.state, task } }
+              : current
+          ))
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted) {
+            setTaskError(error instanceof Error ? error.message : '验证任务状态同步失败。')
+          }
+        })
+        .finally(() => { requestPending = false })
+    }, 1500)
+    return () => {
+      window.clearInterval(timer)
+      controller.abort()
+    }
+  }, [pollingTaskId, pollingTaskStatus, requestKey])
+
+  async function createRunnerTask() {
+    if (pageState.kind !== 'runner_setup' || taskCreationBusy) return
+    setTaskCreationBusy(true)
+    setTaskError(null)
     try {
-      const candidate = await createCandidateRun({ baseline_run_id: pageState.data.baselineRun.id, target_id: pageState.data.target.id, plan_hash: pageState.data.target.plan_hash, candidate_label: label.trim(), candidate_change_summary: summary.trim(), source: 's05_manual_submission', actual_change_summary: summary.trim(), actual_change_status: 'verified', generation_parity_status: 'verified', candidate_first_exposure_at: new Date().toISOString(), responses })
-      createdId = candidate.id
-      setSearchParams({
-        target_id: targetId,
-        candidate_run_id: candidate.id,
-        run_id: pageState.data.target.baseline_run_id,
-        problem_id: pageState.data.target.problem_id,
-      }, { replace: true })
-      const executed = await executeCandidateRun(candidate.id)
-      if (executed.status !== 'completed') throw new Error(`Candidate Run 结束于 ${executed.status}，尚不能生成 Comparison。`)
-      await createCandidateComparisons(candidate.id)
-      setReloadKey((current) => current + 1)
+      const created = await createValidationTask(pageState.data.target.id)
+      if (created.optimization_target_id !== pageState.data.target.id) {
+        throw new Error('Backend 返回的 Validation Task 不属于当前 Frozen Target。')
+      }
+      setRunnerAccess({ taskId: created.task_id, runnerToken: created.runner_token })
+      setSearchParams(withValidationTaskId(searchParams.toString(), created.task_id), { replace: true })
     } catch (error) {
-      setSubmissionError(`${error instanceof Error ? error.message : 'Candidate Validation 执行失败。'}${createdId ? ` Candidate Run: ${createdId}` : ''}`)
+      setTaskError(error instanceof Error ? error.message : '验证任务创建失败。')
     } finally {
-      setSubmissionBusy(false)
+      setTaskCreationBusy(false)
     }
   }
 
@@ -454,10 +551,12 @@ function CandidateValidationPage() {
   if (pageState.kind === 'loading') return <PageMessage title="正在加载 Candidate Validation" detail="正在读取 Frozen Target 与真实运行数据…" />
   if (pageState.kind === 'target_not_found') return <PageMessage title="OptimizationTarget 不存在" detail={`未找到 target_id=${targetId}。`} />
   if (pageState.kind === 'candidate_not_found') return <PageMessage title="Candidate Run 不存在" detail="candidate_run_id 不存在或不属于当前 Frozen Target。" />
+  if (pageState.kind === 'task_not_found') return <PageMessage title="Validation Task 不存在" detail="validation_task_id 不存在或不属于当前 Frozen Target。" />
   if (pageState.kind === 'target_not_frozen') return <PageMessage title="Target 尚未冻结" detail={`当前状态为 ${pageState.target.status}，必须先在 S04 Freeze。`} />
   if (pageState.kind === 'error') return <PageMessage title="Candidate Validation 加载失败" detail={pageState.message} />
   if (pageState.kind === 'candidate_status') return <PageMessage title={`Candidate Run ${pageState.candidateRun.status}`} detail={`Run ${pageState.candidateRun.id} 已从 Backend 恢复。`} />
-  if (pageState.kind === 'no_candidate') return <CandidateSubmission data={pageState.data} busy={submissionBusy} error={submissionError} onSubmit={(label, summary, responses) => { void submitCandidate(label, summary, responses) }} />
+  if (pageState.kind === 'runner_setup') return <RunnerSubmission key={pageState.data.target.id} data={pageState.data} task={null} runnerAccess={runnerAccess} busy={taskCreationBusy} error={taskError} onCreate={() => { void createRunnerTask() }} />
+  if (pageState.kind === 'runner_task') return <RunnerSubmission key={pageState.data.target.id} data={pageState.data} task={pageState.task} runnerAccess={runnerAccess} busy={taskCreationBusy} error={taskError} onCreate={() => { void createRunnerTask() }} />
   return <CandidateWorkspace data={pageState.data} selectedCaseId={selectedCaseId} onSelectCase={setSelectedCaseId} decisionBusy={decisionBusy} decisionError={decisionError} onDecision={(decision, actor, reason, overrideReason) => { void submitDecision(decision, actor, reason, overrideReason) }} />
 }
 

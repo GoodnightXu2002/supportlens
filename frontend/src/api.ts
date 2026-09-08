@@ -285,6 +285,31 @@ export type OptimizationTargetPatchInput = Partial<
   OptimizationTargetCreateInput
 >
 
+export type ValidationTaskStatus =
+  | 'pending'
+  | 'running'
+  | 'submitted'
+  | 'failed'
+
+export type ValidationTaskCreateResponse = {
+  task_id: string
+  optimization_target_id: string
+  baseline_run_id: string
+  status: ValidationTaskStatus
+  case_count: number
+  runner_token: string
+  runner_token_expires_at: string
+}
+
+export type ValidationTaskReadResponse = {
+  task_id: string
+  target_id: string
+  status: ValidationTaskStatus
+  created_at: string
+  submitted_at: string | null
+  failed_reason: string | null
+}
+
 export type CandidateResponseInput = {
   conversation_id: string
   case_id: string
@@ -714,6 +739,29 @@ export function freezeOptimizationTarget(
   actor: string,
 ): Promise<OptimizationTarget> {
   return submitOptimizationTargetActorAction(targetId, 'freeze', actor)
+}
+
+export async function createValidationTask(
+  targetId: string,
+): Promise<ValidationTaskCreateResponse> {
+  return requestJson<ValidationTaskCreateResponse>(
+    await fetch(
+      `${API_BASE_URL}/api/optimization-targets/${encodeURIComponent(targetId)}/validation-tasks`,
+      { method: 'POST' },
+    ),
+  )
+}
+
+export async function getValidationTask(
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<ValidationTaskReadResponse> {
+  return requestJson<ValidationTaskReadResponse>(
+    await fetch(
+      `${API_BASE_URL}/api/validation-tasks/${encodeURIComponent(taskId)}`,
+      { signal },
+    ),
+  )
 }
 
 export async function createCandidateRun(

@@ -236,7 +236,6 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
   const missingCases = targetCaseCount === 0
   const requiredFields = [form.definition, form.inclusionCriteria, form.exclusionCriteria, form.expectedObservableChange]
   const canEnter = frozen || (requiredFields.every((value) => value.trim()) && actor.trim() && !missingCases)
-  const multiProblem = problems.length > 1
   const notes: [keyof TargetForm, string][] = [
     ['hypothesisStatement', '优化假设'], ['plannedChange', '计划变更'],
     ['changeSurface', '变更范围'], ['hypothesisEvidenceRefs', '证据引用（每行一项）'],
@@ -286,8 +285,8 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
         </div>
       </div>
       <footer className="s04-action-rail">
-        <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? (multiProblem ? '版本级验证计划已冻结；S05 多 Problem 接入将在下一步完成。' : '验证计划已冻结，可继续进入候选版本验证。') : '确认时自动保存目标并冻结版本级验证计划。')}</p>
-        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter || (frozen && multiProblem)}>{pendingAction === 'complete' ? '正在保存并冻结…' : frozen ? (multiProblem ? '验证计划已冻结' : '进入候选版本验证') : '确认并冻结验证计划'}</button>
+        <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? '验证计划已冻结，可继续进入候选版本验证。' : '确认时自动保存目标并冻结版本级验证计划。')}</p>
+        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并冻结…' : frozen ? '进入候选版本验证' : '确认并冻结验证计划'}</button>
       </footer>
     </section>
   )
@@ -303,6 +302,7 @@ function TargetPlanPage() {
   const activeProblemId = problemId || problemIds[0] || ''
   const workflowTargetId = searchParams.get('target_id')?.trim() ?? ''
   const workflowCandidateRunId = searchParams.get('candidate_run_id')?.trim() ?? ''
+  const workflowValidationTaskId = searchParams.get('validation_task_id')?.trim() ?? ''
   const requestKey = `${runId}:${problemIdsParam}`
   const [loadResult, setLoadResult] = useState<{
     requestKey: string
@@ -357,6 +357,9 @@ function TargetPlanPage() {
           })
           if (target) params.set('target_id', target.id)
           if (candidateRunId) params.set('candidate_run_id', candidateRunId)
+          if (workflowValidationTaskId && workflowTargetId === target?.id) {
+            params.set('validation_task_id', workflowValidationTaskId)
+          }
           setSearchParams(params, { replace: true })
         }
         setForm(target ? formFromTarget(target) : {
@@ -398,7 +401,7 @@ function TargetPlanPage() {
     }
     void load()
     return () => controller.abort()
-  }, [activeProblemId, problemIdsParam, requestKey, runId, setSearchParams, workflowCandidateRunId, workflowTargetId])
+  }, [activeProblemId, problemIdsParam, requestKey, runId, setSearchParams, workflowCandidateRunId, workflowTargetId, workflowValidationTaskId])
 
   const pageState: PageState = !runId || !problemIdsParam
     ? { kind: 'missing_parameters' }
@@ -426,20 +429,10 @@ function TargetPlanPage() {
         problem_ids: problemIdsParam,
       })
       if (pageState.data.candidateRunId) params.set('candidate_run_id', pageState.data.candidateRunId)
-      if (problemIds.length === 1) {
-        navigate('/validation?' + params.toString())
-      } else {
-        setLoadResult({
-          requestKey,
-          state: {
-            kind: 'ready',
-            data: { ...pageState.data, target: frozen },
-          },
-        })
-        setForm(formFromTarget(frozen))
-        setActor(frozen.confirmed_by ?? '')
-        setSearchParams(params, { replace: true })
+      if (workflowValidationTaskId && workflowTargetId === frozen.id) {
+        params.set('validation_task_id', workflowValidationTaskId)
       }
+      navigate('/validation?' + params.toString())
     } catch (error) {
       setActionError(error instanceof Error ? error.message : '操作失败。')
     } finally {

@@ -768,19 +768,41 @@
   line-height: 20px;
 }
 
-.s05-submit input.s05-file-input {
-  padding: 8px;
-  cursor: pointer;
-}
-
-.s05-submit input.s05-file-input::file-selector-button {
-  margin-right: 12px;
-  padding: 6px 10px;
-  color: var(--color-text);
-  background: var(--color-surface-low);
+.s05-runner-scope {
+  display: grid;
+  margin: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  cursor: pointer;
+}
+
+.s05-runner-scope > div {
+  min-width: 0;
+  padding: 12px;
+}
+
+.s05-runner-scope > div:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.s05-runner-scope dt,
+.s05-runner-scope dd {
+  margin: 0;
+}
+
+.s05-runner-scope dt {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.s05-runner-scope dd {
+  margin-top: 4px;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 26px;
 }
 
 .s05-submit > button {
@@ -799,15 +821,128 @@
 }
 
 .s05-submit-note,
-.s05-file-status,
+.s05-copy-status,
 .s05-form-error {
   margin: 0;
 }
 
-.s05-file-status {
+.s05-copy-status {
   color: var(--color-status-success);
   font-size: 12px;
   line-height: 18px;
+}
+
+.s05-runner-task {
+  display: flex;
+  min-width: 0;
+  padding: 16px;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.s05-runner-task > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.s05-runner-task h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.s05-runner-status {
+  padding: 3px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font: 600 11px/16px var(--font-code);
+}
+
+.s05-runner-status--pending {
+  color: var(--color-status-warning);
+}
+
+.s05-runner-status--running {
+  color: var(--color-status-info);
+}
+
+.s05-runner-status--submitted {
+  color: var(--color-status-success);
+}
+
+.s05-runner-status--failed {
+  color: var(--color-status-critical);
+}
+
+.s05-runner-value {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.s05-runner-value > span {
+  color: var(--color-text-secondary);
+  font: 500 10px/15px var(--font-code);
+  text-transform: uppercase;
+}
+
+.s05-runner-value code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 12px/18px var(--font-code);
+}
+
+.s05-runner-value button,
+.s05-runner-copy {
+  min-height: 32px;
+  padding: 6px 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.s05-runner-command {
+  max-height: 220px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  font: 11px/18px var(--font-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.s05-runner-copy {
+  align-self: flex-start;
+}
+
+.s05-runner-success {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-status-success);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.s05-runner-success svg {
+  width: 18px;
+  height: 18px;
 }
 
 .s05-form-error {
