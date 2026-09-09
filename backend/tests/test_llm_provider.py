@@ -88,7 +88,7 @@ def test_prompt_assembly_uses_whitelisted_case_and_versioned_schema() -> None:
         "judge_prompt_version": JUDGE_PROMPT_VERSION,
         "judge_contract_version": JUDGE_CONTRACT_VERSION,
     }
-    assert JUDGE_PROMPT_VERSION == "JUDGE-PROMPT-V1.4"
+    assert JUDGE_PROMPT_VERSION == "JUDGE-PROMPT-V1.5"
     assert request.response_schema_name == "JudgeOutput"
     assert request.response_schema["additionalProperties"] is False
     payload = json.loads(request.messages[1].content)
@@ -115,6 +115,16 @@ def test_prompt_expresses_frozen_calibration_boundaries() -> None:
     )
 
     system_prompt = request.messages[0].content
+    assert (
+        "Write every non-null problem and uncertainty value, and every rationale "
+        "value, in Simplified Chinese."
+        in system_prompt
+    )
+    assert (
+        "Keep judgment, primary_failure_mode, secondary_flags, severity, "
+        "evidence_type, source_ref, and review_required as the contract values"
+        in system_prompt
+    )
     assert "produce a materially wrong result or action" in system_prompt
     assert "core response remains usable or advances the task" in system_prompt
     assert "core task is actually unresolved" in system_prompt
@@ -129,6 +139,7 @@ def test_prompt_expresses_frozen_calibration_boundaries() -> None:
     assert "Insufficient evidence must not increase severity" in system_prompt
     assert "Decide review_required independently from severity" in system_prompt
     assert "contiguous original excerpt" in system_prompt
+    assert "Do not translate, paraphrase, summarize" in system_prompt
     assert "source_ref assistant_response" in system_prompt
     assert "Use incorrect_information when the core error" in system_prompt
     assert "Use policy_procedure_violation when the core error" in system_prompt
@@ -136,6 +147,10 @@ def test_prompt_expresses_frozen_calibration_boundaries() -> None:
     assert "two or more genuinely independent failure problems" in system_prompt
     assert "Do not leave secondary_flags empty" in system_prompt
     assert "NM-" not in system_prompt
+
+    example = json.loads(request.messages[1].content)["judge_output_example"]
+    assert example["evidence"][0]["content"] == "从助手回复中逐字复制的可追溯原文片段。"
+    assert example["rationale"] == "基于所提供证据的简明说明。"
 
 
 def test_fake_provider_payload_validates_as_judge_output() -> None:
