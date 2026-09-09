@@ -166,11 +166,13 @@ function ContextMetadata({ data, form }: { data: LoadedData; form: TargetForm })
     || form.expectedObservableChange.trim() !== target.expected_observable_change.trim()
   )
   return (
-    <dl className="s04-metadata s04-metadata--prefreeze">
-      <div><dt>数据集</dt><dd>{data.dataset.name} {data.dataset.version}</dd></div>
-      <div><dt>基线运行</dt><dd title={data.run.id}>{shortId(data.run.id)} · {evaluationRunStatusLabels[data.run.status]}</dd></div>
-      <div><dt>目标状态</dt><dd>{targetEdited ? '已修改 · 待提交确认' : target ? `${targetStatusLabels[target.status]} · V${target.version}` : '尚未创建'}</dd></div>
-    </dl>
+    <div className="s04-metadata-strip">
+      <dl className="s04-metadata">
+        <div><dt>数据集</dt><dd title={`${data.dataset.name} ${data.dataset.version}`}>{data.dataset.name} {data.dataset.version}</dd></div>
+        <div><dt>基线运行</dt><dd title={data.run.id}>{shortId(data.run.id)} · {evaluationRunStatusLabels[data.run.status]}</dd></div>
+        <div><dt>目标状态</dt><dd>{targetEdited ? '已修改 · 待提交确认' : target ? `${targetStatusLabels[target.status]} · V${target.version}` : '尚未创建'}</dd></div>
+      </dl>
+    </div>
   )
 }
 
@@ -243,47 +245,83 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
   ]
   return (
     <section className="s04-page">
-      <div className="s04-canvas">
-        <div className="s04-content s04-confirmation">
-          <h1>确认优化目标</h1>
-          <ContextMetadata data={data} form={form} />
-          <section aria-labelledby="s04-problem-title">
-            <h2 id="s04-problem-title">本轮优化问题：{problems.length} 个</h2>
-            <ul className="s04-problem-list">
-              {problems.map((problem) => (
-                <li key={problem.problem_id}>
-                  <strong>{problem.scenario}</strong>
-                  <span>{problem.definition}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section aria-labelledby="s04-target-title">
-            <h2 id="s04-target-title">本轮优化目标</h2>
-            <p className="s04-source-note">{frozen ? '目标和验证范围已冻结，可继续验证。' : '系统已建议优化目标，可直接使用或修改。'}</p>
-            <EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy || frozen} multiline />
-            <EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy || frozen} multiline />
-          </section>
-          <details className="s04-notes">
-            <summary>可选优化备注</summary>
-            <div className="s04-form-grid s04-form-grid--two-columns">
-              {notes.map(([field, label]) => <EditableField key={field} label={label + '（可选）'} value={form[field]} onChange={(value) => onFormChange(field, value)} disabled={busy || frozen} multiline />)}
-            </div>
-          </details>
-          <section aria-labelledby="s04-scope-title">
-            <h2 id="s04-scope-title">验证范围</h2>
-            <dl className="s04-plan-grid">
-              <div><dt>目标案例 · {targetCaseCount} 个</dt><dd>所选问题涉及的核心案例去重并集</dd></div>
-              <div><dt>回归案例 · {regressionCaseCount} 个</dt><dd>其余核心案例，用于检查现有表现</dd></div>
-              <div><dt>挑战案例 · {challengeCaseCount} 个</dt><dd>数据集中的全部挑战案例</dd></div>
-            </dl>
-            <p className="s04-source-note">纳入标准：{form.inclusionCriteria}<br />排除标准：{form.exclusionCriteria}</p>
-            {missingCases && <p role="alert">所选问题缺少目标案例。</p>}
-            {frozen && <><p className="s04-source-note">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />冻结人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p><button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button></>}
-          </section>
-          <EditableField label="操作人（必填）" value={frozen ? target.frozen_by ?? '' : actor} onChange={onActorChange} disabled={busy || frozen} />
-        </div>
+      <ContextMetadata data={data} form={form} />
+
+      <div className="s04-workspace">
+        <section className="s04-pane" aria-labelledby="s04-evidence-title">
+          <header className="s04-pane-header"><h2 id="s04-evidence-title">证据</h2></header>
+          <div className="s04-pane-scroll">
+            <section className="s04-section" aria-labelledby="s04-problem-title">
+              <h2 id="s04-problem-title">本轮优化问题：{problems.length} 个</h2>
+              <ul className="s04-problem-list">
+                {problems.map((problem) => (
+                  <li className="s04-problem-card" key={problem.problem_id}>
+                    <span className="s04-code-label" title={problem.problem_id}>
+                      {problem.scenario} · P-{shortId(problem.problem_id)}
+                    </span>
+                    <p>{problem.definition}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="s04-section" aria-labelledby="s04-scope-title">
+              <h2 id="s04-scope-title">验证范围</h2>
+              <dl className="s04-plan-grid">
+                <div><dt>目标案例</dt><dd className="s04-scope-count">{targetCaseCount} 个</dd><dd className="s04-scope-desc">所选问题涉及的核心案例去重并集</dd></div>
+                <div><dt>回归案例</dt><dd className="s04-scope-count">{regressionCaseCount} 个</dd><dd className="s04-scope-desc">其余核心案例，用于检查现有表现</dd></div>
+                <div><dt>挑战案例</dt><dd className="s04-scope-count">{challengeCaseCount} 个</dd><dd className="s04-scope-desc">数据集中的全部挑战案例</dd></div>
+              </dl>
+              <div className="s04-criteria">
+                <div><span>纳入标准</span><p>{form.inclusionCriteria}</p></div>
+                <div><span>排除标准</span><p>{form.exclusionCriteria}</p></div>
+              </div>
+              {missingCases && <p className="s04-alert" role="alert">所选问题缺少目标案例。</p>}
+              {frozen && (
+                <>
+                  <p className="s04-freeze-record">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />冻结人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p>
+                  <button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button>
+                </>
+              )}
+            </section>
+          </div>
+        </section>
+
+        <section className="s04-pane" aria-labelledby="s04-decision-title">
+          <header className="s04-pane-header"><h2 id="s04-decision-title">确认优化目标</h2></header>
+          <div className="s04-pane-scroll">
+            <section className="s04-section" aria-labelledby="s04-target-title">
+              <h2 id="s04-target-title">本轮优化目标</h2>
+              <p className="s04-source-note">{frozen ? '目标和验证范围已冻结，可继续验证。' : '系统已建议优化目标，可直接使用或修改。'}</p>
+              {frozen ? (
+                <>
+                  <div className="s04-evidence-field"><span>目标定义</span><p>{form.definition}</p></div>
+                  <div className="s04-evidence-field"><span>预期可观察变化</span><p>{form.expectedObservableChange}</p></div>
+                </>
+              ) : (
+                <>
+                  <EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy} multiline />
+                  <EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy} multiline />
+                </>
+              )}
+            </section>
+            <details className="s04-notes">
+              <summary>可选优化备注</summary>
+              <div className="s04-form-grid s04-form-grid--two-columns">
+                {notes.map(([field, label]) => <EditableField key={field} label={label + '（可选）'} value={form[field]} onChange={(value) => onFormChange(field, value)} disabled={busy || frozen} multiline />)}
+              </div>
+            </details>
+            {frozen ? (
+              <div className="s04-evidence-field s04-evidence-field--actor"><span>操作人（必填）</span><p>{target.frozen_by ?? ''}</p></div>
+            ) : (
+              <div className="s04-actor-field">
+                <EditableField label="操作人（必填）" value={actor} onChange={onActorChange} disabled={busy} />
+              </div>
+            )}
+          </div>
+        </section>
       </div>
+
       <footer className="s04-action-rail">
         <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? '验证计划已冻结，可继续进入候选版本验证。' : '确认时自动保存目标并冻结版本级验证计划。')}</p>
         <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并冻结…' : frozen ? '进入候选版本验证' : '确认并冻结验证计划'}</button>
