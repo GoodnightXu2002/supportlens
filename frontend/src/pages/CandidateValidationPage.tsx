@@ -12,7 +12,7 @@ import {
   MdSmartToy,
   MdVerified,
 } from 'react-icons/md'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import {
   API_BASE_URL,
@@ -316,6 +316,12 @@ function CandidateWorkspace({
     regressed: 'Regressed',
     inconclusive: 'Inconclusive',
   } as const
+  const targetPlanHref = `/target-plan?${new URLSearchParams({
+    run_id: target.baseline_run_id,
+    problem_id: target.problem_id,
+    problem_ids: (target.problem_ids.length ? target.problem_ids : [target.problem_id]).join(','),
+    target_id: target.id,
+  }).toString()}`
   const pendingReviewCount = candidateResults.filter((item) => item.status === 'pending_review').length
   const manifest = candidateRun.candidate_manifest_snapshot ?? {}
   const lineage = [
@@ -389,7 +395,26 @@ function CandidateWorkspace({
         <section className="s05-claim-boundary" aria-label="结论边界"><strong>Case pairing：same dataset / conversation_id / case_id。</strong><em>结论仅适用于当前 Frozen Target、数据集、Judge 配置与 response set。</em><span>Human Decision 与 Machine recommendation 独立保存，不代表上线或部署。</span></section>
       </div>
 
-      <footer className="s05-action-rail"><em>PLAN V{target.version} · {target.plan_hash}</em><div><button type="button" onClick={() => onDecision('continue', actor, reason, overrideReason)} disabled={decisionBusy || Boolean(candidateRun.final_decision) || !actor.trim() || !reason.trim()}>继续迭代</button><button type="button" onClick={() => onDecision('accept', actor, reason, overrideReason)} disabled={decisionBusy || Boolean(candidateRun.final_decision) || summary.recommended_verdict !== 'ACCEPT' || !actor.trim() || !reason.trim()}><MdVerified aria-hidden="true" />接受候选版本</button></div></footer>
+      <footer className="s05-action-rail">
+        <em>PLAN V{target.version} · {target.plan_hash}</em>
+        <div className="s05-action-area">
+          {candidateRun.final_decision === 'continue' ? (
+            <div className="s05-action-complete s05-action-complete--continue" role="status">
+              <strong>当前候选版本不采纳</strong>
+              <Link to={targetPlanHref}>返回上一步</Link>
+            </div>
+          ) : candidateRun.final_decision === 'accept' ? (
+            <div className="s05-action-complete s05-action-complete--accept" role="status">
+              <strong>候选版本已接受</strong>
+            </div>
+          ) : (
+            <>
+              <button type="button" onClick={() => onDecision('continue', actor, reason, overrideReason)} disabled={decisionBusy || !actor.trim() || !reason.trim()}>继续迭代</button>
+              <button type="button" onClick={() => onDecision('accept', actor, reason, overrideReason)} disabled={decisionBusy || summary.recommended_verdict !== 'ACCEPT' || !actor.trim() || !reason.trim()}><MdVerified aria-hidden="true" />接受候选版本</button>
+            </>
+          )}
+        </div>
+      </footer>
       <div className="s05-analyst-dock"><MdPerson aria-hidden="true" /><strong>{candidateRun.decided_by ?? 'Human Decision'}</strong></div>
     </section>
   )

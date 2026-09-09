@@ -1075,9 +1075,38 @@
   line-height: 18px;
 }
 
-.s05-action-rail > div {
+.s05-action-area {
   display: flex;
+  width: 268px;
   gap: 16px;
+}
+
+.s05-action-complete {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  padding: 8px 16px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.s05-action-complete--continue {
+  justify-content: space-between;
+}
+
+.s05-action-complete--continue a {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.s05-action-complete--accept {
+  justify-content: center;
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .s05-action-rail button {
