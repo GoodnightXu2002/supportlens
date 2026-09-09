@@ -399,6 +399,24 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
             )
             for constraint in inspect(engine).get_foreign_keys("evaluation_runs")
         }
+        task_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("validation_tasks")
+        }
+        task_uniques = {
+            tuple(constraint["column_names"])
+            for constraint in inspect(engine).get_unique_constraints(
+                "validation_tasks"
+            )
+        }
+        task_foreign_keys = {
+            (
+                tuple(constraint["constrained_columns"]),
+                constraint["referred_table"],
+                tuple(constraint["referred_columns"]),
+            )
+            for constraint in inspect(engine).get_foreign_keys("validation_tasks")
+        }
         with engine.connect() as connection:
             revision = connection.scalar(
                 text("SELECT version_num FROM alembic_version")
@@ -411,6 +429,14 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     assert {"problems", "result_problem_links"} <= set(table_names)
     assert "optimization_targets" in table_names
     assert "case_comparisons" in table_names
+    assert "validation_tasks" in table_names
+    assert "candidate_run_id" in task_columns
+    assert ("candidate_run_id",) in task_uniques
+    assert (
+        ("candidate_run_id",),
+        "evaluation_runs",
+        ("id",),
+    ) in task_foreign_keys
     assert {
         "case_errors",
         "business_reference_snapshot",
@@ -563,7 +589,7 @@ def test_alembic_upgrade_creates_evaluation_pipeline_fields(
     ]
     assert "partial_failure" in run_checks["ck_evaluation_runs_status"]
     assert "invalid" in run_checks["ck_evaluation_runs_status"]
-    assert revision == "f1a2c3d4e5f6"
+    assert revision == "b3c4d5e6f7a8"
 
 
 def test_candidate_migration_preserves_populated_evaluation_run_references(
@@ -683,7 +709,7 @@ def test_candidate_migration_preserves_populated_evaluation_run_references(
             )
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                    == "f1a2c3d4e5f6"
+                    == "b3c4d5e6f7a8"
             )
     finally:
         engine.dispose()

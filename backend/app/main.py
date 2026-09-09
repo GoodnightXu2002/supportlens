@@ -77,6 +77,7 @@ from app.schemas import (
     OptimizationTargetProblemSetCreateRequest,
     OptimizationTargetRead,
     ProblemRead,
+    ValidationTaskCandidateStartRequest,
     ValidationTaskCasesResponse,
     ValidationTaskCreateResponse,
     ValidationTaskReadResponse,
@@ -404,6 +405,7 @@ def _validation_task_error_response(error: ValidationTaskError) -> JSONResponse:
         ValidationTaskErrorCode.VALIDATION_TASK_RESPONSE_MISSING: 400,
         ValidationTaskErrorCode.VALIDATION_TASK_RESPONSE_EMPTY: 400,
         ValidationTaskErrorCode.VALIDATION_TASK_PERSISTENCE_FAILED: 500,
+        ValidationTaskErrorCode.VALIDATION_TASK_NOT_SUBMITTED: 409,
     }
     return _error_response(
         status_code=status_by_code[error.code],
@@ -974,6 +976,43 @@ def get_validation_task_cases(
         return service.get_cases(task_id, authorization, db_session)
     except ValidationTaskError as error:
         return _validation_task_error_response(error)
+
+
+@app.post(
+    "/api/validation-tasks/{task_id}/candidate-validation",
+    response_model=EvaluationRunRead,
+)
+def start_validation_task_candidate_validation(
+    task_id: UUID,
+    request: ValidationTaskCandidateStartRequest,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        ValidationTaskService,
+        Depends(get_validation_task_service),
+    ],
+    candidate_service: Annotated[
+        CandidateRunService,
+        Depends(get_candidate_run_service),
+    ],
+    runner: Annotated[CandidateRunner, Depends(get_candidate_runner)],
+    comparison_service: Annotated[
+        CandidateComparisonService,
+        Depends(get_candidate_comparison_service),
+    ],
+) -> EvaluationRun | JSONResponse:
+    try:
+        return service.start_candidate_validation(
+            task_id,
+            request,
+            db_session,
+            candidate_service,
+            runner,
+            comparison_service,
+        )
+    except ValidationTaskError as error:
+        return _validation_task_error_response(error)
+    except CandidateValidationError as error:
+        return _candidate_validation_error_response(error)
 
 
 @app.post(

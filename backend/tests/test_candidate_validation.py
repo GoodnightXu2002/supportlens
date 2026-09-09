@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -30,6 +31,7 @@ from app.models import (
     OptimizationTarget,
     Problem,
     ResultProblemLink,
+    ValidationTask,
 )
 from app.problem_aggregation import build_problem_mapping_key
 from app.schemas import (
@@ -711,6 +713,201 @@ def test_candidate_api_create_execute_compare_and_read(database_engine) -> None:
             assert summary_response.json()["recommended_verdict"] == "ACCEPT"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_submitted_validation_task_runs_candidate_validation_idempotently(
+    database_engine,
+) -> None:
+    foundation = _persist_foundation(database_engine)
+    with Session(database_engine) as session:
+        target = session.get(OptimizationTarget, foundation["target_id"])
+        baseline = session.get(EvaluationRun, foundation["baseline_id"])
+        assert target is not None
+        assert baseline is not None
+        second_problem = Problem(
+            evaluation_run_id=baseline.id,
+            scenario="Refund",
+            definition="Second target issue",
+            mapping_key=build_problem_mapping_key("Refund", "Second target issue"),
+            mapping_version="PRIMARY-PROBLEM-EXACT-V1",
+        )
+        session.add(second_problem)
+        session.flush()
+        target.problem_ids = [str(target.problem_id), str(second_problem.id)]
+        target.problem_set_key = hashlib.sha256(
+            "|".join(sorted(target.problem_ids)).encode()
+        ).hexdigest()
+        target.target_case_ids = ["CASE-001", "CASE-002"]
+        target.regression_case_ids = []
+        target.baseline_affected_case_ids = ["CASE-001", "CASE-002"]
+        baseline_before = (
+            baseline.status,
+            baseline.response_set_key,
+            session.scalar(
+                select(func.count())
+                .select_from(EvaluationResult)
+                .where(EvaluationResult.evaluation_run_id == baseline.id)
+            ),
+        )
+        session.commit()
+
+    provider = ScriptedProvider([_output("success")] * 3)
+
+    def override_db_session():
+        with Session(database_engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = override_db_session
+    app.dependency_overrides[get_candidate_runner] = lambda: CandidateRunner(provider)
+    try:
+        with TestClient(app) as client:
+            pending = client.post(
+                f"/api/optimization-targets/{foundation['target_id']}/validation-tasks"
+            ).json()
+            rejected = client.post(
+                f"/api/validation-tasks/{pending['task_id']}/candidate-validation",
+                json={"candidate_label": "Candidate A", "change_summary": None},
+            )
+            assert rejected.status_code == 409
+            assert rejected.json()["error"]["code"] == (
+                "validation_task_not_submitted"
+            )
+
+            task = client.post(
+                f"/api/optimization-targets/{foundation['target_id']}/validation-tasks"
+            ).json()
+            responses = [
+                {
+                    "case_id": case_id,
+                    "assistant_content": f"Candidate response for {case_id}",
+                }
+                for case_id in ("CASE-001", "CASE-002", "CASE-003")
+            ]
+            submitted = client.post(
+                f"/api/validation-tasks/{task['task_id']}/responses",
+                headers={"Authorization": f"Bearer {task['runner_token']}"},
+                json={"responses": responses},
+            )
+            assert submitted.status_code == 200
+
+            start_url = (
+                f"/api/validation-tasks/{task['task_id']}/candidate-validation"
+            )
+            start_payload = {
+                "candidate_label": "Candidate from runner",
+                "change_summary": "Prompt update",
+            }
+            first = client.post(start_url, json=start_payload)
+            second = client.post(start_url, json=start_payload)
+            assert first.status_code == 200
+            assert second.status_code == 200
+            assert second.json()["id"] == first.json()["id"]
+            assert first.json()["status"] == "completed"
+            assert first.json()["target_id"] == str(foundation["target_id"])
+            assert first.json()["baseline_run_id"] == str(foundation["baseline_id"])
+            assert first.json()["candidate_label"] == "Candidate from runner"
+            assert first.json()["candidate_change_summary"] == "Prompt update"
+            response_snapshot = first.json()["candidate_responses_snapshot"]
+            assert len(response_snapshot) == 3
+            assert first.json()["response_set_hash"] == build_response_set_hash(
+                response_snapshot
+            )
+            assert len(provider.requests) == 3
+
+            status = client.get(
+                f"/api/validation-tasks/{task['task_id']}"
+            ).json()
+            assert status["candidate_run_id"] == first.json()["id"]
+            comparisons = client.get(
+                f"/api/evaluation-runs/{first.json()['id']}/case-comparisons"
+            )
+            summary = client.get(
+                f"/api/evaluation-runs/{first.json()['id']}/candidate-validation-summary"
+            )
+            assert comparisons.status_code == 200
+            assert len(comparisons.json()) == 3
+            assert summary.status_code == 200
+            assert summary.json()["recommended_verdict"] in {
+                "ACCEPT",
+                "CONTINUE",
+                "INCONCLUSIVE",
+            }
+
+        with Session(database_engine) as session:
+            baseline = session.get(EvaluationRun, foundation["baseline_id"])
+            assert baseline is not None
+            assert (
+                baseline.status,
+                baseline.response_set_key,
+                session.scalar(
+                    select(func.count())
+                    .select_from(EvaluationResult)
+                    .where(EvaluationResult.evaluation_run_id == baseline.id)
+                ),
+            ) == baseline_before
+            assert session.scalar(
+                select(func.count())
+                .select_from(EvaluationRun)
+                .where(
+                    EvaluationRun.run_type == "candidate",
+                    EvaluationRun.target_id == foundation["target_id"],
+                )
+            ) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_validation_task_candidate_link_migration_round_trip(database_engine) -> None:
+    from pathlib import Path
+    from runpy import run_path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    foundation = _persist_foundation(database_engine)
+    with Session(database_engine) as session:
+        task = ValidationTask(
+            optimization_target_id=foundation["target_id"],
+            baseline_run_id=foundation["baseline_id"],
+            status="pending",
+            case_scope_snapshot=[],
+            candidate_responses=None,
+            runner_token_hash="a" * 64,
+            runner_token_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        session.add(task)
+        session.commit()
+        task_id = task.id
+
+    migration = run_path(
+        str(
+            Path(__file__).parents[1]
+            / "alembic"
+            / "versions"
+            / "b3c4d5e6f7a8_link_validation_tasks_to_candidate_runs.py"
+        )
+    )
+    with database_engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                migration["downgrade"]()
+                columns = {
+                    row[1]
+                    for row in connection.exec_driver_sql(
+                        "PRAGMA table_info(validation_tasks)"
+                    )
+                }
+                assert "candidate_run_id" not in columns
+                migration["upgrade"]()
+        row = connection.exec_driver_sql(
+            "SELECT candidate_run_id FROM validation_tasks WHERE id = ?",
+            (task_id.hex,),
+        ).one()
+        assert row[0] is None
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
 
 
 def test_human_final_decision_persists_and_is_immutable(database_engine) -> None:

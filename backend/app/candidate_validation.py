@@ -83,6 +83,8 @@ class CandidateRunService:
         self,
         request: CandidateRunCreateRequest,
         db_session: Session,
+        *,
+        commit: bool = True,
     ) -> EvaluationRun:
         baseline = db_session.get(EvaluationRun, request.baseline_run_id)
         if (
@@ -195,7 +197,10 @@ class CandidateRunService:
             candidate_validation_summary=None,
         )
         db_session.add(candidate)
-        db_session.commit()
+        if commit:
+            db_session.commit()
+        else:
+            db_session.flush()
         db_session.refresh(candidate)
         return candidate
 

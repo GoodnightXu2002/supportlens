@@ -308,6 +308,12 @@ export type ValidationTaskReadResponse = {
   created_at: string
   submitted_at: string | null
   failed_reason: string | null
+  candidate_run_id: string | null
+}
+
+export type ValidationTaskCandidateStartInput = {
+  candidate_label: string
+  change_summary?: string | null
 }
 
 export type CandidateResponseInput = {
@@ -760,6 +766,22 @@ export async function getValidationTask(
     await fetch(
       `${API_BASE_URL}/api/validation-tasks/${encodeURIComponent(taskId)}`,
       { signal },
+    ),
+  )
+}
+
+export async function startValidationTaskCandidateValidation(
+  taskId: string,
+  input: ValidationTaskCandidateStartInput,
+): Promise<EvaluationRun> {
+  return requestJson<EvaluationRun>(
+    await fetch(
+      `${API_BASE_URL}/api/validation-tasks/${encodeURIComponent(taskId)}/candidate-validation`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
     ),
   )
 }

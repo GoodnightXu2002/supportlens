@@ -1295,11 +1295,13 @@ def test_validation_task_status_is_read_only_and_omits_secrets(api_context):
             "created_at",
             "submitted_at",
             "failed_reason",
+            "candidate_run_id",
         }
         assert payload["task_id"] == task["task_id"]
         assert payload["target_id"] == target["id"]
         assert payload["status"] == expected_status
         assert payload["created_at"]
+        assert payload["candidate_run_id"] is None
         assert (payload["submitted_at"] is not None) == (
             expected_status == "submitted"
         )
@@ -1430,6 +1432,10 @@ def test_validation_task_migration_round_trip(api_context):
         Path(__file__).parents[1] / "alembic" / "versions"
         / "f1a2c3d4e5f6_add_validation_tasks.py"
     ))
+    link_migration = run_path(str(
+        Path(__file__).parents[1] / "alembic" / "versions"
+        / "b3c4d5e6f7a8_link_validation_tasks_to_candidate_runs.py"
+    ))
     with engine.connect() as connection:
         with connection.begin():
             with Operations.context(MigrationContext.configure(connection)):
@@ -1457,6 +1463,9 @@ def test_validation_task_migration_round_trip(api_context):
                 "runner_token_hash",
                 "runner_token_expires_at",
             } <= columns
+        with connection.begin():
+            with Operations.context(MigrationContext.configure(connection)):
+                link_migration["upgrade"]()
         assert connection.exec_driver_sql("PRAGMA foreign_key_check").all() == []
     assert client.post(
         f"/api/optimization-targets/{target['id']}/validation-tasks"

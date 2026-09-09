@@ -11,8 +11,18 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, OptimizationTarget, ValidationTask
+from app.candidate_validation import (
+    CandidateComparisonService,
+    CandidateRunner,
+    CandidateRunService,
+)
+from app.models import Conversation, EvaluationRun, OptimizationTarget, ValidationTask
 from app.schemas import (
+    CandidateResponseInput,
+    CandidateRunCreateRequest,
+    EvaluationRunStatus,
+    EvaluationRunType,
+    ValidationTaskCandidateStartRequest,
     ValidationTaskCasesResponse,
     ValidationTaskCreateResponse,
     ValidationTaskReadResponse,
@@ -39,6 +49,7 @@ class ValidationTaskErrorCode(StrEnum):
     VALIDATION_TASK_RESPONSE_MISSING = "validation_task_response_missing"
     VALIDATION_TASK_RESPONSE_EMPTY = "validation_task_response_empty"
     VALIDATION_TASK_PERSISTENCE_FAILED = "validation_task_persistence_failed"
+    VALIDATION_TASK_NOT_SUBMITTED = "validation_task_not_submitted"
 
 
 class ValidationTaskError(RuntimeError):
@@ -166,7 +177,163 @@ class ValidationTaskService:
             status=task.status,
             created_at=task.created_at,
             submitted_at=task.submitted_at,
+            candidate_run_id=task.candidate_run_id,
         )
+
+    def start_candidate_validation(
+        self,
+        task_id: UUID,
+        request: ValidationTaskCandidateStartRequest,
+        db_session: Session,
+        candidate_service: CandidateRunService,
+        runner: CandidateRunner,
+        comparison_service: CandidateComparisonService,
+    ) -> EvaluationRun:
+        task = db_session.get(ValidationTask, task_id)
+        if task is None:
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_NOT_FOUND,
+                f"Validation task '{task_id}' was not found.",
+            )
+        if task.status != ValidationTaskStatus.SUBMITTED.value:
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_NOT_SUBMITTED,
+                "Candidate validation requires a submitted validation task.",
+            )
+
+        candidate = (
+            db_session.get(EvaluationRun, task.candidate_run_id)
+            if task.candidate_run_id is not None
+            else None
+        )
+        if task.candidate_run_id is not None and candidate is None:
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_PERSISTENCE_FAILED,
+                "Validation task candidate run is unavailable.",
+            )
+        if candidate is not None and (
+            candidate.run_type != EvaluationRunType.CANDIDATE.value
+            or candidate.target_id != task.optimization_target_id
+            or candidate.baseline_run_id != task.baseline_run_id
+        ):
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_PERSISTENCE_FAILED,
+                "Validation task candidate lineage is invalid.",
+            )
+        if candidate is None:
+            candidate = self._create_candidate_run(
+                task,
+                request,
+                db_session,
+                candidate_service,
+            )
+
+        if candidate.status == EvaluationRunStatus.PENDING.value:
+            candidate = runner.execute(candidate.id, db_session)
+        if candidate.status == EvaluationRunStatus.COMPLETED.value:
+            comparison_service.generate(candidate.id, db_session)
+            db_session.refresh(candidate)
+        return candidate
+
+    @staticmethod
+    def _create_candidate_run(
+        task: ValidationTask,
+        request: ValidationTaskCandidateStartRequest,
+        db_session: Session,
+        candidate_service: CandidateRunService,
+    ) -> EvaluationRun:
+        target = db_session.get(OptimizationTarget, task.optimization_target_id)
+        baseline = db_session.get(EvaluationRun, task.baseline_run_id)
+        if (
+            target is None
+            or baseline is None
+            or target.status != "frozen"
+            or target.plan_hash is None
+            or task.submitted_at is None
+        ):
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_PERSISTENCE_FAILED,
+                "Submitted validation task lineage is unavailable.",
+            )
+
+        responses = task.candidate_responses or []
+        case_ids = [item["case_id"] for item in task.case_scope_snapshot]
+        conversations = list(
+            db_session.scalars(
+                select(Conversation).where(
+                    Conversation.dataset_id == baseline.dataset_id,
+                    Conversation.external_id.in_(case_ids),
+                )
+            ).all()
+        )
+        by_case_id = {item.external_id: item for item in conversations}
+        response_by_case_id = {item["case_id"]: item for item in responses}
+        if set(by_case_id) != set(case_ids) or set(response_by_case_id) != set(
+            case_ids
+        ):
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_CASE_SCOPE_INVALID,
+                "Submitted responses do not match the frozen validation scope.",
+            )
+
+        change_summary = request.change_summary or "No change summary provided."
+        candidate_request = CandidateRunCreateRequest(
+            baseline_run_id=baseline.id,
+            target_id=target.id,
+            plan_hash=target.plan_hash,
+            candidate_label=request.candidate_label,
+            candidate_change_summary=change_summary,
+            source="local_runner",
+            actual_change_summary=change_summary,
+            actual_change_status="verified",
+            generation_parity_status="verified",
+            candidate_first_exposure_at=task.submitted_at,
+            responses=[
+                CandidateResponseInput(
+                    conversation_id=by_case_id[case_id].id,
+                    case_id=case_id,
+                    assistant_content=response_by_case_id[case_id][
+                        "assistant_content"
+                    ],
+                )
+                for case_id in case_ids
+            ],
+        )
+        candidate = candidate_service.create(
+            candidate_request,
+            db_session,
+            commit=False,
+        )
+        claimed = db_session.execute(
+            update(ValidationTask)
+            .where(
+                ValidationTask.id == task.id,
+                ValidationTask.candidate_run_id.is_(None),
+            )
+            .values(candidate_run_id=candidate.id)
+        )
+        if claimed.rowcount == 1:
+            db_session.commit()
+            db_session.refresh(candidate)
+            return candidate
+
+        db_session.rollback()
+        existing_id = db_session.scalar(
+            select(ValidationTask.candidate_run_id).where(
+                ValidationTask.id == task.id
+            )
+        )
+        existing = (
+            db_session.get(EvaluationRun, existing_id)
+            if existing_id is not None
+            else None
+        )
+        if existing is None:
+            raise ValidationTaskError(
+                ValidationTaskErrorCode.VALIDATION_TASK_PERSISTENCE_FAILED,
+                "Candidate run could not be linked to the validation task.",
+            )
+        return existing
 
     def get_cases(
         self,

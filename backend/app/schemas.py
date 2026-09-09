@@ -572,6 +572,28 @@ class ValidationTaskReadResponse(BaseModel):
     created_at: datetime
     submitted_at: datetime | None
     failed_reason: str | None = None
+    candidate_run_id: UUID | None
+
+
+class ValidationTaskCandidateStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_label: str
+    change_summary: str | None = None
+
+    @field_validator("candidate_label")
+    @classmethod
+    def candidate_label_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("candidate_label must not be empty")
+        return value.strip()
+
+    @field_validator("change_summary")
+    @classmethod
+    def normalize_change_summary(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
 
 
 class RunnerCaseRead(BaseModel):

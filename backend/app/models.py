@@ -622,6 +622,10 @@ class OptimizationTarget(Base):
 class ValidationTask(Base):
     __tablename__ = "validation_tasks"
     __table_args__ = (
+        UniqueConstraint(
+            "candidate_run_id",
+            name="uq_validation_tasks_candidate_run_id",
+        ),
         CheckConstraint(
             "status IN ('pending', 'running', 'submitted', 'failed')",
             name="ck_validation_tasks_status",
@@ -652,6 +656,14 @@ class ValidationTask(Base):
         ForeignKey("evaluation_runs.id"),
         nullable=False,
         index=True,
+    )
+    candidate_run_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "evaluation_runs.id",
+            name="fk_validation_tasks_candidate_run_id_evaluation_runs",
+        ),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending", server_default="pending"
