@@ -205,6 +205,41 @@
   font-weight: 700;
 }
 
+.s05-problem-results {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 10px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--color-border);
+  list-style: none;
+}
+
+.s05-problem-results li {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.s05-problem-results span {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s05-problem-results strong {
+  flex: 0 0 auto;
+}
+
+.s05-legacy-problem-result {
+  margin: 0 0 10px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
 .s05-regression-grid {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr 1fr;

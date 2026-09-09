@@ -724,6 +724,21 @@ class RecommendedVerdict(StrEnum):
     INCONCLUSIVE = "INCONCLUSIVE"
 
 
+class ProblemValidationStatus(StrEnum):
+    IMPROVED = "improved"
+    PARTIALLY_IMPROVED = "partially_improved"
+    NOT_IMPROVED = "not_improved"
+    REGRESSED = "regressed"
+    INCONCLUSIVE = "inconclusive"
+
+
+class CandidateProblemResultRead(BaseModel):
+    problem_id: UUID
+    definition: str
+    case_ids: list[str]
+    status: ProblemValidationStatus
+
+
 class CaseComparisonRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -749,6 +764,7 @@ class CandidateValidationSummaryRead(BaseModel):
     baseline_run_id: UUID
     target_id: UUID
     target_outcome: Literal["resolved", "improved", "not_improved", "inconclusive"]
+    problem_results: list[CandidateProblemResultRead] = Field(default_factory=list)
     regression_summary: dict[str, Any]
     other_problems: list[dict[str, Any]]
     new_systematic_problems: list[dict[str, Any]]

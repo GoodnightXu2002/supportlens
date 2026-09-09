@@ -28,12 +28,14 @@ from app.models import (
 )
 from app.problem_aggregation import (
     PROBLEM_MAPPING_VERSION,
+    ProblemAggregationService,
     build_problem_mapping_key,
     normalize_problem_definition,
 )
 from app.schemas import (
     CandidateFinalDecision,
     CandidateFinalDecisionRequest,
+    CandidateProblemResultRead,
     CandidateRunCreateRequest,
     CandidateValidationSummaryRead,
     CaseComparisonRead,
@@ -42,6 +44,7 @@ from app.schemas import (
     EvaluationRunType,
     FinalEffectiveResultRead,
     FinalEffectiveResultStatus,
+    ProblemValidationStatus,
     RecommendedVerdict,
     RegressionLevel,
     TargetProblemStatus,
@@ -743,6 +746,9 @@ class CandidateComparisonService:
         target_comparisons = [
             item for item in comparisons if item.case_id in set(target.target_case_ids)
         ]
+        problem_results = self._build_problem_results(
+            baseline, target, target_comparisons, db_session
+        )
         review_complete = all(
             item.status is FinalEffectiveResultStatus.FINAL
             for item in candidate_effective.values()
@@ -854,9 +860,22 @@ class CandidateComparisonService:
             or regression_counts[RegressionLevel.MAJOR.value]
             or new_systematic
         )
-        if has_decisive_continue_signal:
+        problem_requires_continue = any(
+            item.status
+            in {
+                ProblemValidationStatus.REGRESSED,
+                ProblemValidationStatus.NOT_IMPROVED,
+                ProblemValidationStatus.PARTIALLY_IMPROVED,
+            }
+            for item in problem_results
+        )
+        problem_is_inconclusive = any(
+            item.status is ProblemValidationStatus.INCONCLUSIVE
+            for item in problem_results
+        )
+        if has_decisive_continue_signal or problem_requires_continue:
             verdict = RecommendedVerdict.CONTINUE
-        elif blockers:
+        elif blockers or problem_is_inconclusive:
             verdict = RecommendedVerdict.INCONCLUSIVE
         elif (
             target_outcome not in {"resolved", "improved"}
@@ -870,6 +889,7 @@ class CandidateComparisonService:
             baseline_run_id=baseline.id,
             target_id=target.id,
             target_outcome=target_outcome,
+            problem_results=problem_results,
             regression_summary={
                 "critical": regression_counts["critical"],
                 "major": regression_counts["major"],
@@ -892,6 +912,72 @@ class CandidateComparisonService:
             },
             blockers=blockers,
         )
+
+    def _build_problem_results(
+        self,
+        baseline: EvaluationRun,
+        target: OptimizationTarget,
+        comparisons: list[CaseComparisonRead],
+        db_session: Session,
+    ) -> list[CandidateProblemResultRead]:
+        problem_ids = list(
+            dict.fromkeys(
+                UUID(problem_id)
+                for problem_id in (target.problem_ids or [str(target.problem_id)])
+            )
+        )
+        problems = {
+            problem.problem_id: problem
+            for problem in ProblemAggregationService(
+                final_result_service=self._final_results
+            ).list_problems(baseline.id, db_session)
+            if problem.problem_id in set(problem_ids)
+        }
+        comparisons_by_case = {item.case_id: item for item in comparisons}
+        results: list[CandidateProblemResultRead] = []
+        for problem_id in problem_ids:
+            problem = problems.get(problem_id)
+            if problem is None:
+                raise CandidateValidationError(
+                    CandidateValidationErrorCode.CANDIDATE_COMPARISON_NOT_READY,
+                    "Frozen target problem identity is unavailable.",
+                )
+            affected = set(problem.affected_case_ids)
+            case_ids = [
+                case_id for case_id in target.target_case_ids if case_id in affected
+            ]
+            if not case_ids or any(
+                case_id not in comparisons_by_case for case_id in case_ids
+            ):
+                raise CandidateValidationError(
+                    CandidateValidationErrorCode.CANDIDATE_COMPARISON_NOT_READY,
+                    "Problem comparisons must cover the frozen target scope.",
+                )
+            results.append(
+                CandidateProblemResultRead(
+                    problem_id=problem_id,
+                    definition=problem.definition,
+                    case_ids=case_ids,
+                    status=_aggregate_problem_status(
+                        [comparisons_by_case[case_id].movement for case_id in case_ids]
+                    ),
+                )
+            )
+        return results
+
+
+def _aggregate_problem_status(
+    movements: list[CaseMovement],
+) -> ProblemValidationStatus:
+    if CaseMovement.REGRESSED in movements:
+        return ProblemValidationStatus.REGRESSED
+    if CaseMovement.INCONCLUSIVE in movements:
+        return ProblemValidationStatus.INCONCLUSIVE
+    if CaseMovement.PARTIALLY_IMPROVED in movements:
+        return ProblemValidationStatus.PARTIALLY_IMPROVED
+    if CaseMovement.IMPROVED in movements:
+        return ProblemValidationStatus.IMPROVED
+    return ProblemValidationStatus.NOT_IMPROVED
 
 
 def build_response_set_hash(responses: list[dict[str, Any]]) -> str:

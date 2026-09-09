@@ -367,6 +367,12 @@ export type CandidateValidationSummary = {
   baseline_run_id: string
   target_id: string
   target_outcome: 'resolved' | 'improved' | 'not_improved' | 'inconclusive'
+  problem_results: Array<{
+    problem_id: string
+    definition: string
+    case_ids: string[]
+    status: 'improved' | 'partially_improved' | 'not_improved' | 'regressed' | 'inconclusive'
+  }>
   regression_summary: {
     critical: number
     major: number

@@ -14,6 +14,7 @@ from app.candidate_validation import (
     CandidateRunService,
     CandidateValidationError,
     CandidateValidationErrorCode,
+    _aggregate_problem_status,
     _determine_movement,
     build_response_set_hash,
 )
@@ -38,6 +39,7 @@ from app.schemas import (
     CandidateResponseInput,
     CandidateRunCreateRequest,
     CaseMovement,
+    ProblemValidationStatus,
     TargetProblemStatus,
 )
 
@@ -478,8 +480,10 @@ def test_existing_comparisons_refresh_decisive_continue_verdict(
         candidate = session.get(EvaluationRun, candidate_id)
         stale_summary = dict(candidate.candidate_validation_summary)
         stale_summary["recommended_verdict"] = "INCONCLUSIVE"
+        stale_summary.pop("problem_results")
         candidate.candidate_validation_summary = stale_summary
         session.commit()
+        assert service.get_summary(candidate_id, session).problem_results == []
 
         refreshed, refreshed_summary = service.generate(candidate_id, session)
         assert {item.id for item in refreshed} == comparison_ids
@@ -537,6 +541,25 @@ def test_movement_five_state_key_paths(
         candidate_has_other_problem=other,
     )
     assert movement is CaseMovement(expected)
+
+
+@pytest.mark.parametrize(
+    ("movements", "expected"),
+    [
+        ([CaseMovement.IMPROVED, CaseMovement.REGRESSED], "regressed"),
+        ([CaseMovement.INCONCLUSIVE, CaseMovement.PARTIALLY_IMPROVED], "inconclusive"),
+        (
+            [CaseMovement.PARTIALLY_IMPROVED, CaseMovement.IMPROVED],
+            "partially_improved",
+        ),
+        ([CaseMovement.IMPROVED, CaseMovement.STABLE], "improved"),
+        ([CaseMovement.STABLE, CaseMovement.STABLE], "not_improved"),
+    ],
+)
+def test_problem_status_aggregation_priority(
+    movements: list[CaseMovement], expected: str
+) -> None:
+    assert _aggregate_problem_status(movements) is ProblemValidationStatus(expected)
 
 
 @pytest.mark.parametrize(
@@ -647,6 +670,14 @@ def test_pending_review_never_accepts(database_engine) -> None:
         ),
         (
             [
+                _output("failure", problem="Target issue", severity="medium"),
+                _output("success"),
+                _output("success"),
+            ],
+            "CONTINUE",
+        ),
+        (
+            [
                 _output("success", review_required=True),
                 _output("success"),
                 _output("success"),
@@ -733,6 +764,29 @@ def test_submitted_validation_task_runs_candidate_validation_idempotently(
         )
         session.add(second_problem)
         session.flush()
+        second_problem_id = second_problem.id
+        second_result = session.scalar(
+            select(EvaluationResult)
+            .join(Conversation)
+            .where(
+                EvaluationResult.evaluation_run_id == baseline.id,
+                Conversation.external_id == "CASE-002",
+            )
+        )
+        assert second_result is not None
+        second_payload = _output(
+            "failure", problem="Second target issue", severity="high"
+        )
+        for key, value in second_payload.items():
+            setattr(second_result, key, value)
+        second_result.raw_judge_output = second_payload
+        session.add(
+            ResultProblemLink(
+                problem_id=second_problem.id,
+                evaluation_result_id=second_result.id,
+                role="primary",
+            )
+        )
         target.problem_ids = [str(target.problem_id), str(second_problem.id)]
         target.problem_set_key = hashlib.sha256(
             "|".join(sorted(target.problem_ids)).encode()
@@ -827,11 +881,14 @@ def test_submitted_validation_task_runs_candidate_validation_idempotently(
             assert comparisons.status_code == 200
             assert len(comparisons.json()) == 3
             assert summary.status_code == 200
-            assert summary.json()["recommended_verdict"] in {
-                "ACCEPT",
-                "CONTINUE",
-                "INCONCLUSIVE",
-            }
+            assert summary.json()["recommended_verdict"] == "ACCEPT"
+            assert [
+                (item["problem_id"], item["case_ids"], item["status"])
+                for item in summary.json()["problem_results"]
+            ] == [
+                (str(foundation["problem_id"]), ["CASE-001"], "improved"),
+                (str(second_problem_id), ["CASE-002"], "improved"),
+            ]
 
         with Session(database_engine) as session:
             baseline = session.get(EvaluationRun, foundation["baseline_id"])
