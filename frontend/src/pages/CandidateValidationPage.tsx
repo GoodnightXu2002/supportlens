@@ -41,6 +41,13 @@ import {
   type ValidationTaskReadResponse,
 } from '../api'
 import {
+  blockerLabel,
+  evidenceTypeLabel,
+  failureModeLabel,
+  runStatusLabel,
+  targetStatusLabel,
+} from '../displayLabels'
+import {
   buildLocalRunnerCommand,
   withValidationTaskId,
 } from '../validationTaskHandoff'
@@ -119,12 +126,24 @@ function messageContent(conversation: DatasetConversation, role: 'user' | 'assis
 }
 
 function judgeSummary(result: JudgeOutput) {
+  const judgmentLabels: Record<JudgeOutput['judgment'], string> = {
+    success: '成功',
+    warning: '警告',
+    failure: '失败',
+    uncertain: '不确定',
+  }
+  const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
+    low: '低',
+    medium: '中',
+    high: '高',
+    critical: '严重',
+  }
   return [
-    `judgment: ${result.judgment}`,
-    `primary_failure_mode: ${result.primary_failure_mode ?? 'null'}`,
-    `severity: ${result.severity ?? 'null'}`,
-    `problem: ${result.problem ?? 'null'}`,
-    `review_required: ${String(result.review_required)}`,
+    `judgment: ${judgmentLabels[result.judgment]}`,
+    `primary_failure_mode: ${result.primary_failure_mode ? failureModeLabel(result.primary_failure_mode) : '无'}`,
+    `severity: ${result.severity ? severityLabels[result.severity] : '无'}`,
+    `problem: ${result.problem ?? '无'}`,
+    `review_required: ${result.review_required === null ? '未指定' : result.review_required ? '是' : '否'}`,
     `rationale: ${result.rationale}`,
   ].join('\n')
 }
@@ -132,7 +151,7 @@ function judgeSummary(result: JudgeOutput) {
 function evidenceText(evidence: JudgeEvidence[] | null) {
   if (!evidence?.length) return '无可用证据'
   return evidence
-    .map((item) => `${item.evidence_type} · ${item.source_ref ?? '无 source_ref'}\n${item.content}`)
+    .map((item) => `${evidenceTypeLabel(item.evidence_type)} · ${item.source_ref ?? '无 source_ref'}\n${item.content}`)
     .join('\n\n')
 }
 
@@ -153,10 +172,29 @@ const statusTextLabels: Record<string, string> = {
   regressed: '变差',
   inconclusive: '无法得出结论',
   stable: '无变化',
+  resolved: '已解决',
+  present: '仍存在',
+  absent: '不存在',
   passed: '通过',
   failed: '未通过',
   verified: '已验证',
   not_applicable: '不适用',
+  unsupported: '不支持',
+  pending: '待开始',
+  running: '运行中',
+  completed: '已完成',
+  partial_failure: '部分失败',
+  invalid: '无效',
+  submitted: '已提交',
+  pending_review: '待人工复核',
+  critical: '严重',
+  major: '重大',
+  minor: '轻微',
+  ACCEPT: '接受',
+  CONTINUE: '继续迭代',
+  INCONCLUSIVE: '无法得出结论',
+  accept: '接受',
+  continue: '不采纳',
   true: '是',
   false: '否',
   none: '无',
@@ -183,10 +221,10 @@ type RunnerAccess = {
 }
 
 const runnerStatusLabels = {
-  pending: 'pending · 等待 Runner',
-  running: 'running · Runner 执行中',
-  submitted: 'submitted · 回答已提交',
-  failed: 'failed · 执行失败',
+  pending: '等待运行程序',
+  running: '运行程序执行中',
+  submitted: '回答已提交',
+  failed: '执行失败',
 }
 
 function RunnerSubmission({
@@ -208,7 +246,7 @@ function RunnerSubmission({
   onCreate: () => void
   onStart: (label: string, summary: string) => void
 }) {
-  const [label, setLabel] = useState(`Candidate V${data.target.version}`)
+  const [label, setLabel] = useState(`候选版本 V${data.target.version}`)
   const [summary, setSummary] = useState('')
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
   const access = task && runnerAccess?.taskId === task.task_id ? runnerAccess : null
@@ -234,7 +272,7 @@ function RunnerSubmission({
       <div className="s05-canvas s05-submit">
         <header>
           <h1>候选版本验证</h1>
-          <p>Frozen Target V{data.target.version} · {data.dataset.name} {data.dataset.version}</p>
+          <p>已冻结目标 V{data.target.version} · {data.dataset.name} {data.dataset.version}</p>
         </header>
         <dl className="s05-runner-scope" aria-label="冻结验证范围">
           <div><dt>本轮优化问题</dt><dd>{new Set(data.target.problem_ids).size || 1}</dd></div>
@@ -256,9 +294,9 @@ function RunnerSubmission({
             {busy ? '正在创建验证任务…' : '创建验证任务'}
           </button>
         ) : (
-          <section className="s05-runner-task" aria-label="Local Runner 任务" aria-live="polite">
+          <section className="s05-runner-task" aria-label="本地运行任务" aria-live="polite">
             <header>
-              <h2>Local Runner</h2>
+              <h2>本地运行程序</h2>
               <span className={`s05-runner-status s05-runner-status--${task.status}`}>
                 {runnerStatusLabels[task.status]}
               </span>
@@ -275,20 +313,20 @@ function RunnerSubmission({
                 </button>
               </>
             ) : task.status === 'failed' ? (
-              <p className="s05-form-error">{task.failed_reason ?? '验证任务执行失败，Backend 未提供失败原因。'}</p>
+              <p className="s05-form-error">{task.failed_reason ?? '验证任务执行失败，后端未提供失败原因。'}</p>
             ) : access ? (
               <>
                 <div className="s05-runner-value">
-                  <span>一次性 token</span>
+                  <span>一次性 Token</span>
                   <code>{access.runnerToken}</code>
                   <button type="button" onClick={() => { void copyValue(access.runnerToken, 'Token') }}>复制</button>
                 </div>
-                <p className="s05-submit-note">在 SupportLens/backend 目录执行；先替换命令中的三项 AGENT_* 本地配置。Agent API Key 仅保留在本机。</p>
+                <p className="s05-submit-note">在 SupportLens/backend 目录执行；先替换命令中的三项 AGENT_* 本地配置。智能体 API 密钥仅保留在本机。</p>
                 <pre className="s05-runner-command">{runnerCommand}</pre>
-                <button className="s05-runner-copy" type="button" onClick={() => { void copyValue(runnerCommand, 'Runner 命令') }}>复制 Runner 命令</button>
+                <button className="s05-runner-copy" type="button" onClick={() => { void copyValue(runnerCommand, '运行命令') }}>复制运行命令</button>
               </>
             ) : (
-              <p className="s05-submit-note">Runner token 已按安全规则不再显示；页面将继续恢复并同步此任务的真实状态。</p>
+              <p className="s05-submit-note">运行程序 Token 已按安全规则不再显示；页面将继续恢复并同步此任务的真实状态。</p>
             )}
             {copyStatus && <p className="s05-copy-status" role="status">{copyStatus}</p>}
           </section>
@@ -378,7 +416,7 @@ function CandidateWorkspace({
   ]
 
   if (!selectedComparison || !conversation || !baselineResult || !candidateResult) {
-    return <PageMessage title="Case traceability 不完整" detail="无法按 comparison IDs 关联当前 Target Case。" />
+    return <PageMessage title="案例追溯链不完整" detail="无法按案例对比 ID 关联当前目标案例。" />
   }
 
   return (
@@ -388,42 +426,42 @@ function CandidateWorkspace({
           <div><span>数据集</span><strong>{dataset.name} {dataset.version}</strong></div>
           <div><span>基线版本</span><strong title={baselineRun.id}>{baselineRun.id}</strong></div>
           <div><span>候选版本</span><strong title={candidateRun.id}>{candidateRun.candidate_label} · {candidateRun.id}</strong></div>
-          <div><span>结论范围</span><strong>当前 Frozen Validation Plan</strong></div>
+          <div><span>结论范围</span><strong>当前已冻结验证计划</strong></div>
         </section>
 
         <section className="s05-status" aria-label="实验状态与追溯链">
-          <div className="s05-status-chips"><span>运行：{candidateRun.status}</span><span>阻断：{summary.blockers.length || 'none'}</span><span>实验完整性：{summary.integrity_gate}</span><span>人工最终决策：{candidateRun.final_decision ?? '尚未作出'}</span></div>
+          <div className="s05-status-chips"><span>运行：{runStatusLabel(candidateRun.status)}</span><span>阻断：{summary.blockers.length || '无'}</span><span>实验完整性：{statusText(summary.integrity_gate)}</span><span>人工最终决策：{candidateRun.final_decision ? statusText(candidateRun.final_decision) : '尚未作出'}</span></div>
           <div className="s05-status-details">
             <div className="s05-lineage"><h2>实验追溯链</h2>{lineage.map((item) => <code key={item}>{item}</code>)}</div>
-            <div className="s05-gates"><h2>状态门槛</h2><div><span>实际变更：{statusText(displayValue(manifest.actual_change_status))}</span><span>生成一致性：{statusText(displayValue(manifest.generation_parity_status))}</span><span>评测配置兼容性：{statusText(summary.compatibility_gate)}</span><span>受保护能力：{statusText(summary.protected_capability_gate)}</span><span>最终结果：{candidateResults.filter((item) => item.status === 'final').length}/{candidateResults.length}</span><span>案例对比：{comparisons.length}</span></div><p>仅展示 Backend 已保存的 Candidate manifest、Final Effective Results、Comparison 与 Validation Summary。</p></div>
+            <div className="s05-gates"><h2>状态门槛</h2><div><span>实际变更：{statusText(displayValue(manifest.actual_change_status))}</span><span>生成一致性：{statusText(displayValue(manifest.generation_parity_status))}</span><span>评测配置兼容性：{statusText(summary.compatibility_gate)}</span><span>受保护能力：{statusText(summary.protected_capability_gate)}</span><span>最终结果：{candidateResults.filter((item) => item.status === 'final').length}/{candidateResults.length}</span><span>案例对比：{comparisons.length}</span></div><p>仅展示后端已保存的候选版本清单、最终生效结果、案例对比与验证摘要。</p></div>
           </div>
         </section>
 
         <section className="s05-outcomes" aria-label="目标与回归结果">
-          <article className="s05-outcome-card"><MdCheckCircle className={`s05-outcome-icon s05-outcome-icon--${problemCardTone}`} aria-hidden="true" /><div><h2>Problem-level（{summary.problem_results.length || 1}）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单 Problem 结果：{summary.target_outcome}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标 High/Critical</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
-          <article className="s05-outcome-card s05-regression-card"><MdVerified className={`s05-outcome-icon s05-outcome-icon--${regressionCardTone}`} aria-hidden="true" /><div><h2>Version-level · 回归检查 ({comparisons.length - targetComparisons.length} 个非目标案例)</h2><div className="s05-regression-grid"><dl><div><dt>严重回归 CRITICAL</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归 MAJOR</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归 MINOR</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>Other Problems</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>Regression 与 New Systematic Problem 均直接来自 Backend Validation Summary。</p></div></article>
+          <article className="s05-outcome-card"><MdCheckCircle className={`s05-outcome-icon s05-outcome-icon--${problemCardTone}`} aria-hidden="true" /><div><h2>问题级（{summary.problem_results.length || 1}）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标高/严重问题</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
+          <article className="s05-outcome-card s05-regression-card"><MdVerified className={`s05-outcome-icon s05-outcome-icon--${regressionCardTone}`} aria-hidden="true" /><div><h2>版本级 · 回归检查（{comparisons.length - targetComparisons.length} 个非目标案例）</h2><div className="s05-regression-grid"><dl><div><dt>严重回归</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>回归与新系统性问题均直接来自后端验证摘要。</p></div></article>
         </section>
 
-        <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={item.case_id === selectedComparison.case_id ? 's05-case-tab s05-case-tab--active' : 's05-case-tab'} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${item.movement}${item.regression_level ? ` · ${item.regression_level}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
+        <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={item.case_id === selectedComparison.case_id ? 's05-case-tab s05-case-tab--active' : 's05-case-tab'} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${statusText(item.movement)}${item.regression_level ? ` · ${statusText(item.regression_level)}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
 
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
-          <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em>conversation_id：{selectedComparison.conversation_id}</em></h2><div><span><i />Baseline</span><span><i />Candidate</span></div></header>
+          <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em>conversation_id：{selectedComparison.conversation_id}</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
           <div className="s05-comparison-body">
             <ComparisonNode icon={<MdChatBubble />} label="会话 / 用户消息"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <div className="s05-version-columns">
-              <div className="s05-version-column"><ComparisonNode icon={<MdForum />} label="回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode><ComparisonNode icon={<MdSmartToy />} label="Machine JudgeOutput"><pre className="s05-node-box">{judgeSummary(baselineResult.machine_result)}</pre></ComparisonNode><ComparisonNode icon={<MdPerson />} label="人工复核"><pre>{resultReview(baselineResult)}</pre></ComparisonNode><ComparisonNode icon={<MdVerified />} label="最终生效结果"><pre className="s05-node-box s05-effective-result">{baselineResult.final_result ? judgeSummary(baselineResult.final_result) : baselineResult.status}</pre></ComparisonNode><ComparisonNode icon={<MdAnalytics />} label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.baseline)}</pre></ComparisonNode></div>
+              <div className="s05-version-column"><ComparisonNode icon={<MdForum />} label="回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode><ComparisonNode icon={<MdSmartToy />} label="机器 JudgeOutput"><pre className="s05-node-box">{judgeSummary(baselineResult.machine_result)}</pre></ComparisonNode><ComparisonNode icon={<MdPerson />} label="人工复核"><pre>{resultReview(baselineResult)}</pre></ComparisonNode><ComparisonNode icon={<MdVerified />} label="最终生效结果"><pre className="s05-node-box s05-effective-result">{baselineResult.final_result ? judgeSummary(baselineResult.final_result) : statusText(baselineResult.status)}</pre></ComparisonNode><ComparisonNode icon={<MdAnalytics />} label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.baseline)}</pre></ComparisonNode></div>
               <div className="s05-movement"><span><MdArrowForward aria-hidden="true" /></span><strong>案例变化：{statusText(selectedComparison.movement)}</strong><dl><div><dt>目标状态</dt><dd>{statusText(selectedComparison.target_problem_status)}</dd></div><div><dt>目标变差</dt><dd>{statusText(selectedComparison.target_worse)}</dd></div><div><dt>回归级别</dt><dd>{statusText(selectedComparison.regression_level ?? 'none')}</dd></div></dl></div>
-              <div className="s05-version-column s05-version-column--candidate"><ComparisonNode accent icon={<MdForum />} label="回复"><p>{candidateResponse?.assistant_content ?? 'Candidate response 不存在'}</p></ComparisonNode><ComparisonNode accent icon={<MdSmartToy />} label="Machine JudgeOutput"><pre className="s05-node-box">{judgeSummary(candidateResult.machine_result)}</pre></ComparisonNode><ComparisonNode accent icon={<MdPerson />} label="人工复核"><pre>{resultReview(candidateResult)}</pre></ComparisonNode><ComparisonNode accent icon={<MdVerified />} label="最终生效结果"><pre className="s05-node-box s05-effective-result s05-effective-result--candidate">{candidateResult.final_result ? judgeSummary(candidateResult.final_result) : candidateResult.status}</pre></ComparisonNode><ComparisonNode accent icon={<MdAnalytics />} label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.candidate)}</pre></ComparisonNode></div>
+              <div className="s05-version-column s05-version-column--candidate"><ComparisonNode accent icon={<MdForum />} label="回复"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode><ComparisonNode accent icon={<MdSmartToy />} label="机器 JudgeOutput"><pre className="s05-node-box">{judgeSummary(candidateResult.machine_result)}</pre></ComparisonNode><ComparisonNode accent icon={<MdPerson />} label="人工复核"><pre>{resultReview(candidateResult)}</pre></ComparisonNode><ComparisonNode accent icon={<MdVerified />} label="最终生效结果"><pre className="s05-node-box s05-effective-result s05-effective-result--candidate">{candidateResult.final_result ? judgeSummary(candidateResult.final_result) : statusText(candidateResult.status)}</pre></ComparisonNode><ComparisonNode accent icon={<MdAnalytics />} label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.candidate)}</pre></ComparisonNode></div>
             </div>
             <div className="s05-shared-evidence"><ComparisonNode icon={<MdFactCheck />} label="业务上下文"><pre>{displayValue(conversationMetadata(conversation, 'business_context'))}</pre></ComparisonNode><ComparisonNode icon={<MdMenuBook />} label="参考依据"><pre>{displayValue(conversationMetadata(conversation, 'reference_evidence'))}</pre></ComparisonNode></div>
           </div>
         </section>
 
         <section className="s05-decision" aria-label="候选版本决策">
-          <article className="s05-recommendation"><span className="s05-eyebrow">Version-level · 系统建议 · {summary.policy_version}</span><h2>{summary.recommended_verdict}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{statusText(value)}</dd></div>)}</dl><p><span aria-hidden="true" />{summary.blockers.length ? `阻断项：${summary.blockers.join(', ')}` : '所有机器阻断项已通过；仍等待独立人工决策。'}</p></article>
-          <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span><div><MdPerson aria-hidden="true" /><span>{candidateRun.decided_by ?? '尚未决定'}</span></div></header>{candidateRun.final_decision ? <dl><div><dt>决策</dt><dd>{candidateRun.final_decision === 'accept' ? '接受（accept）' : candidateRun.final_decision === 'continue' ? '不采纳（continue）' : candidateRun.final_decision}</dd></div><div><dt>决定时间</dt><dd>{formatDate(candidateRun.decided_at)}</dd></div><div><dt>理由</dt><dd>{candidateRun.reason}</dd></div><div><dt>改判理由</dt><dd>{candidateRun.override_reason ?? '未改判机器建议'}</dd></div></dl> : <><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与 Machine recommendation 不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</>}</article>
+          <article className="s05-recommendation"><span className="s05-eyebrow">版本级 · 系统建议 · {summary.policy_version}</span><h2>{statusText(summary.recommended_verdict)}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{statusText(value)}</dd></div>)}</dl><p><span aria-hidden="true" />{summary.blockers.length ? `阻断项：${summary.blockers.map(blockerLabel).join('、')}` : '所有机器阻断项已通过；仍等待独立人工决策。'}</p></article>
+          <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span><div><MdPerson aria-hidden="true" /><span>{candidateRun.decided_by ?? '尚未决定'}</span></div></header>{candidateRun.final_decision ? <dl><div><dt>决策</dt><dd>{statusText(candidateRun.final_decision)}</dd></div><div><dt>决定时间</dt><dd>{formatDate(candidateRun.decided_at)}</dd></div><div><dt>理由</dt><dd>{candidateRun.reason}</dd></div><div><dt>改判理由</dt><dd>{candidateRun.override_reason ?? '未改判机器建议'}</dd></div></dl> : <><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</>}</article>
         </section>
-        <section className="s05-claim-boundary" aria-label="结论边界"><strong>案例配对：同一 dataset / conversation_id / case_id。</strong><em>结论仅适用于当前 Frozen Target、数据集、Judge 配置与 response set。</em><span>人工决策与机器建议独立保存，不代表上线或部署。</span></section>
+        <section className="s05-claim-boundary" aria-label="结论边界"><strong>案例配对：同一数据集 / conversation_id / case_id。</strong><em>结论仅适用于当前已冻结目标、数据集、判定配置与回答集。</em><span>人工决策与机器建议独立保存，不代表上线或部署。</span></section>
       </div>
 
       <footer className="s05-action-rail">
@@ -552,7 +590,7 @@ function CandidateValidationPage() {
           setLoadResult({ requestKey, state: { kind: 'task_not_found' } })
           return
         }
-        setLoadResult({ requestKey, state: { kind: 'error', message: error instanceof Error ? error.message : '无法加载 Candidate Validation。' } })
+        setLoadResult({ requestKey, state: { kind: 'error', message: error instanceof Error ? error.message : '无法加载候选版本验证。' } })
       }
     }
     void load()
@@ -607,7 +645,7 @@ function CandidateValidationPage() {
     try {
       const created = await createValidationTask(pageState.data.target.id)
       if (created.optimization_target_id !== pageState.data.target.id) {
-        throw new Error('Backend 返回的 Validation Task 不属于当前 Frozen Target。')
+        throw new Error('后端返回的验证任务不属于当前已冻结目标。')
       }
       setRunnerAccess({ taskId: created.task_id, runnerToken: created.runner_token })
       setSearchParams(withValidationTaskId(searchParams.toString(), created.task_id), { replace: true })
@@ -640,7 +678,7 @@ function CandidateValidationPage() {
       setSearchParams(params, { replace: true })
     } catch (error) {
       const code = error instanceof ApiRequestError ? ` (${error.code})` : ''
-      setTaskError(`${error instanceof Error ? error.message : 'Candidate Validation 启动失败。'}${code}`)
+      setTaskError(`${error instanceof Error ? error.message : '候选版本验证启动失败。'}${code}`)
     } finally {
       setCandidateValidationBusy(false)
     }
@@ -655,20 +693,20 @@ function CandidateValidationPage() {
       setLoadResult((current) => current.requestKey === requestKey && current.state.kind === 'ready' ? { requestKey, state: { kind: 'ready', data: { ...current.state.data, candidateRun } } } : current)
     } catch (error) {
       const code = error instanceof ApiRequestError ? ` (${error.code})` : ''
-      setDecisionError(`${error instanceof Error ? error.message : 'Human Decision 保存失败。'}${code}`)
+      setDecisionError(`${error instanceof Error ? error.message : '人工决策保存失败。'}${code}`)
     } finally {
       setDecisionBusy(false)
     }
   }
 
-  if (pageState.kind === 'missing_target') return <PageMessage title="缺少 Frozen Target" detail="请从 S04 使用 target_id 进入 Candidate Validation。" />
-  if (pageState.kind === 'loading') return <PageMessage title="正在加载 Candidate Validation" detail="正在读取 Frozen Target 与真实运行数据…" />
-  if (pageState.kind === 'target_not_found') return <PageMessage title="OptimizationTarget 不存在" detail={`未找到 target_id=${targetId}。`} />
-  if (pageState.kind === 'candidate_not_found') return <PageMessage title="Candidate Run 不存在" detail="candidate_run_id 不存在或不属于当前 Frozen Target。" />
-  if (pageState.kind === 'task_not_found') return <PageMessage title="Validation Task 不存在" detail="validation_task_id 不存在或不属于当前 Frozen Target。" />
-  if (pageState.kind === 'target_not_frozen') return <PageMessage title="Target 尚未冻结" detail={`当前状态为 ${pageState.target.status}，必须先在 S04 Freeze。`} />
-  if (pageState.kind === 'error') return <PageMessage title="Candidate Validation 加载失败" detail={pageState.message} />
-  if (pageState.kind === 'candidate_status') return <PageMessage title={`Candidate Run ${pageState.candidateRun.status}`} detail={`Run ${pageState.candidateRun.id} 已从 Backend 恢复。`} />
+  if (pageState.kind === 'missing_target') return <PageMessage title="缺少已冻结目标" detail="请从目标与计划页面使用 target_id 进入候选版本验证。" />
+  if (pageState.kind === 'loading') return <PageMessage title="正在加载候选版本验证" detail="正在读取已冻结目标与真实运行数据…" />
+  if (pageState.kind === 'target_not_found') return <PageMessage title="优化目标不存在" detail={`未找到 target_id=${targetId}。`} />
+  if (pageState.kind === 'candidate_not_found') return <PageMessage title="候选版本运行不存在" detail="candidate_run_id 不存在或不属于当前已冻结目标。" />
+  if (pageState.kind === 'task_not_found') return <PageMessage title="验证任务不存在" detail="validation_task_id 不存在或不属于当前已冻结目标。" />
+  if (pageState.kind === 'target_not_frozen') return <PageMessage title="目标尚未冻结" detail={`当前状态为 ${targetStatusLabel(pageState.target.status)}，必须先在目标与计划页面冻结。`} />
+  if (pageState.kind === 'error') return <PageMessage title="候选版本验证加载失败" detail={pageState.message} />
+  if (pageState.kind === 'candidate_status') return <PageMessage title={`候选版本运行${runStatusLabel(pageState.candidateRun.status)}`} detail={`运行 ${pageState.candidateRun.id} 已从后端恢复。`} />
   if (pageState.kind === 'runner_setup') return <RunnerSubmission key={pageState.data.target.id} data={pageState.data} task={null} runnerAccess={runnerAccess} busy={taskCreationBusy} validationBusy={candidateValidationBusy} error={taskError} onCreate={() => { void createRunnerTask() }} onStart={(label, summary) => { void startCandidateValidation(label, summary) }} />
   if (pageState.kind === 'runner_task') return <RunnerSubmission key={pageState.data.target.id} data={pageState.data} task={pageState.task} runnerAccess={runnerAccess} busy={taskCreationBusy} validationBusy={candidateValidationBusy} error={taskError} onCreate={() => { void createRunnerTask() }} onStart={(label, summary) => { void startCandidateValidation(label, summary) }} />
   return <CandidateWorkspace data={pageState.data} selectedCaseId={selectedCaseId} onSelectCase={setSelectedCaseId} decisionBusy={decisionBusy} decisionError={decisionError} onDecision={(decision, actor, reason, overrideReason) => { void submitDecision(decision, actor, reason, overrideReason) }} />

@@ -23,6 +23,7 @@ import {
   parseProblemIds,
   serializeProblemIds,
 } from '../baselineTargetGate'
+import { scenarioLabel } from '../displayLabels'
 import { buildValidationCaseExport } from '../validationHandoff'
 import './TargetPlanPage.css'
 
@@ -257,7 +258,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
                 {problems.map((problem) => (
                   <li className="s04-problem-card" key={problem.problem_id}>
                     <span className="s04-code-label" title={problem.problem_id}>
-                      {problem.scenario} · P-{shortId(problem.problem_id)}
+                      {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)}
                     </span>
                     <p>{problem.definition}</p>
                   </li>
@@ -403,7 +404,7 @@ function TargetPlanPage() {
         setForm(target ? formFromTarget(target) : {
           ...emptyForm,
           definition: `改善本轮 ${selectedProblems.length} 个问题：\n${selectedProblems.map((problem) => problem.definition).join('\n')}`,
-          inclusionCriteria: '所选 Problems 涉及的核心案例去重并集。',
+          inclusionCriteria: '所选问题涉及的核心案例去重并集。',
           exclusionCriteria: '其余核心案例不计入目标案例，并作为回归案例。',
           expectedObservableChange: '减少所选问题在目标案例中的出现，并保持回归案例表现。',
         })

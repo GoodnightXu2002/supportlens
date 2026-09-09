@@ -26,6 +26,11 @@ import {
   type ImportPreviewResponse,
   type PrivacyStatus,
 } from '../api'
+import {
+  datasetSourceLabel,
+  privacyStatusLabel,
+  scenarioLabel,
+} from '../displayLabels'
 import './DatasetPage.css'
 
 type ImportStatus =
@@ -67,7 +72,7 @@ function readErrorFromUnknown(error: unknown) {
   }
   return {
     code: 'dataset_read_failed',
-    message: '无法读取 Dataset。请确认 Backend 正在运行后重试。',
+    message: '无法读取数据集。请确认后端正在运行后重试。',
   }
 }
 
@@ -268,7 +273,7 @@ function DatasetPage() {
     }
     return {
       code: 'network_error',
-      message: '无法连接导入服务。请确认 Backend 正在运行后重试。',
+      message: '无法连接导入服务。请确认后端正在运行后重试。',
       details: [],
     }
   }
@@ -282,7 +287,7 @@ function DatasetPage() {
       setImportStatus('preview_error')
       setImportError({
         code: 'required_input_missing',
-        message: '请选择 CSV / JSON 文件，并填写 Dataset Name 与 Version。',
+        message: '请选择 CSV / JSON 文件，并填写数据集名称与版本。',
         details: [],
       })
       return
@@ -293,7 +298,7 @@ function DatasetPage() {
       setImportStatus('preview_error')
       setImportError({
         code: 'unsupported_file_type',
-        message: '仅支持 .csv 或 .json 文件；Backend 仍会执行最终校验。',
+        message: '仅支持 .csv 或 .json 文件；后端仍会执行最终校验。',
         details: [],
       })
       return
@@ -351,7 +356,7 @@ function DatasetPage() {
   function errorLocation(detail: ImportErrorDetail) {
     if (typeof detail.row === 'number') return `第 ${detail.row} 行`
     if (typeof detail.item_index === 'number') {
-      return `第 ${detail.item_index + 1} 项（index ${detail.item_index}）`
+      return `第 ${detail.item_index + 1} 项（索引 ${detail.item_index}）`
     }
     return '文件级'
   }
@@ -410,32 +415,32 @@ function DatasetPage() {
   return (
     <section className="s02-page" aria-label="数据集详情工作区">
       {datasetListStatus === 'loading'
-        ? renderDataState('正在读取 Dataset', '正在从 Backend 获取可用 Dataset…')
+        ? renderDataState('正在读取数据集', '正在从后端获取可用数据集…')
         : datasetListStatus === 'error'
           ? renderDataState(
-              'Dataset 加载失败',
-              datasetListError ?? '无法获取 Dataset 列表。',
+              '数据集加载失败',
+              datasetListError ?? '无法获取数据集列表。',
               '重试',
               retryDatasetList,
             )
           : datasets.length === 0
             ? renderDataState(
-                '尚无 Dataset',
-                '导入 CSV 或 JSON 后，真实 Dataset 与 Conversation 将显示在这里。',
+                '尚无数据集',
+                '导入 CSV 或 JSON 后，真实数据集与会话将显示在这里。',
                 '新建 / 导入数据集',
                 openDatasetImport,
               )
             : datasetNotFound
               ? renderDataState(
-                  'Dataset Not Found',
-                  'URL 指定的 Dataset 不存在，未使用其他 Dataset 替代。',
-                  '查看最新 Dataset',
+                  '未找到数据集',
+                  'URL 指定的数据集不存在，未使用其他数据集替代。',
+                  '查看最新数据集',
                   () => selectDataset(datasets[0].dataset_id),
                   requestedDatasetId ?? undefined,
                 )
               : activeReadError
                 ? renderDataState(
-                    'Dataset 读取失败',
+                    '数据集读取失败',
                     activeReadError.message,
                     '重试',
                     retrySelectedDataset,
@@ -443,8 +448,8 @@ function DatasetPage() {
                   )
                 : !detailReady || !datasetDetail
                   ? renderDataState(
-                      '正在读取 Dataset',
-                      '正在获取 Dataset Detail 与 Conversations…',
+                      '正在读取数据集',
+                      '正在获取数据集详情与会话…',
                     )
                   : (
                     <>
@@ -452,12 +457,12 @@ function DatasetPage() {
         <section className="s02-ready-banner" aria-label="数据集状态">
           <MdCheckCircle aria-hidden="true" />
           <div>
-            <h1>{datasetDetail.name}<span>已就绪 READY</span></h1>
-            <p>{datasetDetail.description ?? '未提供 Dataset 描述。'}</p>
+            <h1>{datasetDetail.name}<span>已就绪</span></h1>
+            <p>{datasetDetail.description ?? '未提供数据集描述。'}</p>
           </div>
           {datasets.length > 1 ? (
             <label className="s02-dataset-switcher">
-              <span>当前 Dataset</span>
+              <span>当前数据集</span>
               <select
                 value={datasetDetail.dataset_id}
                 onChange={(event) => selectDataset(event.target.value)}
@@ -479,7 +484,7 @@ function DatasetPage() {
           </div>
           <div className="s02-metadata__item s02-metadata__item--source">
             <span>来源</span>
-            <strong>{datasetDetail.source}</strong>
+            <strong>{datasetSourceLabel(datasetDetail.source)}</strong>
           </div>
           <div className="s02-metadata__item">
             <span>案例总数</span>
@@ -491,7 +496,7 @@ function DatasetPage() {
           </div>
           <div className="s02-metadata__secondary">
             <div><span>版本</span><code>{datasetDetail.version}</code></div>
-            <div><span>隐私状态</span><code>{datasetDetail.privacy_status}</code></div>
+            <div><span>隐私状态</span><code>{privacyStatusLabel(datasetDetail.privacy_status)}</code></div>
             <div><span>描述</span><strong>{datasetDetail.description ?? '未提供'}</strong></div>
           </div>
         </section>
@@ -507,11 +512,11 @@ function DatasetPage() {
                     {Object.entries(datasetDetail.scenario_distribution).length > 0 ? (
                       Object.entries(datasetDetail.scenario_distribution).map(
                         ([label, count]) => (
-                          <span key={label}>{label} <strong>{count}</strong></span>
+                          <span key={label}>{scenarioLabel(label)} <strong>{count}</strong></span>
                         ),
                       )
                     ) : (
-                      <span>未提供 scenario</span>
+                      <span>未提供场景</span>
                     )}
                   </div>
                 </div>
@@ -555,7 +560,7 @@ function DatasetPage() {
                   <select value={scenario} onChange={(event) => setScenario(event.target.value)}>
                     <option value="all">业务场景（全部）</option>
                     {scenarioOptions.map((value) => (
-                      <option key={value} value={value}>{value}</option>
+                      <option key={value} value={value}>{scenarioLabel(value)}</option>
                     ))}
                   </select>
                 </label>
@@ -569,7 +574,7 @@ function DatasetPage() {
                     <th>案例 ID</th>
                     <th>业务场景</th>
                     <th>消息摘要</th>
-                    <th>Metadata</th>
+                    <th>元数据</th>
                     <th>创建时间</th>
                   </tr>
                 </thead>
@@ -577,7 +582,7 @@ function DatasetPage() {
                   {visibleRows.map((conversation) => (
                     <tr key={conversation.id}>
                       <td><code>{conversation.external_id}</code></td>
-                      <td>{conversationScenario(conversation)}</td>
+                      <td>{scenarioLabel(conversationScenario(conversation))}</td>
                       <td title={conversationSummary(conversation)}>
                         {conversationSummary(conversation)}
                       </td>
@@ -604,8 +609,8 @@ function DatasetPage() {
         <div>
           <MdWarningAmber aria-hidden="true" />
           <p>
-            <strong>生产式（Production-like）不等于生产代表性（Production-representative）。</strong>
-            <span>结论仅适用于当前评测集（Evaluation Set），不代表生产发生率、统计显著性或业务收益。</span>
+            <strong>仿生产数据不等于具备生产代表性。</strong>
+            <span>结论仅适用于当前评测集，不代表生产发生率、统计显著性或业务收益。</span>
           </p>
         </div>
         <Link to="/review">用于质量复盘</Link>
@@ -632,7 +637,7 @@ function DatasetPage() {
               <div>
                 <h2 id="s02-import-title">新建 / 导入数据集</h2>
                 <p id="s02-import-description">
-                  上传标准 CSV 或 JSON，先完成全量校验，再确认写入 Dataset。
+                  上传标准 CSV 或 JSON，先完成全量校验，再确认写入数据集。
                 </p>
               </div>
               <button
@@ -651,39 +656,39 @@ function DatasetPage() {
                 <div className="s02-import-success">
                   <MdCheckCircle aria-hidden="true" />
                   <h3>数据集已成功导入</h3>
-                  <p>全部 Conversation 已完成原子写入，可以关闭窗口。</p>
+                  <p>全部会话已完成原子写入，可以关闭窗口。</p>
                   <dl>
-                    <div><dt>Dataset ID</dt><dd><code>{importResult.dataset_id}</code></dd></div>
-                    <div><dt>Name</dt><dd>{importResult.name}</dd></div>
-                    <div><dt>Version</dt><dd><code>{importResult.version}</code></dd></div>
-                    <div><dt>Conversation</dt><dd>{importResult.conversation_count}</dd></div>
-                    <div><dt>Created</dt><dd>{formatCreatedAt(importResult.created_at)}</dd></div>
+                    <div><dt>数据集 ID</dt><dd><code>{importResult.dataset_id}</code></dd></div>
+                    <div><dt>名称</dt><dd>{importResult.name}</dd></div>
+                    <div><dt>版本</dt><dd><code>{importResult.version}</code></dd></div>
+                    <div><dt>会话</dt><dd>{importResult.conversation_count}</dd></div>
+                    <div><dt>创建时间</dt><dd>{formatCreatedAt(importResult.created_at)}</dd></div>
                   </dl>
                 </div>
               ) : preview ? (
                 <div className="s02-import-preview">
                   <div className="s02-import-summary">
                     <div>
-                      <span>Dataset</span>
+                      <span>数据集</span>
                       <strong>{preview.dataset_identity.name}</strong>
                       <code>{preview.dataset_identity.version}</code>
                     </div>
                     <div><span>文件</span><strong>{file?.name}</strong></div>
-                    <div><span>Conversation</span><strong>{preview.total_conversation_count}</strong></div>
+                    <div><span>会话</span><strong>{preview.total_conversation_count}</strong></div>
                   </div>
 
                   <section className="s02-import-scenarios" aria-labelledby="s02-scenarios-title">
-                    <h3 id="s02-scenarios-title">Scenario distribution</h3>
+                    <h3 id="s02-scenarios-title">场景分布</h3>
                     <div>
                       {Object.entries(preview.scenario_distribution).map(([label, count]) => (
-                        <span key={label}><code>{label}</code><strong>{count}</strong></span>
+                        <span key={label}><code>{scenarioLabel(label)}</code><strong>{count}</strong></span>
                       ))}
                     </div>
                   </section>
 
                   <section className="s02-import-conversations" aria-labelledby="s02-preview-title">
                     <div className="s02-import-conversations__heading">
-                      <h3 id="s02-preview-title">Preview conversations</h3>
+                      <h3 id="s02-preview-title">会话预览</h3>
                       <span>显示前 {preview.preview_conversations.length} 条</span>
                     </div>
                     <div className="s02-import-conversations__list">
@@ -691,12 +696,12 @@ function DatasetPage() {
                         <article key={conversation.external_id}>
                           <header>
                             <code>{conversation.external_id}</code>
-                            <span>{String(conversation.metadata.scenario ?? '未声明 scenario')}</span>
+                            <span>{conversation.metadata.scenario ? scenarioLabel(String(conversation.metadata.scenario)) : '未声明场景'}</span>
                           </header>
                           <ol>
                             {conversation.messages.map((message, index) => (
                               <li key={`${conversation.external_id}-${index}`}>
-                                <strong>{message.role === 'user' ? 'USER' : 'ASSISTANT'}</strong>
+                                <strong>{message.role === 'user' ? '用户' : '助手'}</strong>
                                 <p>{message.content}</p>
                               </li>
                             ))}
@@ -722,13 +727,13 @@ function DatasetPage() {
                     <MdUploadFile aria-hidden="true" />
                     <span>
                       <strong>{file ? file.name : '选择 CSV / JSON 文件'}</strong>
-                      <small>{file ? `${(file.size / 1024).toFixed(1)} KB` : '最大 5 MB；Backend 执行最终校验'}</small>
+                      <small>{file ? `${(file.size / 1024).toFixed(1)} KB` : '最大 5 MB；后端执行最终校验'}</small>
                     </span>
                   </label>
 
                   <div className="s02-import-form__grid">
                     <label className="s02-import-field s02-import-field--wide">
-                      <span>Dataset Name <b>必填</b></span>
+                      <span>数据集名称 <b>必填</b></span>
                       <input
                         type="text"
                         value={datasetName}
@@ -739,7 +744,7 @@ function DatasetPage() {
                       />
                     </label>
                     <label className="s02-import-field">
-                      <span>Version</span>
+                      <span>版本</span>
                       <input
                         type="text"
                         value={version}
@@ -748,19 +753,19 @@ function DatasetPage() {
                       />
                     </label>
                     <label className="s02-import-field">
-                      <span>Privacy Status</span>
+                      <span>隐私状态</span>
                       <select
                         value={privacyStatus}
                         onChange={(event) => setPrivacyStatus(event.target.value as PrivacyStatus)}
                       >
-                        <option value="unknown">unknown</option>
-                        <option value="synthetic">synthetic</option>
-                        <option value="deidentified">deidentified</option>
-                        <option value="may_contain_personal_data">may_contain_personal_data</option>
+                        <option value="unknown">{privacyStatusLabel('unknown')}</option>
+                        <option value="synthetic">{privacyStatusLabel('synthetic')}</option>
+                        <option value="deidentified">{privacyStatusLabel('deidentified')}</option>
+                        <option value="may_contain_personal_data">{privacyStatusLabel('may_contain_personal_data')}</option>
                       </select>
                     </label>
                     <label className="s02-import-field s02-import-field--full">
-                      <span>Description <b>可选</b></span>
+                      <span>描述 <b>可选</b></span>
                       <textarea
                         rows={2}
                         value={description}
@@ -769,7 +774,7 @@ function DatasetPage() {
                       />
                     </label>
                     <label className="s02-import-field s02-import-field--full">
-                      <span>Representativeness Statement <b>可选</b></span>
+                      <span>代表性声明 <b>可选</b></span>
                       <textarea
                         rows={2}
                         value={representativenessStatement}

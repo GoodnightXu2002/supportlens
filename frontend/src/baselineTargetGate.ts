@@ -16,11 +16,11 @@ export function getProblemSelectionBlocker(cases: ProblemSelectionCase[]) {
     .filter((item) => item.judgment === 'failure')
     .map((item) => item.primaryFailureMode)
   if (failureModes.some((mode) => mode === null) || new Set(failureModes).size > 1) {
-    return 'Core Failure 没有唯一的 Primary Failure Mode。'
+    return '核心失败案例没有唯一的主要失败模式。'
   }
   return coreCases.some((item) => item.judgment === 'warning' || item.judgment === 'failure')
     ? null
-    : '没有可纳入本轮优化的 Core Warning 或 Core Failure。'
+    : '没有可纳入本轮优化的核心警告或核心失败案例。'
 }
 
 export function getSelectedCoreCases(
@@ -91,10 +91,10 @@ export function getTargetEntryBlocker({
     return '该问题仅出现在挑战案例中，暂不作为本轮优化目标。'
   }
   if (hasExistingTarget) return null
-  if (runType !== 'baseline') return '阻塞：目标与计划只接受 Baseline Run。'
-  if (runStatus !== 'completed') return '阻塞：Baseline Run 尚未 completed。'
+  if (runType !== 'baseline') return '阻塞：目标与计划只接受基线运行。'
+  if (runStatus !== 'completed') return '阻塞：基线运行尚未完成。'
   if (pendingReviewCount > 0) return `阻塞：仍有 ${pendingReviewCount} 个案例待人工复核。`
-  if (!problem) return '阻塞：当前没有可进入目标与计划的 Problem。'
+  if (!problem) return '阻塞：当前没有可进入目标与计划的问题。'
 
   const failureResults = affectedFinalResults.filter(
     (result) => result?.final_result?.judgment === 'failure',
@@ -104,6 +104,6 @@ export function getTargetEntryBlocker({
   )
   return failureResults.some((result) => !result?.final_result?.primary_failure_mode)
     || failureModes.size > 1
-    ? '阻塞：受影响的失败案例没有唯一的 Primary Failure Mode。'
+    ? '阻塞：受影响的失败案例没有唯一的主要失败模式。'
     : null
 }

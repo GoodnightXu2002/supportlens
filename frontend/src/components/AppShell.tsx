@@ -83,7 +83,7 @@ function AppShell() {
         <Link
           className="brand"
           to="/review"
-          aria-label="SupportLens home"
+          aria-label="SupportLens 首页"
           onClick={() => setDatasetImportOpen(false)}
         >
           <span className="brand-mark" aria-hidden="true">
@@ -95,7 +95,7 @@ function AppShell() {
           <span className="brand-name">SupportLens</span>
         </Link>
 
-        <nav className="sidebar-navigation" aria-label="Primary navigation">
+        <nav className="sidebar-navigation" aria-label="主导航">
           <Link
             aria-current={isQualityReviewRoute ? 'page' : undefined}
             className={
@@ -147,7 +147,7 @@ function AppShell() {
             <div className="route-header route-header--review">
               <h1 className="route-header-title">开始质量复盘</h1>
               <span className="route-header-description">
-                本轮要评什么 Dataset / Evaluation Set，以及哪个 Baseline？
+                本轮要评测哪个数据集 / 评测集，以及使用哪条基线？
               </span>
             </div>
           ) : isDatasetRoute ? (
@@ -177,7 +177,7 @@ function AppShell() {
               <div className="workspace-title">证据链工作区</div>
               <nav
                 className="workflow-navigation"
-                aria-label="Evidence workflow stages"
+                aria-label="评测工作流阶段"
               >
                 {workflowNavigationItems.map((item, index) => {
                   const current = index === workflowStepIndex

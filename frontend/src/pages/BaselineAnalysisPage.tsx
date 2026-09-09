@@ -39,6 +39,16 @@ import {
   serializeProblemIds,
   type ProblemSelectionCase,
 } from '../baselineTargetGate'
+import {
+  blockerLabel,
+  datasetSourceLabel,
+  evidenceTypeLabel,
+  failureModeLabel,
+  privacyStatusLabel,
+  runSourceLabel,
+  runStatusLabel,
+  scenarioLabel,
+} from '../displayLabels'
 import './BaselineAnalysisPage.css'
 
 type LoadedData = {
@@ -349,7 +359,7 @@ function BaselineAnalysisPage() {
   if (pageState.kind === 'missing_run_id') {
     return (
       <PageMessage
-        title="缺少 Evaluation Run"
+        title="缺少评测运行"
         detail="请使用 /baseline?run_id=<evaluation_run_id> 打开基线分析。"
       />
     )
@@ -360,7 +370,7 @@ function BaselineAnalysisPage() {
   if (pageState.kind === 'run_not_found') {
     return (
       <PageMessage
-        title="Evaluation Run 不存在"
+        title="评测运行不存在"
         detail={`未找到 run_id=${runId} 对应的评测运行。`}
       />
     )
@@ -368,8 +378,8 @@ function BaselineAnalysisPage() {
   if (pageState.kind === 'aggregation_not_completed') {
     return (
       <PageMessage
-        title="Problem Aggregation 尚未完成"
-        detail={`Run ${shortId(pageState.run.id)} 当前不能展示正式 Problem 数据。`}
+        title="问题聚合尚未完成"
+        detail={`运行 ${shortId(pageState.run.id)} 当前不能展示正式问题数据。`}
       />
     )
   }
@@ -404,7 +414,7 @@ function BaselineAnalysisPage() {
     .map((problemId) => problems.find((problem) => problem.problem_id === problemId))
     .filter((problem): problem is Problem => problem !== undefined)
   const targetEntryBlocker = selectedProblems.length === 0
-    ? '请至少选择 1 个可优化 Problem。'
+    ? '请至少选择 1 个可优化问题。'
     : selectedProblems.map((problem) => getTargetEntryBlocker({
       hasExistingTarget: Boolean(selectedTarget),
       runType: data.run.run_type,
@@ -442,7 +452,7 @@ function BaselineAnalysisPage() {
             />
             <div>
               <h1>{pendingReviewCount === 0 ? '人工复核已清空' : '需要人工复核 - 非最终结论'}</h1>
-              <p>{pendingReviewCount === 0 ? 'REVIEW-CLEARED' : `PENDING-REVIEW: ${pendingReviewCount}`}</p>
+              <p>{pendingReviewCount === 0 ? '复核已完成' : `待复核：${pendingReviewCount}`}</p>
             </div>
           </div>
 
@@ -456,17 +466,17 @@ function BaselineAnalysisPage() {
               </dd>
             </div>
             <div>
-              <dt>Evaluation Run</dt>
-              <dd title={`${data.run.id} · ${data.run.run_source} · ${data.run.created_at}`}>
-                {shortId(data.run.id)} · {data.run.status}
+              <dt>评测运行</dt>
+              <dd title={`${data.run.id} · ${runSourceLabel(data.run.run_source)} · ${data.run.created_at}`}>
+                {shortId(data.run.id)} · {runStatusLabel(data.run.status)}
               </dd>
             </div>
             <div>
               <dt>数据类型</dt>
-              <dd>{data.dataset.privacy_status} · {data.dataset.source}</dd>
+              <dd>{privacyStatusLabel(data.dataset.privacy_status)} · {datasetSourceLabel(data.dataset.source)}</dd>
             </div>
             <div className="s03-metadata__type">
-              <dt>Judge</dt>
+              <dt>判定配置</dt>
               <dd title={data.run.judge_model}>{data.run.judge_contract_version}</dd>
             </div>
             <div>
@@ -497,7 +507,7 @@ function BaselineAnalysisPage() {
 
           <div className="s03-pane-scroll s03-problem-list">
             {problems.length === 0 ? (
-              <p className="s03-empty-message">Problem Aggregation 已完成，本 Run 没有可展示的 Problem。</p>
+              <p className="s03-empty-message">问题聚合已完成，本次运行没有可展示的问题。</p>
             ) : problems.map((problem) => {
               const isActive = problem.problem_id === selectedProblem?.problem_id
               const selectionBlocker = getProblemSelectionBlocker(
@@ -520,7 +530,7 @@ function BaselineAnalysisPage() {
                       className={isActive ? 's03-code-label s03-code-label--strong' : 's03-code-label'}
                       title={problem.problem_id}
                     >
-                      {problem.scenario} · P-{shortId(problem.problem_id)}
+                      {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)}
                     </span>
                     <div className="s03-problem-card__controls">
                       <span className={isActive ? 's03-count-badge s03-count-badge--active' : 's03-count-badge'}>
@@ -563,12 +573,12 @@ function BaselineAnalysisPage() {
                         <div className="s03-priority-grid__wide"><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />证据置信度：</dt><dd>{signalLabel(problem.evidence_confidence)}</dd></div>
                       </dl>
                       <p className="s03-profile-detail">
-                        Severity Distribution：L {problem.severity_distribution.low} / M {problem.severity_distribution.medium} / H {problem.severity_distribution.high} / C {problem.severity_distribution.critical}
+                        严重程度分布：低 {problem.severity_distribution.low} / 中 {problem.severity_distribution.medium} / 高 {problem.severity_distribution.high} / 严重 {problem.severity_distribution.critical}
                       </p>
                       <p className="s03-ranking-detail">
                         {problem.rank !== null
-                          ? `Dense Rank ${problem.rank}${problem.equal_review_priority ? ' · Equal Review Priority' : ''}`
-                          : `不可排名${problem.ranking_blockers.length > 0 ? `：${problem.ranking_blockers.join(', ')}` : ''}`}
+                          ? `密集排名 ${problem.rank}${problem.equal_review_priority ? ' · 复核优先级相同' : ''}`
+                          : `不可排名${problem.ranking_blockers.length > 0 ? `：${problem.ranking_blockers.map(blockerLabel).join('、')}` : ''}`}
                       </p>
                     </>
                   ) : (
@@ -626,7 +636,7 @@ function BaselineAnalysisPage() {
                           <span className="s03-case-problems">
                             {relatedProblems.map((problem) => (
                               <span key={problem.problem_id} title={problem.definition}>
-                                {problem.scenario} · P-{shortId(problem.problem_id)}
+                                {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)}
                               </span>
                             ))}
                           </span>
@@ -637,7 +647,7 @@ function BaselineAnalysisPage() {
                 </div>
               </>
             ) : (
-              <p className="s03-empty-message">选择至少一个可优化 Problem 后查看本轮核心案例。</p>
+              <p className="s03-empty-message">选择至少一个可优化问题后查看本轮核心案例。</p>
             )}
           </div>
         </section>
@@ -684,7 +694,7 @@ function BaselineAnalysisPage() {
                         <span className={`s03-ai-judgment__verdict s03-ai-judgment__verdict--${selectedResult.machine_result.judgment}`}>
                           判定：{judgmentLabels[selectedResult.machine_result.judgment]}
                         </span>
-                        <span>{selectedResult.machine_result.primary_failure_mode ?? '无主要失败模式'}</span>
+                        <span>{selectedResult.machine_result.primary_failure_mode ? failureModeLabel(selectedResult.machine_result.primary_failure_mode) : '无主要失败模式'}</span>
                       </div>
                       <p>问题：{selectedResult.machine_result.problem ?? '无'}</p>
                       <p>
@@ -692,14 +702,14 @@ function BaselineAnalysisPage() {
                         {' · '}需人工复核：{selectedResult.machine_result.review_required === null ? '不可用' : selectedResult.machine_result.review_required ? '是' : '否'}
                       </p>
                       {selectedResult.machine_result.secondary_flags.length > 0 ? (
-                        <p>次要标记：{selectedResult.machine_result.secondary_flags.join(', ')}</p>
+                        <p>次要标记：{selectedResult.machine_result.secondary_flags.map(failureModeLabel).join('、')}</p>
                       ) : null}
                       {selectedResult.machine_result.uncertainty ? (
                         <p>不确定性：{selectedResult.machine_result.uncertainty}</p>
                       ) : null}
                       <p>{selectedResult.machine_result.rationale}</p>
                       {selectedResult.machine_result.evidence.length > 0 ? (
-                        <ul>{selectedResult.machine_result.evidence.map((item, index) => <li key={`${selectedResult.evaluation_result_id}-machine-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul>
+                        <ul>{selectedResult.machine_result.evidence.map((item, index) => <li key={`${selectedResult.evaluation_result_id}-machine-${index}`}>{evidenceTypeLabel(item.evidence_type)}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul>
                       ) : null}
                     </div>
                   </div>
@@ -712,7 +722,7 @@ function BaselineAnalysisPage() {
                     {businessContext ? <p className="s03-context-copy">{businessContext}</p> : null}
                     {factEvidence.length > 0 ? (
                       <ul>{factEvidence.map((item, index) => <li key={`${item.evaluation_result_id}-fact-${index}`}>{item.content}</li>)}</ul>
-                    ) : <p className="s03-evidence-empty">Final Effective Result 未提供 Case Fact evidence。</p>}
+                    ) : <p className="s03-evidence-empty">最终生效结果未提供案例事实证据。</p>}
                   </div>
                 </article>
 
@@ -724,7 +734,7 @@ function BaselineAnalysisPage() {
                     {referenceItems.length > 0 ? (
                       <ul>{referenceItems.map((item, index) => <li key={`${item.evaluation_result_id}-reference-${index}`}>{item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul>
                     ) : null}
-                    {!referenceEvidence && referenceItems.length === 0 ? <p className="s03-evidence-empty">未提供可追溯 Reference evidence。</p> : null}
+                    {!referenceEvidence && referenceItems.length === 0 ? <p className="s03-evidence-empty">未提供可追溯的参考证据。</p> : null}
                   </div>
                 </article>
 
@@ -737,10 +747,10 @@ function BaselineAnalysisPage() {
                         <>
                           <p className="s03-human-review__decision">
                             {isHumanCorrection ? <MdCancel aria-hidden="true" /> : <MdCheckCircle aria-hidden="true" />}
-                            {isHumanCorrection ? '已修正 Machine 判定' : '已确认 Machine 判定'}
+                            {isHumanCorrection ? '已修正机器判定' : '已确认机器判定'}
                           </p>
                           <div><span>复核人 / 时间</span><p>{selectedResult.human_decision.reviewer} · {formatDate(selectedResult.human_decision.reviewed_at)}</p></div>
-                          <div><span>复核理由</span><p>{selectedResult.human_decision.change_reason ?? '结论未修改，无 change reason。'}</p></div>
+                          <div><span>复核理由</span><p>{selectedResult.human_decision.change_reason ?? '结论未修改，无修正理由。'}</p></div>
                         </>
                       ) : (
                         <p className={selectedResult.status === 'pending_review'
@@ -763,12 +773,12 @@ function BaselineAnalysisPage() {
                       {selectedResult.final_result ? (
                         <p>
                           问题：{selectedResult.final_result.problem ?? '无'}<br />
-                          严重程度：{selectedResult.final_result.severity ? severityLabels[selectedResult.final_result.severity] : '不可用'} · {selectedResult.final_result.primary_failure_mode ?? '无主要失败模式'}
+                          严重程度：{selectedResult.final_result.severity ? severityLabels[selectedResult.final_result.severity] : '不可用'} · {selectedResult.final_result.primary_failure_mode ? failureModeLabel(selectedResult.final_result.primary_failure_mode) : '无主要失败模式'}
                         </p>
                       ) : null}
-                      <p>{selectedResult.final_result?.rationale ?? '人工复核完成前不存在 Final Effective Result。'}</p>
+                      <p>{selectedResult.final_result?.rationale ?? '人工复核完成前不存在最终生效结果。'}</p>
                       {selectedResult.final_result?.evidence.length ? (
-                        <ul>{selectedResult.final_result.evidence.map((item, index) => <li key={`${selectedResult.evaluation_result_id}-final-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul>
+                        <ul>{selectedResult.final_result.evidence.map((item, index) => <li key={`${selectedResult.evaluation_result_id}-final-${index}`}>{evidenceTypeLabel(item.evidence_type)}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul>
                       ) : null}
                     </div>
                   </div>
@@ -780,7 +790,7 @@ function BaselineAnalysisPage() {
       </div>
 
       <footer className="s03-bottom-bar">
-        <div className="s03-analyst"><strong title={data.run.id}>Run {shortId(data.run.id)}</strong></div>
+        <div className="s03-analyst"><strong title={data.run.id}>运行 {shortId(data.run.id)}</strong></div>
         <div className="s03-bottom-actions">
           <span className={targetEntryBlocker ? undefined : 's03-bottom-actions__info'}>
             {targetEntryBlocker ?? `${data.finalResults.length} 条最终生效结果`}

@@ -28,6 +28,15 @@ import {
   type FinalEffectiveResult,
   type JudgeOutput,
 } from '../api'
+import {
+  datasetSourceLabel,
+  evidenceTypeLabel,
+  failureModeLabel,
+  privacyStatusLabel,
+  runSourceLabel,
+  runStatusLabel,
+  scenarioLabel,
+} from '../displayLabels'
 import './StartQualityReviewPage.css'
 
 type PageStatus =
@@ -65,27 +74,41 @@ const failureModes = [
   'other',
 ] as const
 
+const judgmentLabels: Record<JudgeOutput['judgment'], string> = {
+  success: '成功',
+  warning: '警告',
+  failure: '失败',
+  uncertain: '不确定',
+}
+
+const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  critical: '严重',
+}
+
 const statusCopy: Record<PageStatus, { label: string; detail: string }> = {
-  loading: { label: '正在读取', detail: '正在从 Backend 读取真实 Dataset 与 Run。' },
-  ready: { label: '已就绪 READY', detail: '可以创建并启动真实 Baseline EvaluationRun。' },
-  running: { label: '运行中 RUNNING', detail: 'Backend 正在执行 Baseline EvaluationRun。' },
-  completed: { label: '已完成 COMPLETED', detail: '正在进入基线分析。' },
-  partial_failure: { label: '部分失败 PARTIAL_FAILURE', detail: '部分案例执行失败，已保留成功结果。' },
-  failed: { label: '失败 FAILED', detail: '本次运行没有生成可用结果。' },
-  invalid: { label: '无效 INVALID', detail: '本次运行的输入或快照无效。' },
-  error: { label: '读取失败', detail: '无法读取真实 Dataset 或 EvaluationRun。' },
+  loading: { label: '正在读取', detail: '正在读取真实数据集与评测运行。' },
+  ready: { label: '已就绪', detail: '可以创建并启动真实基线评测运行。' },
+  running: { label: '运行中', detail: '后端正在执行基线评测运行。' },
+  completed: { label: '已完成', detail: '正在进入基线分析。' },
+  partial_failure: { label: '部分失败', detail: '部分案例执行失败，已保留成功结果。' },
+  failed: { label: '失败', detail: '本次运行没有生成可用结果。' },
+  invalid: { label: '无效', detail: '本次运行的输入或快照无效。' },
+  error: { label: '读取失败', detail: '无法读取真实数据集或评测运行。' },
 }
 
 function errorMessage(error: unknown) {
   return error instanceof ApiRequestError
     ? error.message
-    : '无法连接 Backend，请确认服务正在运行后重试。'
+    : '无法连接后端，请确认服务正在运行后重试。'
 }
 
 function formatScenarioDistribution(distribution: Record<string, number>) {
   const entries = Object.entries(distribution)
   return entries.length
-    ? entries.map(([scenario, count]) => `${scenario} ${count}`).join(' / ')
+    ? entries.map(([scenario, count]) => `${scenarioLabel(scenario)} ${count}`).join(' / ')
     : '未提供场景分类'
 }
 
@@ -273,25 +296,25 @@ function StartQualityReviewPage() {
   if (run?.status === 'completed' && reviewLoading && !currentReviewData) {
     currentStatus = {
       label: '正在检查人工复核',
-      detail: '正在读取真实 Final Effective Results。',
+      detail: '正在读取真实最终生效结果。',
     }
   } else if (run?.status === 'completed' && currentReviewData) {
     currentStatus = pendingReviewResults.length > 0
       ? {
           label: `待人工复核 ${pendingReviewResults.length} 条`,
-          detail: '完成全部真实 Human Review 后才会生成 Problem 并进入 S03。',
+          detail: '完成全部真实人工复核后才会生成问题并进入 S03。',
         }
       : {
           label: '人工复核完成 · 待复核 0',
-          detail: '正在继续 Problem Aggregation 并进入 S03。',
+          detail: '正在继续问题聚合并进入 S03。',
         }
   }
   const runError = run?.error_message ?? message
   const readinessGates = [
-    { label: '数据集', status: dataset ? 'VALID' : 'UNAVAILABLE', pass: Boolean(dataset) },
-    { label: '案例', status: `${dataset?.conversation_count ?? 0} CASES`, pass: false },
-    { label: '来源', status: dataset?.source ?? '—', pass: false },
-    { label: '隐私', status: dataset?.privacy_status ?? '—', pass: false },
+    { label: '数据集', status: dataset ? '通过' : '不可用', pass: Boolean(dataset) },
+    { label: '案例', status: `${dataset?.conversation_count ?? 0} 个案例`, pass: false },
+    { label: '来源', status: datasetSourceLabel(dataset?.source), pass: false },
+    { label: '隐私', status: privacyStatusLabel(dataset?.privacy_status), pass: false },
     { label: '版本', status: dataset?.version ?? '—', pass: false },
   ]
 
@@ -433,7 +456,7 @@ function StartQualityReviewPage() {
                   <div>
                     <h3>数据集</h3>
                     <code className="s01-code-chip">
-                      {dataset ? `${dataset.name} ${dataset.version}` : '未选择 Dataset'}
+                      {dataset ? `${dataset.name} ${dataset.version}` : '未选择数据集'}
                     </code>
                   </div>
                   <div className="s01-context-actions">
@@ -451,7 +474,7 @@ function StartQualityReviewPage() {
                         disabled={working || pageStatus === 'running' || datasets.length === 0}
                         onChange={(event) => selectDataset(event.target.value)}
                       >
-                        {datasets.length === 0 ? <option value="">无可用 Dataset</option> : null}
+                        {datasets.length === 0 ? <option value="">无可用数据集</option> : null}
                         {datasets.map((item) => (
                           <option key={item.dataset_id} value={item.dataset_id}>
                             {item.name} · {item.version}
@@ -476,12 +499,12 @@ function StartQualityReviewPage() {
                 <div className="s01-context-topline">
                   <div>
                     <h3>基线运行</h3>
-                    <code className="s01-code-chip">{run?.id ?? '启动时创建真实 EvaluationRun'}</code>
+                    <code className="s01-code-chip">{run?.id ?? '启动时创建真实评测运行'}</code>
                   </div>
                 </div>
                 <div className="s01-details-grid">
-                  <p><strong>回答集:</strong> <code className="s01-inline-code">{run?.response_set_key ?? '所选 Dataset Conversations'}</code></p>
-                  <p className="s01-status-line"><strong>状态:</strong><code className={`s01-status-chip s01-status-chip--${pageStatus}`}>{pageStatus.toUpperCase()}</code></p>
+                  <p><strong>回答集:</strong> <code className="s01-inline-code">{run?.response_set_key ?? '所选数据集会话'}</code></p>
+                  <p className="s01-status-line"><strong>状态:</strong><code className={`s01-status-chip s01-status-chip--${pageStatus}`}>{statusCopy[pageStatus].label}</code></p>
                 </div>
               </div>
             </article>
@@ -492,12 +515,12 @@ function StartQualityReviewPage() {
                 <div className="s01-context-topline">
                   <div>
                     <h3>评测配置</h3>
-                    <code className="s01-code-chip">{run?.judge_contract_version ?? '启动时由 Backend 固化'}</code>
+                    <code className="s01-code-chip">{run?.judge_contract_version ?? '启动时由后端固化'}</code>
                   </div>
                 </div>
                 <div className="s01-details-grid s01-details-grid--config">
-                  <p><strong>Judge Model:</strong> <code className="s01-inline-code">{run?.judge_model ?? '—'}</code></p>
-                  <p><strong>Run Source:</strong> <code className="s01-inline-code">{run?.run_source ?? '—'}</code></p>
+                  <p><strong>判定模型:</strong> <code className="s01-inline-code">{run?.judge_model ?? '—'}</code></p>
+                  <p><strong>运行来源:</strong> <code className="s01-inline-code">{runSourceLabel(run?.run_source)}</code></p>
                 </div>
               </div>
             </article>
@@ -506,7 +529,7 @@ function StartQualityReviewPage() {
           <section className="s01-gates" aria-labelledby="s01-gates-title">
             <div className="s01-gates-heading">
               <h2 id="s01-gates-title">就绪门槛</h2>
-              <code>{dataset && dataset.conversation_count > 0 ? '2 / 2 PASSED' : 'NOT READY'}</code>
+              <code>{dataset && dataset.conversation_count > 0 ? '2 / 2 通过' : '未就绪'}</code>
             </div>
             <div className="s01-gates-grid">
               {readinessGates.map((gate) => (
@@ -521,10 +544,10 @@ function StartQualityReviewPage() {
           {run?.status === 'completed' && (reviewLoading || currentReviewData) ? (
             <section className="s01-gates s01-review" aria-labelledby="s01-review-title">
               <div className="s01-gates-heading">
-                <h2 id="s01-review-title">Human Review</h2>
-                <code>{reviewLoading && !currentReviewData ? 'LOADING' : `待人工复核 ${pendingReviewResults.length} 条`}</code>
+                <h2 id="s01-review-title">人工复核</h2>
+                <code>{reviewLoading && !currentReviewData ? '读取中' : `待人工复核 ${pendingReviewResults.length} 条`}</code>
               </div>
-              {reviewLoading && !currentReviewData ? <p className="s01-review-state" role="status">正在读取真实 Final Effective Results…</p> : null}
+              {reviewLoading && !currentReviewData ? <p className="s01-review-state" role="status">正在读取真实最终生效结果…</p> : null}
               {currentReviewData ? (
                 <>
                   <label className="s01-reviewer-field">
@@ -544,20 +567,20 @@ function StartQualityReviewPage() {
                           <header><strong>{result.case_id}</strong><code>{result.evaluation_result_id}</code></header>
                           <dl className="s01-review-copy"><div><dt>用户消息</dt><dd>{userMessage}</dd></div><div><dt>AI 回答</dt><dd>{assistantAnswer}</dd></div></dl>
                           <dl className="s01-review-machine">
-                            <div><dt>机器判定</dt><dd>{result.machine_result.judgment}</dd></div>
-                            <div><dt>失败模式</dt><dd>{result.machine_result.primary_failure_mode ?? '—'}</dd></div>
+                            <div><dt>机器判定</dt><dd>{judgmentLabels[result.machine_result.judgment]}</dd></div>
+                            <div><dt>失败模式</dt><dd>{result.machine_result.primary_failure_mode ? failureModeLabel(result.machine_result.primary_failure_mode) : '—'}</dd></div>
                             <div><dt>问题</dt><dd>{result.machine_result.problem ?? '—'}</dd></div>
-                            <div><dt>严重程度</dt><dd>{result.machine_result.severity ?? '—'}</dd></div>
+                            <div><dt>严重程度</dt><dd>{result.machine_result.severity ? severityLabels[result.machine_result.severity] : '—'}</dd></div>
                           </dl>
-                          <div className="s01-review-evidence"><strong>证据 / 判定理由</strong>{result.machine_result.evidence.length ? <ul>{result.machine_result.evidence.map((item, index) => <li key={`${result.evaluation_result_id}-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul> : <p>无结构化 evidence。</p>}<p>{result.machine_result.rationale}</p></div>
+                          <div className="s01-review-evidence"><strong>证据 / 判定理由</strong>{result.machine_result.evidence.length ? <ul>{result.machine_result.evidence.map((item, index) => <li key={`${result.evaluation_result_id}-${index}`}>{evidenceTypeLabel(item.evidence_type)}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul> : <p>无结构化证据。</p>}<p>{result.machine_result.rationale}</p></div>
                           {correcting && correctionDraft ? (
                             <div className="s01-correction-form">
                               <div className="s01-correction-fields">
-                                <label><span>判定</span><select value={correctionDraft.judgment} onChange={(event) => { const judgment = event.target.value as JudgeOutput['judgment']; setCorrectionDraft((current) => current ? { ...current, judgment, severity: judgment === 'failure' ? (current.severity ?? result.machine_result.severity ?? 'low') : null } : current) }}><option value="success">success</option><option value="warning">warning</option><option value="failure">failure</option><option value="uncertain">uncertain</option></select></label>
-                                <label><span>主要失败模式</span><select value={correctionDraft.primaryFailureMode ?? ''} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, primaryFailureMode: (event.target.value || null) as JudgeOutput['primary_failure_mode'] } : current)}><option value="">null</option>{failureModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}</select></label>
+                                <label><span>判定</span><select value={correctionDraft.judgment} onChange={(event) => { const judgment = event.target.value as JudgeOutput['judgment']; setCorrectionDraft((current) => current ? { ...current, judgment, severity: judgment === 'failure' ? (current.severity ?? result.machine_result.severity ?? 'low') : null } : current) }}><option value="success">成功</option><option value="warning">警告</option><option value="failure">失败</option><option value="uncertain">不确定</option></select></label>
+                                <label><span>主要失败模式</span><select value={correctionDraft.primaryFailureMode ?? ''} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, primaryFailureMode: (event.target.value || null) as JudgeOutput['primary_failure_mode'] } : current)}><option value="">无</option>{failureModes.map((mode) => <option key={mode} value={mode}>{failureModeLabel(mode)}</option>)}</select></label>
                                 <label className="s01-correction-wide"><span>问题</span><textarea value={correctionDraft.problem} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, problem: event.target.value } : current)} rows={3} /></label>
-                                <label><span>严重程度</span><select value={correctionDraft.severity ?? ''} disabled={correctionDraft.judgment !== 'failure'} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, severity: (event.target.value || null) as JudgeOutput['severity'] } : current)}><option value="">null</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option></select></label>
-                                <label><span>需人工复核</span><select value={correctionDraft.reviewRequired === null ? 'null' : String(correctionDraft.reviewRequired)} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, reviewRequired: event.target.value === 'null' ? null : event.target.value === 'true' } : current)}><option value="true">true</option><option value="false">false</option><option value="null">null</option></select></label>
+                                <label><span>严重程度</span><select value={correctionDraft.severity ?? ''} disabled={correctionDraft.judgment !== 'failure'} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, severity: (event.target.value || null) as JudgeOutput['severity'] } : current)}><option value="">无</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="critical">严重</option></select></label>
+                                <label><span>需人工复核</span><select value={correctionDraft.reviewRequired === null ? 'null' : String(correctionDraft.reviewRequired)} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, reviewRequired: event.target.value === 'null' ? null : event.target.value === 'true' } : current)}><option value="true">是</option><option value="false">否</option><option value="null">未指定</option></select></label>
                                 <label className="s01-correction-wide"><span>修正理由</span><textarea value={correctionDraft.changeReason} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, changeReason: event.target.value } : current)} rows={3} /></label>
                               </div>
                               <div><button type="button" onClick={() => { setCorrectionDraft(null); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>取消</button><button type="button" onClick={() => void correctMachineResult(result)} disabled={!reviewer.trim() || !correctionDraft.changeReason.trim() || (correctionDraft.judgment === 'failure' && !correctionDraft.severity) || Boolean(reviewBusyId)}>提交人工修正</button></div>
@@ -577,19 +600,19 @@ function StartQualityReviewPage() {
           <section className="s01-gates s01-history" aria-labelledby="s01-history-title">
             <div className="s01-gates-heading">
               <h2 id="s01-history-title">已完成复盘</h2>
-              <code>{historyLoading ? 'LOADING' : `${historyRuns.length} RUNS`}</code>
+              <code>{historyLoading ? '读取中' : `${historyRuns.length} 条运行`}</code>
             </div>
-            {historyLoading ? <p className="s01-history-state" role="status">正在读取历史 Baseline Runs…</p> : null}
+            {historyLoading ? <p className="s01-history-state" role="status">正在读取历史基线运行…</p> : null}
             {!historyLoading && historyError ? <p className="s01-history-state s01-history-state--error" role="alert">{historyError}</p> : null}
-            {!historyLoading && !historyError && historyRuns.length === 0 ? <p className="s01-history-state">当前 Dataset 暂无已完成复盘。</p> : null}
+            {!historyLoading && !historyError && historyRuns.length === 0 ? <p className="s01-history-state">当前数据集暂无已完成复盘。</p> : null}
             {!historyLoading && !historyError && historyRuns.length > 0 ? (
               <div className="s01-history-list">
                 {historyRuns.map((historyRun) => (
                   <article className="s01-history-run" key={historyRun.id}>
-                    <div><span>Run ID</span><code>{historyRun.id}</code></div>
-                    <div><span>状态</span><strong>completed</strong></div>
+                    <div><span>运行 ID</span><code>{historyRun.id}</code></div>
+                    <div><span>状态</span><strong>{runStatusLabel(historyRun.status)}</strong></div>
                     <div><span>创建时间</span><time dateTime={historyRun.created_at}>{formatRunDate(historyRun.created_at)}</time></div>
-                    <div><span>Judge model</span><code>{historyRun.judge_model || '—'}</code></div>
+                    <div><span>判定模型</span><code>{historyRun.judge_model || '—'}</code></div>
                     <Link className="s01-text-action s01-text-action--info" to={`/baseline?run_id=${encodeURIComponent(historyRun.id)}`}>
                       查看结果<MdOpenInNew aria-hidden="true" />
                     </Link>
@@ -604,7 +627,7 @@ function StartQualityReviewPage() {
       <footer className="s01-action-rail">
         <div className="s01-action-copy">
           <span>状态: {currentStatus.label}</span>
-          <span>{run ? `Run ID: ${run.id}` : '启动后生成真实 Run ID；完成后进入 S03 基线分析。'}</span>
+          <span>{run ? `运行 ID: ${run.id}` : '启动后生成真实运行 ID；完成后进入基线分析。'}</span>
         </div>
         <button className="s01-primary-action" type="button" disabled={!canStart} onClick={() => void startBaseline()}>
           {pendingReviewResults.length > 0
