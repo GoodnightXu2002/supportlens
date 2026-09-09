@@ -47,6 +47,7 @@ def test_cli_runs_complete_task_and_keeps_agent_key_local(
     capsys,
 ) -> None:
     captured: dict[str, object] = {"agent_requests": [], "support_headers": []}
+    client_options: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "supportlens.test" and request.method == "GET":
@@ -86,7 +87,11 @@ def test_cli_runs_complete_task_and_keeps_agent_key_local(
     }
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setattr(local_runner.httpx, "Client", lambda: client)
+    def client_factory(**kwargs) -> httpx.Client:
+        client_options.update(kwargs)
+        return client
+
+    monkeypatch.setattr(local_runner.httpx, "Client", client_factory)
 
     assert local_runner.main() == 0
     output = capsys.readouterr()
@@ -123,6 +128,7 @@ def test_cli_runs_complete_task_and_keeps_agent_key_local(
     assert AGENT_API_KEY not in output.out + output.err
     assert AGENT_API_KEY not in json.dumps(captured["submission"])
     assert AGENT_API_KEY not in repr(_config())
+    assert client_options == {"trust_env": False}
 
 
 @pytest.mark.parametrize(

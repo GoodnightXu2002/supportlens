@@ -199,7 +199,7 @@ def _supportlens_error(response: httpx.Response) -> str:
 def main() -> int:
     try:
         config = RunnerConfig.from_environment()
-        with httpx.Client() as client:
+        with httpx.Client(trust_env=False) as client:
             response_count = run_validation_task(config, client)
     except LocalRunnerError as error:
         print(f"Error: {error}", file=sys.stderr)
