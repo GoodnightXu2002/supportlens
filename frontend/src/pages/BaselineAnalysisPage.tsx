@@ -678,22 +678,24 @@ function BaselineAnalysisPage() {
                 <article className="s03-evidence-node">
                   <span className="s03-node-marker s03-node-marker--icon"><MdSmartToy aria-hidden="true" /></span>
                   <div className="s03-node-content">
-                    <h3 className="s03-node-title--italic">节点 3 / Machine 原始判定</h3>
+                    <h3 className="s03-node-title--italic">节点 3 / 机器原始判定</h3>
                     <div className="s03-ai-judgment">
                       <div className="s03-ai-judgment__status">
-                        <span>判定：{judgmentLabels[selectedResult.machine_result.judgment]}</span>
-                        <span>{selectedResult.machine_result.primary_failure_mode ?? '无 Primary Failure Mode'}</span>
+                        <span className={`s03-ai-judgment__verdict s03-ai-judgment__verdict--${selectedResult.machine_result.judgment}`}>
+                          判定：{judgmentLabels[selectedResult.machine_result.judgment]}
+                        </span>
+                        <span>{selectedResult.machine_result.primary_failure_mode ?? '无主要失败模式'}</span>
                       </div>
-                      <p>Problem：{selectedResult.machine_result.problem ?? '无'}</p>
+                      <p>问题：{selectedResult.machine_result.problem ?? '无'}</p>
                       <p>
-                        Severity：{selectedResult.machine_result.severity ? severityLabels[selectedResult.machine_result.severity] : '不可用'}
-                        {' · '}Review Required：{String(selectedResult.machine_result.review_required)}
+                        严重程度：{selectedResult.machine_result.severity ? severityLabels[selectedResult.machine_result.severity] : '不可用'}
+                        {' · '}需人工复核：{selectedResult.machine_result.review_required === null ? '不可用' : selectedResult.machine_result.review_required ? '是' : '否'}
                       </p>
                       {selectedResult.machine_result.secondary_flags.length > 0 ? (
-                        <p>Secondary Flags：{selectedResult.machine_result.secondary_flags.join(', ')}</p>
+                        <p>次要标记：{selectedResult.machine_result.secondary_flags.join(', ')}</p>
                       ) : null}
                       {selectedResult.machine_result.uncertainty ? (
-                        <p>Uncertainty：{selectedResult.machine_result.uncertainty}</p>
+                        <p>不确定性：{selectedResult.machine_result.uncertainty}</p>
                       ) : null}
                       <p>{selectedResult.machine_result.rationale}</p>
                       {selectedResult.machine_result.evidence.length > 0 ? (
@@ -741,8 +743,10 @@ function BaselineAnalysisPage() {
                           <div><span>复核理由</span><p>{selectedResult.human_decision.change_reason ?? '结论未修改，无 change reason。'}</p></div>
                         </>
                       ) : (
-                        <p className="s03-human-review__decision">
-                          {selectedResult.status === 'pending_review' ? '等待人工复核' : 'Machine Final / 无人工复核'}
+                        <p className={selectedResult.status === 'pending_review'
+                          ? 's03-human-review__decision s03-human-review__decision--pending'
+                          : 's03-human-review__decision s03-human-review__decision--neutral'}>
+                          {selectedResult.status === 'pending_review' ? '等待人工复核' : '机器最终结论 / 无人工复核'}
                         </p>
                       )}
                     </div>
@@ -750,16 +754,16 @@ function BaselineAnalysisPage() {
                 </article>
 
                 <article className="s03-evidence-node">
-                  <span className="s03-node-marker s03-node-marker--final"><MdGavel aria-hidden="true" /></span>
+                  <span className={`s03-node-marker s03-node-marker--final${selectedResult.final_result ? ` s03-node-marker--final-${selectedResult.final_result.judgment}` : ''}`}><MdGavel aria-hidden="true" /></span>
                   <div className="s03-node-content">
                     <h3>节点 7 / 最终生效结果</h3>
-                    <div className="s03-final-result">
-                      <div><span>最终判定</span><strong>{selectedResult.final_result ? judgmentLabels[selectedResult.final_result.judgment] : 'Pending Review'}</strong></div>
-                      <div><span>记录状态</span><em>{selectedResult.status === 'final' ? `${selectedResult.source === 'human' ? 'Human' : 'Machine'} Final` : 'Pending Review'}</em></div>
+                    <div className={`s03-final-result${selectedResult.final_result ? ` s03-final-result--${selectedResult.final_result.judgment}` : ''}`}>
+                      <div><span>最终判定</span><strong>{selectedResult.final_result ? judgmentLabels[selectedResult.final_result.judgment] : '待人工复核'}</strong></div>
+                      <div><span>记录状态</span><em>{selectedResult.status === 'final' ? (selectedResult.source === 'human' ? '人工最终结论' : '机器最终结论') : '待人工复核'}</em></div>
                       {selectedResult.final_result ? (
                         <p>
-                          Problem：{selectedResult.final_result.problem ?? '无'}<br />
-                          Severity：{selectedResult.final_result.severity ? severityLabels[selectedResult.final_result.severity] : '不可用'} · {selectedResult.final_result.primary_failure_mode ?? '无 Primary Failure Mode'}
+                          问题：{selectedResult.final_result.problem ?? '无'}<br />
+                          严重程度：{selectedResult.final_result.severity ? severityLabels[selectedResult.final_result.severity] : '不可用'} · {selectedResult.final_result.primary_failure_mode ?? '无主要失败模式'}
                         </p>
                       ) : null}
                       <p>{selectedResult.final_result?.rationale ?? '人工复核完成前不存在 Final Effective Result。'}</p>
@@ -778,7 +782,9 @@ function BaselineAnalysisPage() {
       <footer className="s03-bottom-bar">
         <div className="s03-analyst"><strong title={data.run.id}>Run {shortId(data.run.id)}</strong></div>
         <div className="s03-bottom-actions">
-          <span>{targetEntryBlocker ?? `${data.finalResults.length} 个 Final Effective Results`}</span>
+          <span className={targetEntryBlocker ? undefined : 's03-bottom-actions__info'}>
+            {targetEntryBlocker ?? `${data.finalResults.length} 条最终生效结果`}
+          </span>
           <button
             type="button"
             disabled={Boolean(targetEntryBlocker)}

@@ -288,11 +288,11 @@ function StartQualityReviewPage() {
   }
   const runError = run?.error_message ?? message
   const readinessGates = [
-    { label: '数据集', status: dataset ? 'VALID' : 'UNAVAILABLE' },
-    { label: '案例', status: `${dataset?.conversation_count ?? 0} CASES` },
-    { label: '来源', status: dataset?.source ?? '—' },
-    { label: '隐私', status: dataset?.privacy_status ?? '—' },
-    { label: '版本', status: dataset?.version ?? '—' },
+    { label: '数据集', status: dataset ? 'VALID' : 'UNAVAILABLE', pass: Boolean(dataset) },
+    { label: '案例', status: `${dataset?.conversation_count ?? 0} CASES`, pass: false },
+    { label: '来源', status: dataset?.source ?? '—', pass: false },
+    { label: '隐私', status: dataset?.privacy_status ?? '—', pass: false },
+    { label: '版本', status: dataset?.version ?? '—', pass: false },
   ]
 
   function selectDataset(datasetId: string) {
@@ -510,7 +510,10 @@ function StartQualityReviewPage() {
             </div>
             <div className="s01-gates-grid">
               {readinessGates.map((gate) => (
-                <div className="s01-gate" key={gate.label}><span>{gate.label}</span><code>{gate.status}</code></div>
+                <div className="s01-gate" key={gate.label}>
+                  <span>{gate.label}</span>
+                  <code className={gate.pass ? 's01-gate-chip s01-gate-chip--pass' : 's01-gate-chip'}>{gate.status}</code>
+                </div>
               ))}
             </div>
           </section>
@@ -541,21 +544,21 @@ function StartQualityReviewPage() {
                           <header><strong>{result.case_id}</strong><code>{result.evaluation_result_id}</code></header>
                           <dl className="s01-review-copy"><div><dt>用户消息</dt><dd>{userMessage}</dd></div><div><dt>AI 回答</dt><dd>{assistantAnswer}</dd></div></dl>
                           <dl className="s01-review-machine">
-                            <div><dt>Machine judgment</dt><dd>{result.machine_result.judgment}</dd></div>
-                            <div><dt>Failure mode</dt><dd>{result.machine_result.primary_failure_mode ?? '—'}</dd></div>
-                            <div><dt>Problem</dt><dd>{result.machine_result.problem ?? '—'}</dd></div>
-                            <div><dt>Severity</dt><dd>{result.machine_result.severity ?? '—'}</dd></div>
+                            <div><dt>机器判定</dt><dd>{result.machine_result.judgment}</dd></div>
+                            <div><dt>失败模式</dt><dd>{result.machine_result.primary_failure_mode ?? '—'}</dd></div>
+                            <div><dt>问题</dt><dd>{result.machine_result.problem ?? '—'}</dd></div>
+                            <div><dt>严重程度</dt><dd>{result.machine_result.severity ?? '—'}</dd></div>
                           </dl>
-                          <div className="s01-review-evidence"><strong>Evidence / rationale</strong>{result.machine_result.evidence.length ? <ul>{result.machine_result.evidence.map((item, index) => <li key={`${result.evaluation_result_id}-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul> : <p>无结构化 evidence。</p>}<p>{result.machine_result.rationale}</p></div>
+                          <div className="s01-review-evidence"><strong>证据 / 判定理由</strong>{result.machine_result.evidence.length ? <ul>{result.machine_result.evidence.map((item, index) => <li key={`${result.evaluation_result_id}-${index}`}>{item.evidence_type}: {item.content}{item.source_ref ? ` (${item.source_ref})` : ''}</li>)}</ul> : <p>无结构化 evidence。</p>}<p>{result.machine_result.rationale}</p></div>
                           {correcting && correctionDraft ? (
                             <div className="s01-correction-form">
                               <div className="s01-correction-fields">
-                                <label><span>Judgment</span><select value={correctionDraft.judgment} onChange={(event) => { const judgment = event.target.value as JudgeOutput['judgment']; setCorrectionDraft((current) => current ? { ...current, judgment, severity: judgment === 'failure' ? (current.severity ?? result.machine_result.severity ?? 'low') : null } : current) }}><option value="success">success</option><option value="warning">warning</option><option value="failure">failure</option><option value="uncertain">uncertain</option></select></label>
-                                <label><span>Primary failure mode</span><select value={correctionDraft.primaryFailureMode ?? ''} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, primaryFailureMode: (event.target.value || null) as JudgeOutput['primary_failure_mode'] } : current)}><option value="">null</option>{failureModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}</select></label>
-                                <label className="s01-correction-wide"><span>Problem</span><textarea value={correctionDraft.problem} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, problem: event.target.value } : current)} rows={3} /></label>
-                                <label><span>Severity</span><select value={correctionDraft.severity ?? ''} disabled={correctionDraft.judgment !== 'failure'} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, severity: (event.target.value || null) as JudgeOutput['severity'] } : current)}><option value="">null</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option></select></label>
-                                <label><span>Review required</span><select value={correctionDraft.reviewRequired === null ? 'null' : String(correctionDraft.reviewRequired)} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, reviewRequired: event.target.value === 'null' ? null : event.target.value === 'true' } : current)}><option value="true">true</option><option value="false">false</option><option value="null">null</option></select></label>
-                                <label className="s01-correction-wide"><span>Change reason</span><textarea value={correctionDraft.changeReason} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, changeReason: event.target.value } : current)} rows={3} /></label>
+                                <label><span>判定</span><select value={correctionDraft.judgment} onChange={(event) => { const judgment = event.target.value as JudgeOutput['judgment']; setCorrectionDraft((current) => current ? { ...current, judgment, severity: judgment === 'failure' ? (current.severity ?? result.machine_result.severity ?? 'low') : null } : current) }}><option value="success">success</option><option value="warning">warning</option><option value="failure">failure</option><option value="uncertain">uncertain</option></select></label>
+                                <label><span>主要失败模式</span><select value={correctionDraft.primaryFailureMode ?? ''} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, primaryFailureMode: (event.target.value || null) as JudgeOutput['primary_failure_mode'] } : current)}><option value="">null</option>{failureModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}</select></label>
+                                <label className="s01-correction-wide"><span>问题</span><textarea value={correctionDraft.problem} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, problem: event.target.value } : current)} rows={3} /></label>
+                                <label><span>严重程度</span><select value={correctionDraft.severity ?? ''} disabled={correctionDraft.judgment !== 'failure'} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, severity: (event.target.value || null) as JudgeOutput['severity'] } : current)}><option value="">null</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option></select></label>
+                                <label><span>需人工复核</span><select value={correctionDraft.reviewRequired === null ? 'null' : String(correctionDraft.reviewRequired)} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, reviewRequired: event.target.value === 'null' ? null : event.target.value === 'true' } : current)}><option value="true">true</option><option value="false">false</option><option value="null">null</option></select></label>
+                                <label className="s01-correction-wide"><span>修正理由</span><textarea value={correctionDraft.changeReason} onChange={(event) => setCorrectionDraft((current) => current ? { ...current, changeReason: event.target.value } : current)} rows={3} /></label>
                               </div>
                               <div><button type="button" onClick={() => { setCorrectionDraft(null); setReviewError(null) }} disabled={Boolean(reviewBusyId)}>取消</button><button type="button" onClick={() => void correctMachineResult(result)} disabled={!reviewer.trim() || !correctionDraft.changeReason.trim() || (correctionDraft.judgment === 'failure' && !correctionDraft.severity) || Boolean(reviewBusyId)}>提交人工修正</button></div>
                             </div>

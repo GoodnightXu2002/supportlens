@@ -570,9 +570,9 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
-  padding: 24px;
+  padding: 20px 24px;
 }
 
 .s01-gate + .s01-gate {
@@ -589,10 +589,15 @@
 
 .s01-gate code {
   padding: 2px 8px;
-  color: var(--color-status-success);
-  background: #dcfce7;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-high);
   border-radius: var(--radius-control);
   white-space: nowrap;
+}
+
+.s01-gate code.s01-gate-chip--pass {
+  color: var(--color-status-success);
+  background: #dcfce7;
 }
 
 .s01-action-rail {

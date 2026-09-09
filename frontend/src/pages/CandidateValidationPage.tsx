@@ -138,12 +138,33 @@ function evidenceText(evidence: JudgeEvidence[] | null) {
 
 function resultReview(result: FinalEffectiveResult | undefined) {
   if (!result) return '结果不存在'
-  if (!result.human_decision) return 'Machine Final · 无人工复核'
+  if (!result.human_decision) return '机器最终结论 · 无人工复核'
   return [
-    `reviewer: ${result.human_decision.reviewer}`,
-    `reviewed_at: ${formatDate(result.human_decision.reviewed_at)}`,
-    `change_reason: ${result.human_decision.change_reason ?? '确认原结果，无修正理由'}`,
+    `复核人：${result.human_decision.reviewer}`,
+    `复核时间：${formatDate(result.human_decision.reviewed_at)}`,
+    `修正理由：${result.human_decision.change_reason ?? '确认原结果，无修正理由'}`,
   ].join('\n')
+}
+
+const statusTextLabels: Record<string, string> = {
+  improved: '明确改善',
+  partially_improved: '部分改善',
+  not_improved: '未改善',
+  regressed: '变差',
+  inconclusive: '无法得出结论',
+  stable: '无变化',
+  passed: '通过',
+  failed: '未通过',
+  verified: '已验证',
+  not_applicable: '不适用',
+  true: '是',
+  false: '否',
+  none: '无',
+}
+
+function statusText(value: unknown) {
+  const text = String(value)
+  return statusTextLabels[text] ?? text
 }
 
 function PageMessage({ title, detail }: { title: string; detail: string }) {
@@ -217,9 +238,9 @@ function RunnerSubmission({
         </header>
         <dl className="s05-runner-scope" aria-label="冻结验证范围">
           <div><dt>本轮优化问题</dt><dd>{new Set(data.target.problem_ids).size || 1}</dd></div>
-          <div><dt>Target</dt><dd>{data.target.target_case_ids.length}</dd></div>
-          <div><dt>Regression</dt><dd>{data.target.regression_case_ids.length}</dd></div>
-          <div><dt>Challenge</dt><dd>{data.target.challenge_case_ids.length}</dd></div>
+          <div><dt>目标案例</dt><dd>{data.target.target_case_ids.length}</dd></div>
+          <div><dt>回归案例</dt><dd>{data.target.regression_case_ids.length}</dd></div>
+          <div><dt>挑战案例</dt><dd>{data.target.challenge_case_ids.length}</dd></div>
         </dl>
         <label>
           <span>候选版本名称</span>
@@ -310,12 +331,22 @@ function CandidateWorkspace({
   const movements = ['improved', 'partially_improved', 'stable', 'regressed', 'inconclusive'] as const
   const movementCounts = Object.fromEntries(movements.map((movement) => [movement, targetComparisons.filter((item) => item.movement === movement).length]))
   const problemStatusLabels = {
-    improved: 'Improved',
-    partially_improved: 'Partially Improved',
-    not_improved: 'Not Improved',
-    regressed: 'Regressed',
-    inconclusive: 'Inconclusive',
+    improved: '明确改善',
+    partially_improved: '部分改善',
+    not_improved: '未改善',
+    regressed: '变差',
+    inconclusive: '无法得出结论',
   } as const
+  const problemCardTone = summary.problem_results.some((problem) => problem.status === 'regressed')
+    ? 'critical'
+    : summary.problem_results.some((problem) => problem.status === 'not_improved' || problem.status === 'inconclusive')
+      ? 'warning'
+      : 'success'
+  const regressionCardTone = summary.regression_summary.critical > 0 || summary.regression_summary.major > 0
+    ? 'critical'
+    : summary.regression_summary.minor > 0 || summary.new_systematic_problems.length > 0
+      ? 'warning'
+      : 'success'
   const targetPlanHref = `/target-plan?${new URLSearchParams({
     run_id: target.baseline_run_id,
     problem_id: target.problem_id,
@@ -334,16 +365,16 @@ function CandidateWorkspace({
     `DECISION-POLICY · ${summary.policy_version}`,
   ]
   const gates = [
-    ['Target outcome', summary.target_outcome],
-    ['Target clear improved', `${summary.rule_outcomes.clear_improved_count}/${summary.rule_outcomes.target_case_count}`],
-    ['Target worse', String(summary.rule_outcomes.target_worse_count)],
-    ['Critical regression', String(summary.regression_summary.critical)],
-    ['Major regression', String(summary.regression_summary.major)],
-    ['Minor regression', String(summary.regression_summary.minor)],
-    ['New systematic problem', String(summary.new_systematic_problems.length)],
-    ['Pending review', String(pendingReviewCount)],
-    ['Integrity', summary.integrity_gate],
-    ['Compatibility', summary.compatibility_gate],
+    ['目标结果', summary.target_outcome],
+    ['目标明确改善', `${summary.rule_outcomes.clear_improved_count}/${summary.rule_outcomes.target_case_count}`],
+    ['目标变差', String(summary.rule_outcomes.target_worse_count)],
+    ['严重回归', String(summary.regression_summary.critical)],
+    ['重大回归', String(summary.regression_summary.major)],
+    ['轻微回归', String(summary.regression_summary.minor)],
+    ['新系统性问题', String(summary.new_systematic_problems.length)],
+    ['待人工复核', String(pendingReviewCount)],
+    ['完整性', summary.integrity_gate],
+    ['兼容性', summary.compatibility_gate],
   ]
 
   if (!selectedComparison || !conversation || !baselineResult || !candidateResult) {
@@ -361,16 +392,16 @@ function CandidateWorkspace({
         </section>
 
         <section className="s05-status" aria-label="实验状态与追溯链">
-          <div className="s05-status-chips"><span>运行：{candidateRun.status}</span><span>阻断：{summary.blockers.length || 'none'}</span><span>实验完整性：{summary.integrity_gate}</span><span>人工最终决策：{candidateRun.final_decision ?? 'not available'}</span></div>
+          <div className="s05-status-chips"><span>运行：{candidateRun.status}</span><span>阻断：{summary.blockers.length || 'none'}</span><span>实验完整性：{summary.integrity_gate}</span><span>人工最终决策：{candidateRun.final_decision ?? '尚未作出'}</span></div>
           <div className="s05-status-details">
             <div className="s05-lineage"><h2>实验追溯链</h2>{lineage.map((item) => <code key={item}>{item}</code>)}</div>
-            <div className="s05-gates"><h2>状态门槛</h2><div><span>实际变更：{displayValue(manifest.actual_change_status)}</span><span>生成一致性：{displayValue(manifest.generation_parity_status)}</span><span>评测配置兼容性：{summary.compatibility_gate}</span><span>受保护能力：{summary.protected_capability_gate}</span><span>Final Results：{candidateResults.filter((item) => item.status === 'final').length}/{candidateResults.length}</span><span>Comparison：{comparisons.length}</span></div><p>仅展示 Backend 已保存的 Candidate manifest、Final Effective Results、Comparison 与 Validation Summary。</p></div>
+            <div className="s05-gates"><h2>状态门槛</h2><div><span>实际变更：{statusText(displayValue(manifest.actual_change_status))}</span><span>生成一致性：{statusText(displayValue(manifest.generation_parity_status))}</span><span>评测配置兼容性：{statusText(summary.compatibility_gate)}</span><span>受保护能力：{statusText(summary.protected_capability_gate)}</span><span>最终结果：{candidateResults.filter((item) => item.status === 'final').length}/{candidateResults.length}</span><span>案例对比：{comparisons.length}</span></div><p>仅展示 Backend 已保存的 Candidate manifest、Final Effective Results、Comparison 与 Validation Summary。</p></div>
           </div>
         </section>
 
         <section className="s05-outcomes" aria-label="目标与回归结果">
-          <article className="s05-outcome-card"><MdCheckCircle className="s05-outcome-icon" aria-hidden="true" /><div><h2>Problem-level（{summary.problem_results.length || 1}）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单 Problem 结果：{summary.target_outcome}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标 High/Critical</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
-          <article className="s05-outcome-card s05-regression-card"><MdVerified className="s05-outcome-icon" aria-hidden="true" /><div><h2>Version-level · 回归检查 ({comparisons.length - targetComparisons.length} 个非目标案例)</h2><div className="s05-regression-grid"><dl><div><dt>严重回归 CRITICAL</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归 MAJOR</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归 MINOR</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>Other Problems</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>Regression 与 New Systematic Problem 均直接来自 Backend Validation Summary。</p></div></article>
+          <article className="s05-outcome-card"><MdCheckCircle className={`s05-outcome-icon s05-outcome-icon--${problemCardTone}`} aria-hidden="true" /><div><h2>Problem-level（{summary.problem_results.length || 1}）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单 Problem 结果：{summary.target_outcome}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标 High/Critical</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
+          <article className="s05-outcome-card s05-regression-card"><MdVerified className={`s05-outcome-icon s05-outcome-icon--${regressionCardTone}`} aria-hidden="true" /><div><h2>Version-level · 回归检查 ({comparisons.length - targetComparisons.length} 个非目标案例)</h2><div className="s05-regression-grid"><dl><div><dt>严重回归 CRITICAL</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归 MAJOR</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归 MINOR</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>Other Problems</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>Regression 与 New Systematic Problem 均直接来自 Backend Validation Summary。</p></div></article>
         </section>
 
         <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={item.case_id === selectedComparison.case_id ? 's05-case-tab s05-case-tab--active' : 's05-case-tab'} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${item.movement}${item.regression_level ? ` · ${item.regression_level}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
@@ -381,7 +412,7 @@ function CandidateWorkspace({
             <ComparisonNode icon={<MdChatBubble />} label="会话 / 用户消息"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <div className="s05-version-columns">
               <div className="s05-version-column"><ComparisonNode icon={<MdForum />} label="回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode><ComparisonNode icon={<MdSmartToy />} label="Machine JudgeOutput"><pre className="s05-node-box">{judgeSummary(baselineResult.machine_result)}</pre></ComparisonNode><ComparisonNode icon={<MdPerson />} label="人工复核"><pre>{resultReview(baselineResult)}</pre></ComparisonNode><ComparisonNode icon={<MdVerified />} label="最终生效结果"><pre className="s05-node-box s05-effective-result">{baselineResult.final_result ? judgeSummary(baselineResult.final_result) : baselineResult.status}</pre></ComparisonNode><ComparisonNode icon={<MdAnalytics />} label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.baseline)}</pre></ComparisonNode></div>
-              <div className="s05-movement"><span><MdArrowForward aria-hidden="true" /></span><strong>案例变化：{selectedComparison.movement}</strong><dl><div><dt>Target status</dt><dd>{selectedComparison.target_problem_status}</dd></div><div><dt>Target worse</dt><dd>{String(selectedComparison.target_worse)}</dd></div><div><dt>Regression</dt><dd>{selectedComparison.regression_level ?? 'none'}</dd></div></dl></div>
+              <div className="s05-movement"><span><MdArrowForward aria-hidden="true" /></span><strong>案例变化：{statusText(selectedComparison.movement)}</strong><dl><div><dt>目标状态</dt><dd>{statusText(selectedComparison.target_problem_status)}</dd></div><div><dt>目标变差</dt><dd>{statusText(selectedComparison.target_worse)}</dd></div><div><dt>回归级别</dt><dd>{statusText(selectedComparison.regression_level ?? 'none')}</dd></div></dl></div>
               <div className="s05-version-column s05-version-column--candidate"><ComparisonNode accent icon={<MdForum />} label="回复"><p>{candidateResponse?.assistant_content ?? 'Candidate response 不存在'}</p></ComparisonNode><ComparisonNode accent icon={<MdSmartToy />} label="Machine JudgeOutput"><pre className="s05-node-box">{judgeSummary(candidateResult.machine_result)}</pre></ComparisonNode><ComparisonNode accent icon={<MdPerson />} label="人工复核"><pre>{resultReview(candidateResult)}</pre></ComparisonNode><ComparisonNode accent icon={<MdVerified />} label="最终生效结果"><pre className="s05-node-box s05-effective-result s05-effective-result--candidate">{candidateResult.final_result ? judgeSummary(candidateResult.final_result) : candidateResult.status}</pre></ComparisonNode><ComparisonNode accent icon={<MdAnalytics />} label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.candidate)}</pre></ComparisonNode></div>
             </div>
             <div className="s05-shared-evidence"><ComparisonNode icon={<MdFactCheck />} label="业务上下文"><pre>{displayValue(conversationMetadata(conversation, 'business_context'))}</pre></ComparisonNode><ComparisonNode icon={<MdMenuBook />} label="参考依据"><pre>{displayValue(conversationMetadata(conversation, 'reference_evidence'))}</pre></ComparisonNode></div>
@@ -389,10 +420,10 @@ function CandidateWorkspace({
         </section>
 
         <section className="s05-decision" aria-label="候选版本决策">
-          <article className="s05-recommendation"><span className="s05-eyebrow">Version-level · 系统建议 · {summary.policy_version}</span><h2>{summary.recommended_verdict}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><p><span aria-hidden="true" />{summary.blockers.length ? `Blockers: ${summary.blockers.join(', ')}` : '所有 machine blockers 已通过；仍等待独立 Human Decision。'}</p></article>
-          <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span><div><MdPerson aria-hidden="true" /><span>{candidateRun.decided_by ?? '尚未决定'}</span></div></header>{candidateRun.final_decision ? <dl><div><dt>决策</dt><dd>{candidateRun.final_decision}</dd></div><div><dt>决定时间</dt><dd>{formatDate(candidateRun.decided_at)}</dd></div><div><dt>理由</dt><dd>{candidateRun.reason}</dd></div><div><dt>Override reason</dt><dd>{candidateRun.override_reason ?? '未改判机器建议'}</dd></div></dl> : <><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与 Machine recommendation 不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</>}</article>
+          <article className="s05-recommendation"><span className="s05-eyebrow">Version-level · 系统建议 · {summary.policy_version}</span><h2>{summary.recommended_verdict}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{statusText(value)}</dd></div>)}</dl><p><span aria-hidden="true" />{summary.blockers.length ? `阻断项：${summary.blockers.join(', ')}` : '所有机器阻断项已通过；仍等待独立人工决策。'}</p></article>
+          <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span><div><MdPerson aria-hidden="true" /><span>{candidateRun.decided_by ?? '尚未决定'}</span></div></header>{candidateRun.final_decision ? <dl><div><dt>决策</dt><dd>{candidateRun.final_decision === 'accept' ? '接受（accept）' : candidateRun.final_decision === 'continue' ? '不采纳（continue）' : candidateRun.final_decision}</dd></div><div><dt>决定时间</dt><dd>{formatDate(candidateRun.decided_at)}</dd></div><div><dt>理由</dt><dd>{candidateRun.reason}</dd></div><div><dt>改判理由</dt><dd>{candidateRun.override_reason ?? '未改判机器建议'}</dd></div></dl> : <><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与 Machine recommendation 不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</>}</article>
         </section>
-        <section className="s05-claim-boundary" aria-label="结论边界"><strong>Case pairing：same dataset / conversation_id / case_id。</strong><em>结论仅适用于当前 Frozen Target、数据集、Judge 配置与 response set。</em><span>Human Decision 与 Machine recommendation 独立保存，不代表上线或部署。</span></section>
+        <section className="s05-claim-boundary" aria-label="结论边界"><strong>案例配对：同一 dataset / conversation_id / case_id。</strong><em>结论仅适用于当前 Frozen Target、数据集、Judge 配置与 response set。</em><span>人工决策与机器建议独立保存，不代表上线或部署。</span></section>
       </div>
 
       <footer className="s05-action-rail">
@@ -415,7 +446,7 @@ function CandidateWorkspace({
           )}
         </div>
       </footer>
-      <div className="s05-analyst-dock"><MdPerson aria-hidden="true" /><strong>{candidateRun.decided_by ?? 'Human Decision'}</strong></div>
+      <div className="s05-analyst-dock"><MdPerson aria-hidden="true" /><strong>{candidateRun.decided_by ?? '尚未决策'}</strong></div>
     </section>
   )
 }
