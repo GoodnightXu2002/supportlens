@@ -2,6 +2,8 @@
 
 在线 Demo：[https://supportlens.webxu.cn](https://supportlens.webxu.cn)
 
+Demo 当前使用 NovaMart 合成客服会话数据，产品导入与评测链路与真实上传数据使用同一套流程。
+
 SupportLens 是一个面向 AI 客服 Agent 团队的质量评测与优化 MVP。它将真实会话、自动评测、问题诊断、优化目标、候选版本验证和人工决策串成可追溯的产品闭环，帮助团队把“感觉模型需要优化”转化为有证据、有优先级、可验证的改进流程。
 
 ## 核心痛点
@@ -30,10 +32,10 @@ Dataset Import
 1. **Dataset Import**：导入客服会话数据，形成可复用的评测数据集。
 2. **Baseline Evaluation**：对当前版本执行基线评测，保留逐会话结果。
 3. **Problem / Evidence / Priority**：将失败聚合为问题，关联原始证据并确定优化优先级。
-4. **System Optimization Suggestions + Target Freeze**：生成系统级优化建议，确认并冻结本轮目标与验证范围。
+4. **System Optimization Suggestions + Target Freeze**：系统自动为每个目标问题生成一条优化建议，确认并冻结本轮目标与验证范围。
 5. **Candidate Validation**：通过 Local Runner 获取候选版本回复，并在相同范围内重新评测。
 6. **Regression / Verdict**：对比基线与候选版本，识别改善、持平和回归，形成验证结论。
-7. **Human Final Decision**：由人做最终接受、拒绝或覆盖判断，系统不替代产品与业务决策。
+7. **Human Final Decision**：由人做最终接受候选版本或继续迭代的判断，系统不替代产品与业务决策。
 
 ## 产品差异
 
