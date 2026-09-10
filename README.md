@@ -104,6 +104,7 @@ Dataset Import
 cd backend
 uv sync --dev
 Copy-Item .env.example .env
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
@@ -119,6 +120,22 @@ npm run dev
 ```
 
 前端默认运行在 `http://127.0.0.1:5173`，并通过 `VITE_API_BASE_URL` 连接后端。
+
+### 验证
+
+后端（`backend/`）：
+
+```powershell
+uv run pytest
+uv run ruff check .
+```
+
+前端（`frontend/`）：
+
+```powershell
+npm run lint
+npm run build
+```
 
 ## 项目边界
 
