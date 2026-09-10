@@ -17,7 +17,11 @@ from app.llm_provider import (
     ProviderMessageRole,
 )
 from app.models import OptimizationTarget, Problem
-from app.schemas import OptimizationSuggestionRead, OptimizationTargetSuggestionsRead
+from app.schemas import (
+    OptimizationSuggestionRead,
+    OptimizationTargetStatus,
+    OptimizationTargetSuggestionsRead,
+)
 
 OPTIMIZATION_SUGGESTION_PROMPT_VERSION = "OPTIMIZATION-SUGGESTION-PROMPT-V1"
 
@@ -37,6 +41,9 @@ class _SuggestionOutput(BaseModel):
 
 class OptimizationSuggestionsErrorCode(StrEnum):
     OPTIMIZATION_TARGET_NOT_FOUND = "optimization_target_not_found"
+    OPTIMIZATION_SUGGESTIONS_TARGET_FROZEN = (
+        "optimization_suggestions_target_frozen"
+    )
     OPTIMIZATION_SUGGESTIONS_PROBLEM_NOT_FOUND = (
         "optimization_suggestions_problem_not_found"
     )
@@ -83,6 +90,14 @@ class OptimizationSuggestionsService:
                 optimization_target_id=target.id,
                 generated=False,
                 suggestions=stored,
+            )
+        if target.status == OptimizationTargetStatus.FROZEN.value:
+            raise OptimizationSuggestionsError(
+                (
+                    OptimizationSuggestionsErrorCode
+                    .OPTIMIZATION_SUGGESTIONS_TARGET_FROZEN
+                ),
+                "Frozen optimization targets cannot generate suggestions.",
             )
 
         problems = self._load_problems(target, db_session)

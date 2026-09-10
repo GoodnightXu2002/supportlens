@@ -365,30 +365,27 @@ def test_frozen_target_returns_stored_suggestions_without_overwrite(
     assert stored["plan_hash"] == frozen["plan_hash"]
 
 
-def test_frozen_target_without_suggestions_generates_without_state_changes(
+def test_frozen_target_without_suggestions_is_rejected_with_409(
     api_context,
 ) -> None:
     client, engine = api_context
     ids = _seed_run(engine)
     target = _create_multi_problem_target(client, engine, ids)
-    frozen = _confirm_and_freeze_target(client, target["id"])
+    _confirm_and_freeze_target(client, target["id"])
     provider = SuggestionProvider()
     _use_provider(client, provider)
 
     response = _generate(client, target["id"])
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["generated"] is True
-    assert [item["problem_id"] for item in body["suggestions"]] == (
-        target["problem_ids"]
+    assert response.status_code == 409
+    assert (
+        response.json()["error"]["code"]
+        == "optimization_suggestions_target_frozen"
     )
-    assert len(provider.requests) == 1
+    assert len(provider.requests) == 0
     stored = client.get(f"/api/optimization-targets/{target['id']}").json()
-    assert stored["optimization_suggestions"] == body["suggestions"]
+    assert stored["optimization_suggestions"] is None
     assert stored["status"] == "frozen"
-    assert stored["plan_hash"] == frozen["plan_hash"]
-    assert stored["hypothesis_confirmed_by"] is None
 
 
 @pytest.mark.parametrize(

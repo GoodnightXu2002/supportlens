@@ -406,6 +406,9 @@ def _optimization_suggestions_error_response(
     status_by_code = {
         OptimizationSuggestionsErrorCode.OPTIMIZATION_TARGET_NOT_FOUND: 404,
         (
+            OptimizationSuggestionsErrorCode.OPTIMIZATION_SUGGESTIONS_TARGET_FROZEN
+        ): 409,
+        (
             OptimizationSuggestionsErrorCode
             .OPTIMIZATION_SUGGESTIONS_PROBLEM_NOT_FOUND
         ): 404,
