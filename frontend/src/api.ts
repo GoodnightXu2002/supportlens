@@ -707,6 +707,23 @@ export async function completeProblemSetOptimizationTarget(
   )
 }
 
+export async function createProblemSetOptimizationTarget(
+  runId: string,
+  problemIds: string[],
+  input: { target: OptimizationTargetCreateInput },
+): Promise<OptimizationTarget> {
+  return requestJson<OptimizationTarget>(
+    await fetch(
+      `${API_BASE_URL}/api/evaluation-runs/${encodeURIComponent(runId)}/optimization-targets`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...input.target, problem_ids: problemIds }),
+      },
+    ),
+  )
+}
+
 export async function generateOptimizationTargetSuggestions(
   targetId: string,
   signal?: AbortSignal,

@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ApiRequestError,
   completeProblemSetOptimizationTarget,
+  createProblemSetOptimizationTarget,
   generateOptimizationTargetSuggestions,
   getDatasetConversations,
   getDatasetDetail,
@@ -139,6 +140,15 @@ function requestFromForm(form: TargetForm): OptimizationTargetCreateInput {
     planned_change: form.plannedChange.trim() || null,
     guardrails: splitEntries(form.guardrails),
     protected_capabilities: splitEntries(form.protectedCapabilities),
+  }
+}
+
+function defaultTargetInput(problems: Problem[]): OptimizationTargetCreateInput {
+  return {
+    definition: `改善本轮 ${problems.length} 个问题：\n${problems.map((problem) => problem.definition).join('\n')}`,
+    inclusion_criteria: '所选问题涉及的核心案例去重并集。',
+    exclusion_criteria: '其余核心案例不计入目标案例，并作为回归案例。',
+    expected_observable_change: '减少所选问题在目标案例中的出现，并保持回归案例表现。',
   }
 }
 
@@ -381,6 +391,35 @@ function TargetPlanPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [suggestionGeneration, setSuggestionGeneration] = useState<SuggestionGenerationState>(idleSuggestionGeneration)
   const attemptedSuggestionTargetIdsRef = useRef<Set<string>>(new Set())
+  const draftTargetCreationRef = useRef<Map<string, Promise<OptimizationTarget>>>(new Map())
+
+  function ensureDraftTarget(
+    creationKey: string,
+    runId: string,
+    requestedProblemIds: string[],
+    selectedProblems: Problem[],
+  ): Promise<OptimizationTarget> {
+    const inFlight = draftTargetCreationRef.current.get(creationKey)
+    if (inFlight) return inFlight
+    const creation = createProblemSetOptimizationTarget(
+      runId,
+      requestedProblemIds,
+      { target: defaultTargetInput(selectedProblems) },
+    )
+      .catch(async (error) => {
+        if (error instanceof ApiRequestError && error.code === 'optimization_target_already_exists') {
+          const targets = await getOptimizationTargets(runId)
+          const existingTarget = targets
+            .filter((item) => haveSameProblemIds(item.problem_ids, requestedProblemIds))
+            .sort((left, right) => right.version - left.version)[0] ?? null
+          if (existingTarget) return existingTarget
+        }
+        throw error
+      })
+      .finally(() => { draftTargetCreationRef.current.delete(creationKey) })
+    draftTargetCreationRef.current.set(creationKey, creation)
+    return creation
+  }
 
   useEffect(() => {
     if (!runId || !problemIdsParam) return
@@ -409,9 +448,19 @@ function TargetPlanPage() {
         const activeProblem = problems.find(
           (problem) => problem.problem_id === activeProblemId,
         ) ?? selectedProblems[0]
-        const target = targets
+        let target: OptimizationTarget | null = targets
           .filter((item) => haveSameProblemIds(item.problem_ids, requestedProblemIds))
           .sort((left, right) => right.version - left.version)[0] ?? null
+        if (target === null) {
+          const draft = await ensureDraftTarget(
+            requestKey,
+            run.id,
+            requestedProblemIds,
+            selectedProblems,
+          )
+          if (controller.signal.aborted) return
+          target = draft
+        }
         const candidateRunId = target
           ? runs.find((item) => item.run_type === 'candidate' && item.target_id === target.id)?.id ?? null
           : null
@@ -428,13 +477,18 @@ function TargetPlanPage() {
           }
           setSearchParams(params, { replace: true })
         }
-        setForm(target ? formFromTarget(target) : {
-          ...emptyForm,
-          definition: `改善本轮 ${selectedProblems.length} 个问题：\n${selectedProblems.map((problem) => problem.definition).join('\n')}`,
-          inclusionCriteria: '所选问题涉及的核心案例去重并集。',
-          exclusionCriteria: '其余核心案例不计入目标案例，并作为回归案例。',
-          expectedObservableChange: '减少所选问题在目标案例中的出现，并保持回归案例表现。',
-        })
+        if (target) {
+          setForm(formFromTarget(target))
+        } else {
+          const defaultInput = defaultTargetInput(selectedProblems)
+          setForm({
+            ...emptyForm,
+            definition: defaultInput.definition,
+            inclusionCriteria: defaultInput.inclusion_criteria,
+            exclusionCriteria: defaultInput.exclusion_criteria,
+            expectedObservableChange: defaultInput.expected_observable_change,
+          })
+        }
         setActor(target?.confirmed_by ?? '')
         setLoadResult({
           requestKey,
