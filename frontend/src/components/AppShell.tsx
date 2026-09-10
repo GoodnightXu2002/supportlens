@@ -86,12 +86,16 @@ function AppShell() {
           aria-label="SupportLens 首页"
           onClick={() => setDatasetImportOpen(false)}
         >
-          <span className="brand-mark" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <span />
-          </span>
+          <svg
+            className="brand-mark"
+            viewBox="0 0 32 32"
+            aria-hidden="true"
+          >
+            <path d="M18 3H8a2 2 0 0 0-2 2v22a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9l-6-6Z" />
+            <path d="M18 3v6h6M11 13h7M11 17h6M11 21h4" />
+            <circle cx="21" cy="22" r="5" />
+            <path d="m24.75 25.75 4.25 4.25" />
+          </svg>
           <span className="brand-name">SupportLens</span>
         </Link>
 

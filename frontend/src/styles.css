@@ -100,22 +100,15 @@ textarea {
 }
 
 .brand-mark {
-  display: grid;
-  grid-template-columns: repeat(2, 5px);
-  grid-template-rows: repeat(2, 5px);
-  place-content: center;
-  gap: 3px;
+  display: block;
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  background: var(--color-primary);
-  border-radius: var(--radius-control);
-}
-
-.brand-mark span {
-  width: 5px;
-  height: 5px;
-  background: var(--color-surface);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .brand-name {
