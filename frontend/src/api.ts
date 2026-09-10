@@ -241,6 +241,7 @@ export type OptimizationTarget = {
   hypothesis_evidence_refs: string[]
   change_surface: string | null
   planned_change: string | null
+  optimization_suggestions: OptimizationSuggestion[] | null
   guardrails: string[]
   change_status: 'planned'
   target_case_ids: string[]
@@ -284,6 +285,17 @@ export type OptimizationTargetCreateInput = {
 export type OptimizationTargetPatchInput = Partial<
   OptimizationTargetCreateInput
 >
+
+export type OptimizationSuggestion = {
+  problem_id: string
+  suggestion: string
+}
+
+export type OptimizationSuggestionsResponse = {
+  optimization_target_id: string
+  generated: boolean
+  suggestions: OptimizationSuggestion[]
+}
 
 export type ValidationTaskStatus =
   | 'pending'
@@ -691,6 +703,18 @@ export async function completeProblemSetOptimizationTarget(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...input, problem_ids: problemIds }),
       },
+    ),
+  )
+}
+
+export async function generateOptimizationTargetSuggestions(
+  targetId: string,
+  signal?: AbortSignal,
+): Promise<OptimizationSuggestionsResponse> {
+  return requestJson<OptimizationSuggestionsResponse>(
+    await fetch(
+      `${API_BASE_URL}/api/optimization-targets/${encodeURIComponent(targetId)}/optimization-suggestions`,
+      { method: 'POST', signal },
     ),
   )
 }

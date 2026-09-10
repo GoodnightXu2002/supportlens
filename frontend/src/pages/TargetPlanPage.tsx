@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MdError } from 'react-icons/md'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   ApiRequestError,
   completeProblemSetOptimizationTarget,
+  generateOptimizationTargetSuggestions,
   getDatasetConversations,
   getDatasetDetail,
   getDatasetEvaluationRuns,
@@ -14,6 +15,7 @@ import {
   type DatasetDetail,
   type DatasetConversation,
   type EvaluationRun,
+  type OptimizationSuggestion,
   type OptimizationTarget,
   type OptimizationTargetCreateInput,
   type Problem,
@@ -47,6 +49,20 @@ type LoadedData = {
   problems: Problem[]
   target: OptimizationTarget | null
   candidateRunId: string | null
+}
+
+type SuggestionGenerationState = {
+  targetId: string
+  status: 'idle' | 'generating' | 'error'
+  suggestions: OptimizationSuggestion[] | null
+  error: string | null
+}
+
+const idleSuggestionGeneration: SuggestionGenerationState = {
+  targetId: '',
+  status: 'idle',
+  suggestions: null,
+  error: null,
 }
 
 type PageState =
@@ -220,14 +236,14 @@ type TargetPlanWorkspaceProps = {
   actor: string
   pendingAction: string | null
   actionError: string | null
-  onFormChange: (field: keyof TargetForm, value: string) => void
+  suggestionGeneration: SuggestionGenerationState
   onActorChange: (value: string) => void
   onExportValidationCases: () => void
   onEnterValidation: () => void
 }
 
 function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
-  onFormChange, onActorChange, onExportValidationCases, onEnterValidation,
+  suggestionGeneration, onActorChange, onExportValidationCases, onEnterValidation,
 }: TargetPlanWorkspaceProps) {
   const { problems, target } = data
   const frozen = target?.status === 'frozen'
@@ -239,11 +255,18 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
   const missingCases = targetCaseCount === 0
   const requiredFields = [form.definition, form.inclusionCriteria, form.exclusionCriteria, form.expectedObservableChange]
   const canEnter = frozen || (requiredFields.every((value) => value.trim()) && actor.trim() && !missingCases)
-  const notes: [keyof TargetForm, string][] = [
-    ['hypothesisStatement', '优化假设'], ['plannedChange', '计划变更'],
-    ['changeSurface', '变更范围'], ['hypothesisEvidenceRefs', '证据引用（每行一项）'],
-    ['guardrails', '保护规则（每行一项）'], ['protectedCapabilities', '需保护的现有能力（每行一项）'],
-  ]
+  const generatedSuggestions = target && suggestionGeneration.targetId === target.id
+    && suggestionGeneration.status !== 'error'
+    ? suggestionGeneration.suggestions
+    : null
+  const suggestions = target?.optimization_suggestions ?? generatedSuggestions
+  const suggestionByProblemId = new Map(
+    (suggestions ?? []).map((item) => [item.problem_id, item.suggestion]),
+  )
+  const suggestionStatusForTarget = target
+    && suggestionGeneration.targetId === target.id
+    ? suggestionGeneration.status
+    : 'idle'
   return (
     <section className="s04-page">
       <ContextMetadata data={data} form={form} />
@@ -289,29 +312,31 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
         </section>
 
         <section className="s04-pane" aria-labelledby="s04-decision-title">
-          <header className="s04-pane-header"><h2 id="s04-decision-title">确认优化目标</h2></header>
+          <header className="s04-pane-header"><h2 id="s04-decision-title">系统优化建议</h2></header>
           <div className="s04-pane-scroll">
-            <section className="s04-section" aria-labelledby="s04-target-title">
-              <h2 id="s04-target-title">本轮优化目标</h2>
-              <p className="s04-source-note">{frozen ? '目标和验证范围已冻结，可继续验证。' : '系统已建议优化目标，可直接使用或修改。'}</p>
-              {frozen ? (
-                <>
-                  <div className="s04-evidence-field"><span>目标定义</span><p>{form.definition}</p></div>
-                  <div className="s04-evidence-field"><span>预期可观察变化</span><p>{form.expectedObservableChange}</p></div>
-                </>
+            <section className="s04-section" aria-labelledby="s04-suggestion-title">
+              <h2 id="s04-suggestion-title">本轮优化问题建议：{problems.length} 个</h2>
+              {target == null ? (
+                <p className="s04-source-note">尚未创建优化目标。</p>
+              ) : frozen && !suggestions?.length ? (
+                <p className="s04-source-note">该历史目标未生成系统优化建议</p>
+              ) : suggestionStatusForTarget === 'generating' ? (
+                <p className="s04-source-note" role="status">正在生成系统优化建议…</p>
+              ) : suggestionStatusForTarget === 'error' ? (
+                <p className="s04-alert" role="alert">{suggestionGeneration.error}</p>
               ) : (
-                <>
-                  <EditableField label="目标定义" value={form.definition} onChange={(value) => onFormChange('definition', value)} disabled={busy} multiline />
-                  <EditableField label="预期可观察变化" value={form.expectedObservableChange} onChange={(value) => onFormChange('expectedObservableChange', value)} disabled={busy} multiline />
-                </>
+                <ul className="s04-problem-list">
+                  {problems.map((problem) => (
+                    <li className="s04-problem-card" key={problem.problem_id}>
+                      <span className="s04-code-label" title={problem.problem_id}>
+                        {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)}
+                      </span>
+                      <p>{suggestionByProblemId.get(problem.problem_id) ?? '暂无优化建议。'}</p>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
-            <details className="s04-notes">
-              <summary>可选优化备注</summary>
-              <div className="s04-form-grid s04-form-grid--two-columns">
-                {notes.map(([field, label]) => <EditableField key={field} label={label + '（可选）'} value={form[field]} onChange={(value) => onFormChange(field, value)} disabled={busy || frozen} multiline />)}
-              </div>
-            </details>
             {frozen ? (
               <div className="s04-evidence-field s04-evidence-field--actor"><span>操作人（必填）</span><p>{target.frozen_by ?? ''}</p></div>
             ) : (
@@ -354,6 +379,8 @@ function TargetPlanPage() {
   const [actor, setActor] = useState('')
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [suggestionGeneration, setSuggestionGeneration] = useState<SuggestionGenerationState>(idleSuggestionGeneration)
+  const attemptedSuggestionTargetIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!runId || !problemIdsParam) return
@@ -449,6 +476,29 @@ function TargetPlanPage() {
       : { kind: 'loading' }
 
   const target = pageState.kind === 'ready' ? pageState.data.target : null
+  const readyData = pageState.kind === 'ready' ? pageState.data : null
+
+  useEffect(() => {
+    const readyTarget = readyData?.target
+    if (!readyTarget || readyTarget.status === 'frozen') return
+    if (readyTarget.optimization_suggestions?.length) return
+    if (attemptedSuggestionTargetIdsRef.current.has(readyTarget.id)) return
+    attemptedSuggestionTargetIdsRef.current.add(readyTarget.id)
+    const targetId = readyTarget.id
+    setSuggestionGeneration({ targetId, status: 'generating', suggestions: null, error: null })
+    void generateOptimizationTargetSuggestions(targetId)
+      .then((response) => {
+        setSuggestionGeneration({ targetId, status: 'idle', suggestions: response.suggestions, error: null })
+      })
+      .catch((error) => {
+        setSuggestionGeneration({
+          targetId,
+          status: 'error',
+          suggestions: null,
+          error: error instanceof Error ? error.message : '生成系统优化建议失败。',
+        })
+      })
+  }, [readyData])
 
   async function enterValidation() {
     if (pageState.kind !== 'ready' || pendingAction) return
@@ -513,7 +563,7 @@ function TargetPlanPage() {
       actor={actor}
       pendingAction={pendingAction}
       actionError={actionError}
-      onFormChange={(field, value) => { setForm((current) => ({ ...current, [field]: value })); setActionError(null) }}
+      suggestionGeneration={suggestionGeneration}
       onActorChange={setActor}
       onExportValidationCases={() => { void exportValidationCases() }}
       onEnterValidation={() => { void enterValidation() }}
