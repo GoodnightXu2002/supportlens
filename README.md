@@ -4,12 +4,12 @@
 
 Demo 当前使用 NovaMart 合成客服会话数据，产品导入与评测链路与真实上传数据使用同一套流程。
 
-SupportLens 是一个面向 AI 客服 Agent 团队的质量评测与优化 MVP。它将真实会话、自动评测、问题诊断、优化目标、候选版本验证和人工决策串成可追溯的产品闭环，帮助团队把“感觉模型需要优化”转化为有证据、有优先级、可验证的改进流程。
+SupportLens 是一个面向 AI 客服产品经理与运营人员的质量评测与优化 MVP。它将真实会话、自动评测、问题诊断、优化目标、候选版本验证和人工决策串成可追溯的产品闭环，帮助团队把“感觉模型需要优化”转化为有证据、有优先级、可验证的改进流程。
 
 ## 项目概览
 
 - 项目性质：个人项目 · MVP
-- 我的职责：产品定义、评测体系设计、核心流程与原型设计、AI 辅助开发推进、E2E 验收
+- 我的职责：产品定义、评测体系设计、核心流程与原型设计、AI 辅助实现、E2E 验收
 - 当前状态：MVP 已上线并完成完整线上流程验证
 - 在线 Demo：[https://supportlens.webxu.cn](https://supportlens.webxu.cn)
 
@@ -53,6 +53,21 @@ Dataset Import
 6. **Regression / Verdict**：对比基线与候选版本，识别改善、持平和回归，形成验证结论。
 7. **Human Final Decision**：由人做最终接受候选版本或继续迭代的判断，系统不替代产品与业务决策。
 
+## 产品差异
+
+- **真实会话自动评测**：围绕实际客服对话建立质量基线，而不是只依赖离线样例演示。
+- **证据可追溯**：问题、结论与原始会话及评测结果关联，便于复核判断依据。
+- **问题级诊断**：从单条失败上升到问题聚合与优先级排序，直接服务优化决策。
+- **版本级优化与验证**：多个目标 Problem 可进入同一版本级优化与验证范围，在冻结范围内比较 Baseline 与 Candidate 并检查 Regression。
+- **人工最终决策**：自动化负责发现、归纳与验证，人保留最终发布判断权。
+
+## 实现结果与验证
+
+- MVP 已完成线上部署，并跑通 Dataset Import → Baseline Evaluation → Problem Diagnosis → Optimization Target → Candidate Validation → Human Final Decision。
+- 公开 Demo 使用 100 条 NovaMart 合成 AI 客服会话，通过正式 Dataset Import 流程导入。
+- 一次完整在线验证中，本轮选择 8 个目标 Problem，其中 5 个明确改善，3 个无法得出结论。
+- 系统保留无法判断和人工复核情况，最终人工决策为「继续迭代」，未接受当前候选版本。
+
 ## 产品界面
 
 数据集导入与管理
@@ -70,21 +85,6 @@ Dataset Import
 候选版本验证与回归检查
 
 ![候选版本验证与回归检查](docs/images/supportlens-s05-candidate-validation.png)
-
-## 实现结果与验证
-
-- MVP 已完成线上部署，并跑通 Dataset Import → Baseline Evaluation → Problem Diagnosis → Optimization Target → Candidate Validation → Human Final Decision。
-- 公开 Demo 使用 100 条 NovaMart 合成 AI 客服会话，通过正式 Dataset Import 流程导入。
-- 一次完整在线验证中，本轮选择 8 个目标 Problem，其中 5 个明确改善，3 个无法得出结论。
-- 系统保留无法判断和人工复核情况，最终人工决策为「继续迭代」，未接受当前候选版本。
-
-## 产品差异
-
-- **真实会话自动评测**：围绕实际客服对话建立质量基线，而不是只依赖离线样例演示。
-- **证据可追溯**：问题、结论与原始会话及评测结果关联，便于复核判断依据。
-- **问题级诊断**：从单条失败上升到问题聚合与优先级排序，直接服务优化决策。
-- **版本级验证**：在冻结的目标和案例范围内比较 Baseline 与 Candidate，显式检查 Regression。
-- **人工最终决策**：自动化负责发现、归纳与验证，人保留最终发布判断权。
 
 ## 技术栈
 
@@ -114,12 +114,23 @@ uv run uvicorn app.main:app --reload
 
 ```powershell
 cd frontend
-npm install
+npm ci
 Copy-Item .env.example .env
 npm run dev
 ```
 
 前端默认运行在 `http://127.0.0.1:5173`，并通过 `VITE_API_BASE_URL` 连接后端。
+
+### S05 Candidate Local Runner
+
+- S04 冻结验证范围后，进入 S05 创建验证任务。
+- S05 生成 `task_id`、一次性 Runner Token 和 PowerShell 运行命令。
+- 在 `backend/` 目录执行该命令，并配置 `AGENT_ENDPOINT`、`AGENT_API_KEY` 和 `AGENT_MODEL`。
+- Runner 获取冻结案例、调用候选 Agent，并将回答提交回 SupportLens。
+- 回到 S05 点击「开始评测」，查看 Baseline / Candidate、Regression 和 Verdict。
+- Runner 入口：`backend/app/local_runner.py`
+- 候选 Agent 需提供 OpenAI-compatible Chat Completions 接口。
+- Agent API Key 仅保留在本机。
 
 ### 验证
 
