@@ -569,6 +569,9 @@ class OptimizationTarget(Base):
     )
     change_surface: Mapped[str | None] = mapped_column(Text, nullable=True)
     planned_change: Mapped[str | None] = mapped_column(Text, nullable=True)
+    optimization_suggestions: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     guardrails: Mapped[list[str]] = mapped_column(
         JSON(none_as_null=True), nullable=False, default=list, server_default="[]"
     )

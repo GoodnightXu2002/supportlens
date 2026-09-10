@@ -477,6 +477,17 @@ class OptimizationTargetProblemSetCompleteRequest(OptimizationTargetActorRequest
         return list(dict.fromkeys(value))
 
 
+class OptimizationSuggestionRead(BaseModel):
+    problem_id: UUID
+    suggestion: str
+
+
+class OptimizationTargetSuggestionsRead(BaseModel):
+    optimization_target_id: UUID
+    generated: bool
+    suggestions: list[OptimizationSuggestionRead]
+
+
 class OptimizationTargetBaselineMetricRead(BaseModel):
     affected_core_cases: int = Field(ge=0)
     core_denominator: int = Field(ge=0)
@@ -520,6 +531,7 @@ class OptimizationTargetRead(BaseModel):
     hypothesis_evidence_refs: list[str]
     change_surface: str | None
     planned_change: str | None
+    optimization_suggestions: list[OptimizationSuggestionRead] | None
     guardrails: list[str]
     change_status: OptimizationTargetChangeStatus
     target_case_ids: list[str]

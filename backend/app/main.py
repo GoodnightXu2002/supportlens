@@ -42,6 +42,11 @@ from app.import_service import (
 from app.judge_contract import JUDGE_CONTRACT_VERSION
 from app.llm_provider import DeepSeekProvider
 from app.models import Conversation, Dataset, EvaluationRun, HumanDecision
+from app.optimization_suggestions import (
+    OptimizationSuggestionsError,
+    OptimizationSuggestionsErrorCode,
+    OptimizationSuggestionsService,
+)
 from app.optimization_target import (
     OptimizationTargetError,
     OptimizationTargetErrorCode,
@@ -76,6 +81,7 @@ from app.schemas import (
     OptimizationTargetProblemSetCompleteRequest,
     OptimizationTargetProblemSetCreateRequest,
     OptimizationTargetRead,
+    OptimizationTargetSuggestionsRead,
     ProblemRead,
     ValidationTaskCandidateStartRequest,
     ValidationTaskCasesResponse,
@@ -146,6 +152,10 @@ def get_candidate_runner() -> CandidateRunner:
 
 def get_baseline_runner() -> BaselineRunner:
     return BaselineRunner(DeepSeekProvider(settings))
+
+
+def get_optimization_suggestions_service() -> OptimizationSuggestionsService:
+    return OptimizationSuggestionsService(DeepSeekProvider(settings))
 
 
 def get_db_session() -> Iterator[Session]:
@@ -382,6 +392,32 @@ def _optimization_target_error_response(
         ): 400,
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_FAILURE_MODE_NOT_UNIQUE: 400,
         OptimizationTargetErrorCode.OPTIMIZATION_TARGET_PERSISTENCE_FAILED: 500,
+    }
+    return _error_response(
+        status_code=status_by_code[error.code],
+        code=error.code.value,
+        message=str(error),
+    )
+
+
+def _optimization_suggestions_error_response(
+    error: OptimizationSuggestionsError,
+) -> JSONResponse:
+    status_by_code = {
+        OptimizationSuggestionsErrorCode.OPTIMIZATION_TARGET_NOT_FOUND: 404,
+        (
+            OptimizationSuggestionsErrorCode
+            .OPTIMIZATION_SUGGESTIONS_PROBLEM_NOT_FOUND
+        ): 404,
+        OptimizationSuggestionsErrorCode.OPTIMIZATION_SUGGESTIONS_LLM_FAILED: 502,
+        (
+            OptimizationSuggestionsErrorCode
+            .OPTIMIZATION_SUGGESTIONS_LLM_OUTPUT_INVALID
+        ): 502,
+        (
+            OptimizationSuggestionsErrorCode
+            .OPTIMIZATION_SUGGESTIONS_PERSISTENCE_FAILED
+        ): 500,
     }
     return _error_response(
         status_code=status_by_code[error.code],
@@ -845,6 +881,24 @@ def patch_optimization_target(
         return service.patch(target_id, request, db_session)
     except OptimizationTargetError as error:
         return _optimization_target_error_response(error)
+
+
+@app.post(
+    "/api/optimization-targets/{target_id}/optimization-suggestions",
+    response_model=OptimizationTargetSuggestionsRead,
+)
+def generate_optimization_target_suggestions(
+    target_id: UUID,
+    db_session: Annotated[Session, Depends(get_db_session)],
+    service: Annotated[
+        OptimizationSuggestionsService,
+        Depends(get_optimization_suggestions_service),
+    ],
+) -> OptimizationTargetSuggestionsRead | JSONResponse:
+    try:
+        return service.generate(target_id, db_session)
+    except OptimizationSuggestionsError as error:
+        return _optimization_suggestions_error_response(error)
 
 
 @app.post(
