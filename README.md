@@ -71,6 +71,13 @@ Dataset Import
 
 ![候选版本验证与回归检查](docs/images/supportlens-s05-candidate-validation.png)
 
+## 实现结果与验证
+
+- MVP 已完成线上部署，并跑通 Dataset Import → Baseline Evaluation → Problem Diagnosis → Optimization Target → Candidate Validation → Human Final Decision。
+- 公开 Demo 使用 100 条 NovaMart 合成 AI 客服会话，通过正式 Dataset Import 流程导入。
+- 一次完整在线验证中，本轮选择 8 个目标 Problem，其中 5 个明确改善，3 个无法得出结论。
+- 系统保留无法判断和人工复核情况，最终人工决策为「继续迭代」，未接受当前候选版本。
+
 ## 产品差异
 
 - **真实会话自动评测**：围绕实际客服对话建立质量基线，而不是只依赖离线样例演示。
