@@ -22,3 +22,7 @@ frontend/.npm-cache/
 .idea/
 .vscode/
 *.log
+
+.workbuddy/
+backend/.pytest-tmp-*/
+backend/backups/
