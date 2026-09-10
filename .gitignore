@@ -26,3 +26,4 @@ frontend/.npm-cache/
 .workbuddy/
 backend/.pytest-tmp-*/
 backend/backups/
+backend/.pytest-tmp/
