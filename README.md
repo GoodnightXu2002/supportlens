@@ -37,6 +37,24 @@ Dataset Import
 6. **Regression / Verdict**：对比基线与候选版本，识别改善、持平和回归，形成验证结论。
 7. **Human Final Decision**：由人做最终接受候选版本或继续迭代的判断，系统不替代产品与业务决策。
 
+## 产品界面
+
+数据集导入与管理
+
+![数据集导入与管理](docs/images/supportlens-s02-dataset.png)
+
+问题级诊断与证据追溯
+
+![问题级诊断与证据追溯](docs/images/supportlens-s03-problem-evidence.png)
+
+自动优化建议与目标冻结
+
+![自动优化建议与目标冻结](docs/images/supportlens-s04-optimization-plan.png)
+
+候选版本验证与回归检查
+
+![候选版本验证与回归检查](docs/images/supportlens-s05-candidate-validation.png)
+
 ## 产品差异
 
 - **真实会话自动评测**：围绕实际客服对话建立质量基线，而不是只依赖离线样例演示。
