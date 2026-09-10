@@ -351,7 +351,7 @@ function CandidateWorkspace({
   decisionError: string | null
   onDecision: (decision: 'accept' | 'continue', actor: string, reason: string, overrideReason: string) => void
 }) {
-  const { target, baselineRun, candidateRun, dataset, conversations, baselineResults, candidateResults, comparisons, summary } = data
+  const { target, candidateRun, conversations, baselineResults, candidateResults, comparisons, summary } = data
   const targetCaseIds = new Set(target.target_case_ids)
   const targetComparisons = comparisons.filter((item) => targetCaseIds.has(item.case_id))
   const orderedComparisons = [
@@ -392,16 +392,6 @@ function CandidateWorkspace({
     target_id: target.id,
   }).toString()}`
   const pendingReviewCount = candidateResults.filter((item) => item.status === 'pending_review').length
-  const manifest = candidateRun.candidate_manifest_snapshot ?? {}
-  const lineage = [
-    `TARGET-V${target.version} · ${target.id}`,
-    `PLAN-HASH · ${target.plan_hash}`,
-    `BASELINE-RUN · ${baselineRun.id}`,
-    `CANDIDATE-RUN · ${candidateRun.id}`,
-    `RESPONSE-SET-HASH · ${candidateRun.response_set_hash}`,
-    `JUDGE-CONTRACT · ${candidateRun.judge_contract_version}`,
-    `DECISION-POLICY · ${summary.policy_version}`,
-  ]
   const gates = [
     ['目标结果', summary.target_outcome],
     ['目标明确改善', `${summary.rule_outcomes.clear_improved_count}/${summary.rule_outcomes.target_case_count}`],
@@ -422,21 +412,6 @@ function CandidateWorkspace({
   return (
     <section className="s05-page" aria-label="候选版本验证工作区">
       <div className="s05-canvas">
-        <section className="s05-metadata" aria-label="候选版本验证上下文">
-          <div><span>数据集</span><strong>{dataset.name} {dataset.version}</strong></div>
-          <div><span>基线版本</span><strong title={baselineRun.id}>{baselineRun.id}</strong></div>
-          <div><span>候选版本</span><strong title={candidateRun.id}>{candidateRun.candidate_label} · {candidateRun.id}</strong></div>
-          <div><span>结论范围</span><strong>当前已冻结验证计划</strong></div>
-        </section>
-
-        <section className="s05-status" aria-label="实验状态与追溯链">
-          <div className="s05-status-chips"><span>运行：{runStatusLabel(candidateRun.status)}</span><span>阻断：{summary.blockers.length || '无'}</span><span>实验完整性：{statusText(summary.integrity_gate)}</span><span>人工最终决策：{candidateRun.final_decision ? statusText(candidateRun.final_decision) : '尚未作出'}</span></div>
-          <div className="s05-status-details">
-            <div className="s05-lineage"><h2>实验追溯链</h2>{lineage.map((item) => <code key={item}>{item}</code>)}</div>
-            <div className="s05-gates"><h2>状态门槛</h2><div><span>实际变更：{statusText(displayValue(manifest.actual_change_status))}</span><span>生成一致性：{statusText(displayValue(manifest.generation_parity_status))}</span><span>评测配置兼容性：{statusText(summary.compatibility_gate)}</span><span>受保护能力：{statusText(summary.protected_capability_gate)}</span><span>最终结果：{candidateResults.filter((item) => item.status === 'final').length}/{candidateResults.length}</span><span>案例对比：{comparisons.length}</span></div><p>仅展示后端已保存的候选版本清单、最终生效结果、案例对比与验证摘要。</p></div>
-          </div>
-        </section>
-
         <section className="s05-outcomes" aria-label="目标与回归结果">
           <article className="s05-outcome-card"><MdCheckCircle className={`s05-outcome-icon s05-outcome-icon--${problemCardTone}`} aria-hidden="true" /><div><h2>问题级（{summary.problem_results.length || 1}）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标高/严重问题</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
           <article className="s05-outcome-card s05-regression-card"><MdVerified className={`s05-outcome-icon s05-outcome-icon--${regressionCardTone}`} aria-hidden="true" /><div><h2>版本级 · 回归检查（{comparisons.length - targetComparisons.length} 个非目标案例）</h2><div className="s05-regression-grid"><dl><div><dt>严重回归</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>回归与新系统性问题均直接来自后端验证摘要。</p></div></article>
