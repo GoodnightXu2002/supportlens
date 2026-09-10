@@ -66,10 +66,10 @@ class HumanReviewService:
                 HumanReviewErrorCode.HUMAN_REVIEW_ALREADY_COMPLETED,
                 "Human review has already been completed for this result.",
             )
-        if evaluation_result.review_required is not True:
+        if evaluation_result.review_required is False:
             raise HumanReviewError(
                 HumanReviewErrorCode.HUMAN_REVIEW_NOT_REQUIRED,
-                "Human review is only accepted when review_required is true.",
+                "Human review is not accepted when review_required is false.",
             )
         if not reviewer.strip():
             raise HumanReviewError(

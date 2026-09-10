@@ -374,3 +374,32 @@ def test_review_is_rejected_when_machine_result_does_not_require_it(
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "human_review_not_required"
+
+
+def test_review_is_allowed_when_machine_review_requirement_is_unknown(
+    api_context,
+) -> None:
+    client, engine = api_context
+    run_id, result_ids = _persist_run_with_results(
+        engine,
+        [("CASE-UNKNOWN-REVIEW", False)],
+    )
+    result_id = result_ids["CASE-UNKNOWN-REVIEW"]
+    with Session(engine) as session:
+        machine = session.get(EvaluationResult, result_id)
+        assert machine is not None
+        machine.review_required = None
+        session.commit()
+
+    pending = client.get(
+        f"/api/evaluation-runs/{run_id}/final-effective-results"
+    ).json()[0]
+    assert pending["status"] == "pending_review"
+
+    response = _submit_review(client, result_id, action="confirm")
+
+    assert response.status_code == 201
+    with Session(engine) as session:
+        machine = session.get(EvaluationResult, result_id)
+        assert machine is not None
+        assert machine.review_required is None
