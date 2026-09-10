@@ -13,6 +13,15 @@ SupportLens 是一个面向 AI 客服 Agent 团队的质量评测与优化 MVP�
 - 当前状态：MVP 已上线并完成完整线上流程验证
 - 在线 Demo：[https://supportlens.webxu.cn](https://supportlens.webxu.cn)
 
+## Demo 快速体验
+
+1. 打开在线 Demo：[https://supportlens.webxu.cn](https://supportlens.webxu.cn)
+2. 在「开始质量复盘」页面向下找到「已完成复盘」。
+3. 打开列表中的第一条已完成记录，点击「查看结果」，进入已完成的 Baseline 分析。
+4. 继续沿页面顶部流程查看「目标与计划」和「候选版本验证」。
+
+重新发起质量复盘会调用真实模型 API；受当前 MVP 架构及模型调用耗时影响，完整评测所需时间较长。为获得更顺畅的浏览体验，建议优先查看上述已完成结果。
+
 ## 核心痛点
 
 AI 客服上线后会积累大量真实会话，但团队往往难以系统回答：
