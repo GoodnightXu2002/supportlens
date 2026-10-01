@@ -99,7 +99,14 @@ const evaluationRunStatusLabels: Record<EvaluationRun['status'], string> = {
 const targetStatusLabels: Record<OptimizationTarget['status'], string> = {
   draft: '草稿',
   confirmed: '已确认',
-  frozen: '已冻结',
+  frozen: '已确认锁定',
+}
+
+const severityLabels: Record<NonNullable<Problem['priority_severity']>, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  critical: '严重',
 }
 
 function joinEntries(values: string[]) {
@@ -286,12 +293,12 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           <header className="s04-pane-header"><h2 id="s04-evidence-title">证据</h2></header>
           <div className="s04-pane-scroll">
             <section className="s04-section" aria-labelledby="s04-problem-title">
-              <h2 id="s04-problem-title">本轮优化问题：{problems.length} 个</h2>
+              <h2 id="s04-problem-title">优化问题（来自基线分析）：{problems.length} 个</h2>
               <ul className="s04-problem-list">
                 {problems.map((problem) => (
                   <li className="s04-problem-card" key={problem.problem_id}>
                     <span className="s04-code-label" title={problem.problem_id}>
-                      {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)}
+                      {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)} · {problem.priority_severity ? `严重度 ${severityLabels[problem.priority_severity]}` : '严重度待补充'}
                     </span>
                     <p>{problem.definition}</p>
                   </li>
@@ -313,7 +320,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
               {missingCases && <p className="s04-alert" role="alert">所选问题缺少目标案例。</p>}
               {frozen && (
                 <>
-                  <p className="s04-freeze-record">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />冻结人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p>
+                  <p className="s04-freeze-record">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />锁定人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p>
                   <button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button>
                 </>
               )}
@@ -325,7 +332,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           <header className="s04-pane-header"><h2 id="s04-decision-title">系统优化建议</h2></header>
           <div className="s04-pane-scroll">
             <section className="s04-section" aria-labelledby="s04-suggestion-title">
-              <h2 id="s04-suggestion-title">本轮优化问题建议：{problems.length} 个</h2>
+              <h2 id="s04-suggestion-title">系统建议（针对每个问题）：{problems.length} 条</h2>
               {target == null ? (
                 <p className="s04-source-note">尚未创建优化目标。</p>
               ) : frozen && !suggestions?.length ? (
@@ -359,8 +366,8 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
       </div>
 
       <footer className="s04-action-rail">
-        <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? '验证计划已冻结，可继续进入候选版本验证。' : '确认时自动保存目标并冻结版本级验证计划。')}</p>
-        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并冻结…' : frozen ? '进入候选版本验证' : '确认并冻结验证计划'}</button>
+        <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? '验证计划已确认锁定，可继续进入候选版本验证。' : '确认时自动保存目标并锁定版本级验证计划。')}</p>
+        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并锁定…' : frozen ? '进入候选版本验证' : '确认并锁定验证计划'}</button>
       </footer>
     </section>
   )
@@ -563,7 +570,7 @@ function TargetPlanPage() {
         runId, parseProblemIds(problemIdsParam), { actor: actor.trim(), target: requestFromForm(form) },
       )
       if (frozen.status !== 'frozen' || !frozen.plan_hash || !frozen.frozen_at) {
-        throw new Error('验证计划尚未完成冻结，请重试。')
+        throw new Error('验证计划尚未完成锁定，请重试。')
       }
       const params = new URLSearchParams({
         target_id: frozen.id,
