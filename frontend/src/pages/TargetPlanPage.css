@@ -11,9 +11,9 @@
 
 .s04-metadata-strip {
   display: flex;
-  min-height: 60px;
+  min-height: 44px;
   align-items: center;
-  padding: 10px 32px;
+  padding: 8px 32px;
   flex: 0 0 auto;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -23,21 +23,24 @@
   display: flex;
   min-width: 0;
   flex: 1;
-  gap: 48px;
+  align-items: baseline;
+  gap: 24px;
   margin: 0;
 }
 
 .s04-metadata > div {
   min-width: 0;
-  flex: 0 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .s04-metadata dt {
-  margin: 0 0 2px;
+  margin: 0;
   color: var(--color-text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 14px;
+  line-height: 18px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -143,6 +146,19 @@
   font-size: 15px;
   font-weight: 600;
   line-height: 22px;
+}
+
+.s04-pairs-header h2 em {
+  color: var(--color-text-secondary);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.s04-pairs-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
 }
 
 .s04-generating {

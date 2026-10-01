@@ -257,6 +257,10 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
     && suggestionGeneration.targetId === target.id
     ? suggestionGeneration.status
     : 'idle'
+  const severityCounts = (['critical', 'high', 'medium', 'low'] as const)
+    .map((key) => ({ key, count: problems.filter((item) => item.priority_severity === key).length }))
+    .filter((item) => item.count > 0)
+  const severityPending = problems.filter((item) => !item.priority_severity).length
   return (
     <section className="s04-page">
       <ContextMetadata data={data} form={form} />
@@ -275,8 +279,14 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
 
         <section className="s04-pairs" aria-labelledby="s04-pairs-title">
           <header className="s04-pairs-header">
-            <h2 id="s04-pairs-title">优化问题 → 系统建议（{problems.length} 对）</h2>
+            <h2 id="s04-pairs-title">优化问题 → 系统建议 <em>· {problems.length} 对</em></h2>
             {suggestionStatusForTarget === 'generating' ? <span className="s04-generating" role="status">正在生成系统优化建议…</span> : null}
+            <div className="s04-pairs-meta">
+              {severityCounts.map(({ key, count }) => (
+                <span key={key} className={`s04-severity s04-severity--${key}`}>{severityLabels[key]} {count}</span>
+              ))}
+              {severityPending > 0 ? <span className="s04-severity">待补充 {severityPending}</span> : null}
+            </div>
           </header>
           {suggestionStatusForTarget === 'error' ? (
             <div className="s04-generation-error" role="alert">
