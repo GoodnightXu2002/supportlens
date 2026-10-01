@@ -115,7 +115,7 @@ uv run uvicorn app.main:app --reload
 ```powershell
 cd frontend
 npm ci
-Copy-Item .env.example .env
+Copy-Item .env.example .env.development
 npm run dev
 ```
 
