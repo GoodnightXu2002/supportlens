@@ -162,9 +162,35 @@
 }
 
 .s04-generating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--color-status-info);
   font-size: 12px;
   line-height: 18px;
+}
+
+.s04-generating svg {
+  width: 13px;
+  height: 13px;
+}
+
+.s04-spinning {
+  animation: s04-spin 1s linear infinite;
+}
+
+@keyframes s04-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.s04-status-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+  vertical-align: -2px;
+  color: var(--color-status-success);
 }
 
 .s04-generation-error {
@@ -183,6 +209,12 @@
 
 .s04-generation-error span {
   flex: 1;
+}
+
+.s04-generation-error__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .s04-generation-error button {
@@ -379,6 +411,9 @@
 }
 
 .s04-outline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 36px;
   padding: 6px 16px;
   flex: 0 0 auto;
@@ -389,6 +424,11 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+}
+
+.s04-outline-action svg {
+  width: 15px;
+  height: 15px;
 }
 
 .s04-outline-action:hover {
@@ -455,6 +495,10 @@
 }
 
 .s04-action-rail button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 36px;
   padding: 6px 24px;
   flex-shrink: 0;
@@ -467,6 +511,11 @@
   font-weight: 600;
   line-height: 20px;
   cursor: pointer;
+}
+
+.s04-action-rail button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .s04-action-rail button:hover {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MdError, MdExpandMore } from 'react-icons/md'
+import { MdArrowForward, MdAutorenew, MdError, MdExpandMore, MdFileDownload, MdLock, MdLockOutline } from 'react-icons/md'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
@@ -204,7 +204,7 @@ function ContextMetadata({ data, form }: { data: LoadedData; form: TargetForm })
       <dl className="s04-metadata">
         <div><dt>数据集</dt><dd title={`${data.dataset.name} ${data.dataset.version}`}>{data.dataset.name} {data.dataset.version}</dd></div>
         <div><dt>基线运行</dt><dd title={data.run.id}>{shortId(data.run.id)} · {evaluationRunStatusLabels[data.run.status]}</dd></div>
-        <div><dt>目标状态</dt><dd>{targetEdited ? '已修改 · 待提交确认' : target ? `${targetStatusLabels[target.status]} · V${target.version}` : '尚未创建'}</dd></div>
+        <div><dt>目标状态</dt><dd>{target?.status === 'frozen' ? <MdLock aria-hidden="true" className="s04-status-icon" /> : null}{targetEdited ? '已修改 · 待提交确认' : target ? `${targetStatusLabels[target.status]} · V${target.version}` : '尚未创建'}</dd></div>
       </dl>
     </div>
   )
@@ -280,7 +280,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
         <section className="s04-pairs" aria-labelledby="s04-pairs-title">
           <header className="s04-pairs-header">
             <h2 id="s04-pairs-title">优化问题 → 系统建议 <em>· {problems.length} 对</em></h2>
-            {suggestionStatusForTarget === 'generating' ? <span className="s04-generating" role="status">正在生成系统优化建议…</span> : null}
+            {suggestionStatusForTarget === 'generating' ? <span className="s04-generating" role="status"><MdAutorenew aria-hidden="true" className="s04-spinning" />正在生成系统优化建议…</span> : null}
             <div className="s04-pairs-meta">
               {severityCounts.map(({ key, count }) => (
                 <span key={key} className={`s04-severity s04-severity--${key}`}>{severityLabels[key]} {count}</span>
@@ -290,6 +290,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           </header>
           {suggestionStatusForTarget === 'error' ? (
             <div className="s04-generation-error" role="alert">
+              <MdError aria-hidden="true" className="s04-generation-error__icon" />
               <span>{suggestionGeneration.error}</span>
               <button type="button" onClick={onRetrySuggestions}>重新生成</button>
             </div>
@@ -350,7 +351,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           {frozen && (
             <div className="s04-freeze-block">
               <p className="s04-freeze-record">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />锁定人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p>
-              <button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button>
+              <button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : (<><MdFileDownload aria-hidden="true" />导出验证案例 JSON</>)}</button>
             </div>
           )}
         </section>
@@ -364,7 +365,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           ) : (
             <label className="s04-rail-field"><span>操作人（必填）</span><input value={actor} onChange={(event) => onActorChange(event.target.value)} disabled={busy} /></label>
           )}
-          <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并锁定…' : frozen ? '进入候选版本验证' : '确认并锁定验证计划'}</button>
+          <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并锁定…' : (<>{frozen ? <MdArrowForward aria-hidden="true" /> : <MdLockOutline aria-hidden="true" />}{frozen ? '进入候选版本验证' : '确认并锁定验证计划'}</>)}</button>
         </div>
       </footer>
     </section>
