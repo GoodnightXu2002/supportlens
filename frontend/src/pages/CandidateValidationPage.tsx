@@ -23,14 +23,12 @@ import {
   type DatasetDetail,
   type EvaluationRun,
   type FinalEffectiveResult,
-  type JudgeEvidence,
   type JudgeOutput,
   type OptimizationTarget,
   type ValidationTaskReadResponse,
 } from '../api'
 import {
   blockerLabel,
-  evidenceTypeLabel,
   failureModeLabel,
   runStatusLabel,
   targetStatusLabel,
@@ -112,19 +110,21 @@ function messageContent(conversation: DatasetConversation, role: 'user' | 'assis
   return content.length ? content.join('\n\n') : '未提供'
 }
 
+const judgmentLabels: Record<JudgeOutput['judgment'], string> = {
+  success: '成功',
+  warning: '警告',
+  failure: '失败',
+  uncertain: '不确定',
+}
+
+const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  critical: '严重',
+}
+
 function JudgeBlock({ result }: { result: JudgeOutput }) {
-  const judgmentLabels: Record<JudgeOutput['judgment'], string> = {
-    success: '成功',
-    warning: '警告',
-    failure: '失败',
-    uncertain: '不确定',
-  }
-  const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
-    low: '低',
-    medium: '中',
-    high: '高',
-    critical: '严重',
-  }
   return (
     <div className="s05-judge">
       <p className="s05-judge__meta">
@@ -141,21 +141,55 @@ function JudgeBlock({ result }: { result: JudgeOutput }) {
   )
 }
 
-function evidenceText(evidence: JudgeEvidence[] | null) {
-  if (!evidence?.length) return '无可用证据'
-  return evidence
-    .map((item) => `${evidenceTypeLabel(item.evidence_type)} · ${item.source_ref ?? '无 source_ref'}\n${item.content}`)
-    .join('\n\n')
+function effectiveOutput(result: FinalEffectiveResult | undefined) {
+  if (!result) return null
+  return result.final_result ?? result.machine_result
 }
 
-function resultReview(result: FinalEffectiveResult | undefined) {
+function provenanceLine(result: FinalEffectiveResult | undefined) {
   if (!result) return '结果不存在'
-  if (!result.human_decision) return '机器最终结论 · 无人工复核'
-  return [
-    `复核人：${result.human_decision.reviewer}`,
-    `复核时间：${formatDate(result.human_decision.reviewed_at)}`,
-    `修正理由：${result.human_decision.change_reason ?? '确认原结果，无修正理由'}`,
-  ].join('\n')
+  if (!result.human_decision) return '机器判定 · 无人工复核'
+  const machine = result.machine_result
+  const machineSeverity = machine.severity ? severityLabels[machine.severity] : '无'
+  return `人工复核 · ${result.human_decision.reviewer} · ${formatDate(result.human_decision.reviewed_at)} · 机器原始判定 ${judgmentLabels[machine.judgment]} · 严重度 ${machineSeverity}`
+}
+
+function VerdictDeltaBar({ baseline, candidate, movement, targetWorse, regressionLevel }: {
+  baseline: JudgeOutput | null
+  candidate: JudgeOutput | null
+  movement: CaseComparison['movement']
+  targetWorse: boolean
+  regressionLevel: CaseComparison['regression_level']
+}) {
+  const fields = [
+    {
+      label: '判定',
+      from: baseline ? judgmentLabels[baseline.judgment] : '无',
+      to: candidate ? judgmentLabels[candidate.judgment] : '无',
+    },
+    {
+      label: '严重度',
+      from: baseline?.severity ? severityLabels[baseline.severity] : '无',
+      to: candidate?.severity ? severityLabels[candidate.severity] : '无',
+    },
+    {
+      label: '失败模式',
+      from: baseline?.primary_failure_mode ? failureModeLabel(baseline.primary_failure_mode) : '无',
+      to: candidate?.primary_failure_mode ? failureModeLabel(candidate.primary_failure_mode) : '无',
+    },
+  ]
+  return (
+    <div className="s05-verdict-delta" role="status">
+      <strong className="s05-verdict-delta__movement">{statusText(movement)}</strong>
+      {fields.map((field) => (
+        <span className="s05-verdict-delta__field" key={field.label}>
+          <span>{field.label}</span>
+          {field.from === field.to ? <strong>{field.from}</strong> : <strong className="s05-verdict-delta__changed">{field.from} → {field.to}</strong>}
+        </span>
+      ))}
+      <span className="s05-verdict-delta__meta">目标变差 {statusText(targetWorse)} · 回归级别 {statusText(regressionLevel ?? 'none')}</span>
+    </div>
+  )
 }
 
 const statusTextLabels: Record<string, string> = {
@@ -455,10 +489,28 @@ function CandidateWorkspace({
           <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
           <div className="s05-comparison-body">
             <ComparisonNode label="会话 / 用户消息"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
+            <VerdictDeltaBar
+              baseline={effectiveOutput(baselineResult)}
+              candidate={effectiveOutput(candidateResult)}
+              movement={selectedComparison.movement}
+              targetWorse={selectedComparison.target_worse}
+              regressionLevel={selectedComparison.regression_level}
+            />
             <div className="s05-version-columns">
-              <div className="s05-version-column"><ComparisonNode label="回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode><ComparisonNode label="AI 评测判定"><JudgeBlock result={baselineResult.machine_result} /></ComparisonNode><ComparisonNode label="人工复核"><pre>{resultReview(baselineResult)}</pre></ComparisonNode><ComparisonNode label="最终生效结果"><div className="s05-node-box s05-effective-result">{baselineResult.final_result ? <JudgeBlock result={baselineResult.final_result} /> : statusText(baselineResult.status)}</div></ComparisonNode><ComparisonNode label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.baseline)}</pre></ComparisonNode></div>
-              <div className="s05-movement"><strong>案例变化：{statusText(selectedComparison.movement)}</strong><dl><div><dt>目标变差</dt><dd>{statusText(selectedComparison.target_worse)}</dd></div><div><dt>回归级别</dt><dd>{statusText(selectedComparison.regression_level ?? 'none')}</dd></div></dl></div>
-              <div className="s05-version-column s05-version-column--candidate"><ComparisonNode accent label="回复"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode><ComparisonNode accent label="AI 评测判定"><JudgeBlock result={candidateResult.machine_result} /></ComparisonNode><ComparisonNode accent label="人工复核"><pre>{resultReview(candidateResult)}</pre></ComparisonNode><ComparisonNode accent label="最终生效结果"><div className="s05-node-box s05-effective-result s05-effective-result--candidate">{candidateResult.final_result ? <JudgeBlock result={candidateResult.final_result} /> : statusText(candidateResult.status)}</div></ComparisonNode><ComparisonNode accent label="回复证据"><pre>{evidenceText(selectedComparison.evidence_snapshot.candidate)}</pre></ComparisonNode></div>
+              <div className="s05-version-column">
+                <ComparisonNode label="回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode>
+                <ComparisonNode label="生效判定">
+                  {effectiveOutput(baselineResult) ? <JudgeBlock result={effectiveOutput(baselineResult)!} /> : <p>{statusText(baselineResult?.status)}</p>}
+                  <p className="s05-provenance">{provenanceLine(baselineResult)}</p>
+                </ComparisonNode>
+              </div>
+              <div className="s05-version-column s05-version-column--candidate">
+                <ComparisonNode accent label="回复"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode>
+                <ComparisonNode accent label="生效判定">
+                  {effectiveOutput(candidateResult) ? <JudgeBlock result={effectiveOutput(candidateResult)!} /> : <p>候选判定不存在</p>}
+                  <p className="s05-provenance">{provenanceLine(candidateResult)}</p>
+                </ComparisonNode>
+              </div>
             </div>
             <div className="s05-shared-evidence"><ComparisonNode label="业务上下文"><pre>{displayValue(conversationMetadata(conversation, 'business_context'))}</pre></ComparisonNode><ComparisonNode label="参考依据"><pre>{displayValue(conversationMetadata(conversation, 'reference_evidence'))}</pre></ComparisonNode></div>
           </div>
