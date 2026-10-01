@@ -460,7 +460,7 @@
 
 .s05-version-column--candidate .s05-node-box {
   border-color: rgb(21 128 61 / 30%);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+  box-shadow: 0 1px 2px rgb(58 50 34 / 6%);
 }
 
 .s05-effective-result {
@@ -972,7 +972,7 @@
   flex-direction: column;
   gap: 3px;
   color: var(--color-text-secondary);
-  background: rgb(241 245 249 / 50%);
+  background: rgb(240 236 226 / 50%);
   font-size: 12px;
   line-height: 18px;
 }
@@ -1087,7 +1087,7 @@
 }
 
 .s05-action-rail button:last-child:hover {
-  background: #2d3133;
+  background: #33302a;
 }
 
 .s05-action-rail svg {

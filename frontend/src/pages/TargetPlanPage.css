@@ -372,8 +372,8 @@
   padding: 6px 24px;
   flex-shrink: 0;
   color: #fff;
-  background: #000;
-  border: 1px solid #000;
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-sm);
   font-family: var(--font-heading);
   font-size: 14px;
@@ -383,11 +383,11 @@
 }
 
 .s04-action-rail button:hover {
-  background: #2d3133;
+  background: #33302a;
 }
 
 .s04-page button:disabled {
-  color: #76777d;
+  color: #8a8478;
   background: var(--color-surface-high);
   border-color: var(--color-border);
   opacity: 0.5;

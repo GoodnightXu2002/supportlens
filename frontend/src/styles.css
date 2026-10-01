@@ -1,15 +1,17 @@
 :root {
-  --color-background: #f7f9fb;
-  --color-surface: #ffffff;
-  --color-surface-low: #f2f4f6;
-  --color-surface-subtle: #f1f5f9;
-  --color-surface-high: #e6e8ea;
-  --color-text: #191c1e;
-  --color-text-secondary: #515f74;
-  --color-text-prose: #334155;
-  --color-border: #e2e8f0;
-  --color-outline: #c6c6cd;
-  --color-primary: #000000;
+  /* 暖纸中性主题：宣纸底 + 墨色文字，状态语义色保持不变 */
+  --color-background: #f7f4ee;
+  --color-surface: #fdfcf9;
+  --color-surface-low: #f3f0e8;
+  --color-surface-subtle: #f0ede4;
+  --color-surface-high: #e6e2d6;
+  --color-text: #23211c;
+  --color-text-secondary: #5d574b;
+  --color-text-prose: #3b372e;
+  --color-border: #e3ded1;
+  --color-border-strong: #d6cfbe;
+  --color-outline: #c8c2b2;
+  --color-primary: #1e1c17;
   --color-status-critical: #b91c1c;
   --color-status-warning: #b45309;
   --color-status-success: #15803d;
@@ -17,6 +19,7 @@
 
   --font-heading: "IBM Plex Sans", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   --font-body: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-brand: Georgia, "Times New Roman", "Songti SC", SimSun, serif;
   --font-code: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 
   --sidebar-width: 240px;
@@ -31,7 +34,7 @@
   --radius-sm: 2px;
   --radius-control: 4px;
   --radius-surface: 4px;
-  --shadow-overlay: 0 12px 32px rgb(15 23 42 / 10%);
+  --shadow-overlay: 0 12px 32px rgb(58 50 34 / 12%);
 
   font-family: var(--font-body);
   color: var(--color-text);
@@ -112,11 +115,11 @@ textarea {
 }
 
 .brand-name {
-  font-family: var(--font-heading);
+  font-family: var(--font-brand);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 24px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
 }
 
 .sidebar-navigation {
@@ -238,9 +241,9 @@ textarea {
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  color: #45464d;
+  color: var(--color-text-prose);
   background: var(--color-surface);
-  border: 1px solid #d8e0ea;
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-control);
   font-family: var(--font-heading);
   font-size: 13px;
@@ -384,8 +387,8 @@ h1 {
 }
 
 ::selection {
-  color: var(--color-primary);
-  background: #d5e3fd;
+  color: var(--color-text);
+  background: #eae1ce;
 }
 
 ::-webkit-scrollbar {

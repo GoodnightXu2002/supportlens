@@ -260,7 +260,7 @@
 }
 
 .s01-details-grid strong {
-  color: #45464d;
+  color: var(--color-text-prose);
   font-weight: 500;
 }
 
