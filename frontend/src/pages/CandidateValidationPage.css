@@ -82,28 +82,15 @@
   min-width: 0;
   align-items: flex-start;
   gap: 16px;
-  padding: 20px;
+  padding: 0;
 }
 
 .s05-outcome-card:first-child {
   border-right: 1px solid var(--color-border);
 }
 
-.s05-outcome-icon {
-  width: 24px;
-  height: 24px;
-  margin-top: 1px;
-  flex: 0 0 auto;
-  color: var(--color-status-success);
-}
 
-.s05-outcome-icon--warning {
-  color: var(--color-status-warning);
-}
 
-.s05-outcome-icon--critical {
-  color: var(--color-status-critical);
-}
 
 .s05-outcome-card > div {
   min-width: 0;
@@ -233,11 +220,12 @@
 
 .s05-regression-grid dd {
   margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-heading);
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 20px;
-  white-space: nowrap;
 }
 
 .s05-minor-regression dd {
@@ -317,10 +305,72 @@
   background: var(--color-surface-subtle);
 }
 
+.s05-case-tab--improved {
+  color: var(--color-status-success);
+  border-color: rgb(21 128 61 / 35%);
+}
+
+.s05-case-tab--regressed {
+  color: var(--color-status-critical);
+  border-color: rgb(185 28 28 / 35%);
+}
+
 .s05-case-tab--active {
   color: var(--color-surface);
   background: var(--color-primary);
   border-color: var(--color-primary);
+}
+
+.s05-judge {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.s05-judge__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.s05-judge__meta span {
+  color: var(--color-text-secondary);
+}
+
+.s05-judge__meta strong {
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+.s05-judge__verdict--failure,
+.s05-judge__verdict--warning {
+  color: var(--color-status-critical);
+}
+
+.s05-judge__verdict--success {
+  color: var(--color-status-success);
+}
+
+.s05-judge__problem {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--color-text-prose);
+  background: var(--color-surface-low);
+  border-left: 2px solid var(--color-border-strong);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.s05-judge__rationale {
+  margin: 0;
+  color: var(--color-text-prose);
+  font-size: 12px;
+  line-height: 19px;
 }
 
 .s05-comparison {
@@ -411,29 +461,8 @@
   gap: 16px;
 }
 
-.s05-node__icon {
-  display: flex;
-  width: 24px;
-  height: 24px;
-  margin-top: 2px;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  color: var(--color-text-secondary);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-}
 
-.s05-node--candidate .s05-node__icon {
-  color: var(--color-status-info);
-  border-color: var(--color-status-info);
-}
 
-.s05-node__icon svg {
-  width: 14px;
-  height: 14px;
-}
 
 .s05-node__content {
   min-width: 0;
@@ -1015,16 +1044,6 @@
   font-style: italic;
 }
 
-.s05-claim-boundary {
-  display: flex;
-  padding: 14px 24px 42px;
-  flex-direction: column;
-  gap: 3px;
-  color: var(--color-text-secondary);
-  background: rgb(240 236 226 / 50%);
-  font-size: 12px;
-  line-height: 18px;
-}
 
 .s05-claim-boundary strong {
   color: var(--color-text);
@@ -1144,21 +1163,6 @@
   height: 18px;
 }
 
-.s05-analyst-dock {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  z-index: 60;
-  display: flex;
-  width: var(--sidebar-width);
-  height: 64px;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  border-right: 1px solid var(--color-border);
-}
 
 .s05-analyst-dock img {
   width: 32px;
