@@ -292,7 +292,12 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
                 <li className="s04-pair-row" key={problem.problem_id}>
                   <header className="s04-pair-meta">
                     <span className="s04-pair-num">{String(index + 1).padStart(2, '0')}</span>
-                    <span className="s04-pair-scenario">{scenarioLabel(problem.scenario)} · 严重度 {problem.priority_severity ? severityLabels[problem.priority_severity] : '待补充'}</span>
+                    <span className="s04-pair-scenario">{scenarioLabel(problem.scenario)}</span>
+                    {problem.priority_severity ? (
+                      <span className={`s04-severity s04-severity--${problem.priority_severity}`}>严重度 {severityLabels[problem.priority_severity]}</span>
+                    ) : (
+                      <span className="s04-severity">严重度 待补充</span>
+                    )}
                     <span className="s04-pair-pid" title={problem.problem_id}>P-{shortId(problem.problem_id)}</span>
                   </header>
                   <div className="s04-pair-block">
