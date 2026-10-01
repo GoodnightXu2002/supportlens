@@ -263,14 +263,12 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
 
       <div className="s04-plan-scroll">
         <section className="s04-scope" aria-label="验证范围">
-          <dl className="s04-scope-stats">
-            <div><dt>目标案例</dt><dd>{targetCaseCount}</dd><dd className="s04-scope-desc">所选问题涉及的核心案例去重并集</dd></div>
-            <div><dt>回归案例</dt><dd>{regressionCaseCount}</dd><dd className="s04-scope-desc">其余核心案例，用于检查现有表现</dd></div>
-            <div><dt>挑战案例</dt><dd>{challengeCaseCount}</dd><dd className="s04-scope-desc">数据集中的全部挑战案例</dd></div>
-          </dl>
-          <div className="s04-criteria">
-            <div><span>纳入标准</span><p>{form.inclusionCriteria}</p></div>
-            <div><span>排除标准</span><p>{form.exclusionCriteria}</p></div>
+          <div className="s04-scope-line">
+            <div className="s04-scope-stat"><span className="s04-scope-label">目标案例</span><strong>{targetCaseCount}</strong></div>
+            <div className="s04-scope-stat"><span className="s04-scope-label">回归案例</span><strong>{regressionCaseCount}</strong></div>
+            <div className="s04-scope-stat"><span className="s04-scope-label">挑战案例</span><strong>{challengeCaseCount}</strong></div>
+            <p className="s04-scope-criteria" title={form.inclusionCriteria}><span>纳入</span>{form.inclusionCriteria}</p>
+            <p className="s04-scope-criteria" title={form.exclusionCriteria}><span>排除</span>{form.exclusionCriteria}</p>
           </div>
           {missingCases && <p className="s04-alert" role="alert">所选问题缺少目标案例。</p>}
         </section>
