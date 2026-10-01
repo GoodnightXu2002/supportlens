@@ -484,12 +484,7 @@
   display: grid;
   margin-top: 20px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 32px;
-}
-
-.s05-version-column--candidate {
-  padding-left: 32px;
-  border-left: 1px dashed var(--color-border);
+  gap: 48px;
 }
 
 .s05-version-column {
