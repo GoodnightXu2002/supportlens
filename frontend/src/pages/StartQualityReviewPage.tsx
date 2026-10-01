@@ -3,8 +3,6 @@ import {
   MdCheckCircleOutline,
   MdOpenInNew,
   MdPlayArrow,
-  MdSmartToy,
-  MdTune,
 } from 'react-icons/md'
 import { PiDatabase } from 'react-icons/pi'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -33,7 +31,6 @@ import {
   evidenceTypeLabel,
   failureModeLabel,
   privacyStatusLabel,
-  runSourceLabel,
   runStatusLabel,
   scenarioLabel,
 } from '../displayLabels'
@@ -310,13 +307,6 @@ function StartQualityReviewPage() {
         }
   }
   const runError = run?.error_message ?? message
-  const readinessGates = [
-    { label: '数据集', status: dataset ? '通过' : '不可用', pass: Boolean(dataset) },
-    { label: '案例', status: `${dataset?.conversation_count ?? 0} 个案例`, pass: false },
-    { label: '来源', status: datasetSourceLabel(dataset?.source), pass: false },
-    { label: '隐私', status: privacyStatusLabel(dataset?.privacy_status), pass: false },
-    { label: '版本', status: dataset?.version ?? '—', pass: false },
-  ]
 
   function selectDataset(datasetId: string) {
     setSelectedDatasetId(datasetId)
@@ -436,8 +426,8 @@ function StartQualityReviewPage() {
 
   return (
     <section className="s01-page" aria-label="开始质量复盘">
-      <div className="s01-workspace">
-        <div className="s01-workspace-content">
+      <div className="s01-layout">
+        <div className="s01-main">
           <div className={`s01-ready-banner s01-ready-banner--${pendingReviewResults.length ? 'review' : reviewLoading && run?.status === 'completed' ? 'loading' : pageStatus}`} role="status">
             <MdCheckCircleOutline aria-hidden="true" />
             <div className="s01-ready-copy">
@@ -446,9 +436,36 @@ function StartQualityReviewPage() {
             </div>
           </div>
 
-          <section className="s01-context" aria-labelledby="s01-context-title">
-            <div className="s01-section-heading"><h2 id="s01-context-title">评测上下文</h2></div>
+          <section className="s01-history" aria-labelledby="s01-history-title">
+            <div className="s01-history-heading">
+              <h2 id="s01-history-title">已完成复盘</h2>
+              <code>{historyLoading ? '读取中' : `${historyRuns.length} 条运行`}</code>
+            </div>
+            {historyLoading ? <p className="s01-history-state" role="status">正在读取历史基线运行…</p> : null}
+            {!historyLoading && historyError ? <p className="s01-history-state s01-history-state--error" role="alert">{historyError}</p> : null}
+            {!historyLoading && !historyError && historyRuns.length === 0 ? <p className="s01-history-state">当前数据集暂无已完成复盘，可在右侧启动第一次评测。</p> : null}
+            {!historyLoading && !historyError && historyRuns.length > 0 ? (
+              <div className="s01-history-list">
+                {historyRuns.map((historyRun) => (
+                  <article className="s01-history-run" key={historyRun.id}>
+                    <div className="s01-history-run__top">
+                      <code title={historyRun.id}>{historyRun.id.slice(0, 8).toUpperCase()}</code>
+                      <strong>{runStatusLabel(historyRun.status)}</strong>
+                      <time dateTime={historyRun.created_at}>{formatRunDate(historyRun.created_at)}</time>
+                    </div>
+                    <div className="s01-history-run__meta">
+                      <code>{historyRun.judge_model || '判定模型 —'}</code>
+                      <Link className="s01-text-action s01-text-action--info" to={`/baseline?run_id=${encodeURIComponent(historyRun.id)}`}>
+                        查看结果<MdOpenInNew aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
 
+          <section className="s01-context" aria-label="评测数据集">
             <article className="s01-context-row">
               <div className="s01-context-icon" aria-hidden="true"><PiDatabase /></div>
               <div className="s01-context-content">
@@ -492,53 +509,6 @@ function StartQualityReviewPage() {
                 </div>
               </div>
             </article>
-
-            <article className="s01-context-row">
-              <div className="s01-context-icon" aria-hidden="true"><MdSmartToy /></div>
-              <div className="s01-context-content">
-                <div className="s01-context-topline">
-                  <div>
-                    <h3>基线运行</h3>
-                    <code className="s01-code-chip">{run?.id ?? '启动时创建真实评测运行'}</code>
-                  </div>
-                </div>
-                <div className="s01-details-grid">
-                  <p><strong>回答集:</strong> <code className="s01-inline-code">{run?.response_set_key ?? '所选数据集会话'}</code></p>
-                  <p className="s01-status-line"><strong>状态:</strong><code className={`s01-status-chip s01-status-chip--${pageStatus}`}>{statusCopy[pageStatus].label}</code></p>
-                </div>
-              </div>
-            </article>
-
-            <article className="s01-context-row">
-              <div className="s01-context-icon" aria-hidden="true"><MdTune /></div>
-              <div className="s01-context-content">
-                <div className="s01-context-topline">
-                  <div>
-                    <h3>评测配置</h3>
-                    <code className="s01-code-chip">{run?.judge_contract_version ?? '启动时由后端固化'}</code>
-                  </div>
-                </div>
-                <div className="s01-details-grid s01-details-grid--config">
-                  <p><strong>判定模型:</strong> <code className="s01-inline-code">{run?.judge_model ?? '—'}</code></p>
-                  <p><strong>运行来源:</strong> <code className="s01-inline-code">{runSourceLabel(run?.run_source)}</code></p>
-                </div>
-              </div>
-            </article>
-          </section>
-
-          <section className="s01-gates" aria-labelledby="s01-gates-title">
-            <div className="s01-gates-heading">
-              <h2 id="s01-gates-title">就绪门槛</h2>
-              <code>{dataset && dataset.conversation_count > 0 ? '2 / 2 通过' : '未就绪'}</code>
-            </div>
-            <div className="s01-gates-grid">
-              {readinessGates.map((gate) => (
-                <div className="s01-gate" key={gate.label}>
-                  <span>{gate.label}</span>
-                  <code className={gate.pass ? 's01-gate-chip s01-gate-chip--pass' : 's01-gate-chip'}>{gate.status}</code>
-                </div>
-              ))}
-            </div>
           </section>
 
           {run?.status === 'completed' && (reviewLoading || currentReviewData) ? (
@@ -596,47 +566,42 @@ function StartQualityReviewPage() {
               ) : null}
             </section>
           ) : null}
-
-          <section className="s01-gates s01-history" aria-labelledby="s01-history-title">
-            <div className="s01-gates-heading">
-              <h2 id="s01-history-title">已完成复盘</h2>
-              <code>{historyLoading ? '读取中' : `${historyRuns.length} 条运行`}</code>
-            </div>
-            {historyLoading ? <p className="s01-history-state" role="status">正在读取历史基线运行…</p> : null}
-            {!historyLoading && historyError ? <p className="s01-history-state s01-history-state--error" role="alert">{historyError}</p> : null}
-            {!historyLoading && !historyError && historyRuns.length === 0 ? <p className="s01-history-state">当前数据集暂无已完成复盘。</p> : null}
-            {!historyLoading && !historyError && historyRuns.length > 0 ? (
-              <div className="s01-history-list">
-                {historyRuns.map((historyRun) => (
-                  <article className="s01-history-run" key={historyRun.id}>
-                    <div><span>运行 ID</span><code>{historyRun.id}</code></div>
-                    <div><span>状态</span><strong>{runStatusLabel(historyRun.status)}</strong></div>
-                    <div><span>创建时间</span><time dateTime={historyRun.created_at}>{formatRunDate(historyRun.created_at)}</time></div>
-                    <div><span>判定模型</span><code>{historyRun.judge_model || '—'}</code></div>
-                    <Link className="s01-text-action s01-text-action--info" to={`/baseline?run_id=${encodeURIComponent(historyRun.id)}`}>
-                      查看结果<MdOpenInNew aria-hidden="true" />
-                    </Link>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
         </div>
+
+        <aside className="s01-side" aria-label="启动新评测">
+          <div className="s01-side-card">
+            <h2>启动新评测</h2>
+            <p className="s01-side-dataset" title={dataset ? `${dataset.name} ${dataset.version}` : undefined}>
+              {dataset ? `${dataset.name} ${dataset.version}` : '未选择数据集'}
+            </p>
+            <dl className="s01-side-summary">
+              <div><dt>案例</dt><dd>{dataset ? `${dataset.conversation_count} 个` : '—'}</dd></div>
+              <div><dt>场景</dt><dd>{dataset ? formatScenarioDistribution(dataset.scenario_distribution) : '—'}</dd></div>
+              <div><dt>数据</dt><dd>{dataset ? `${privacyStatusLabel(dataset.privacy_status)} · ${datasetSourceLabel(dataset.source)}` : '—'}</dd></div>
+              <div><dt>快照</dt><dd><code className="s01-inline-code" title={dataset?.dataset_id ?? undefined}>{dataset?.dataset_id ? `${dataset.dataset_id.slice(0, 8)}…` : '—'}</code></dd></div>
+            </dl>
+            <ul className="s01-side-gates">
+              <li className={dataset ? 's01-side-gate s01-side-gate--pass' : 's01-side-gate'}>{dataset ? '✓' : '○'} 数据集已加载</li>
+              <li className={dataset && dataset.conversation_count > 0 ? 's01-side-gate s01-side-gate--pass' : 's01-side-gate'}>{dataset && dataset.conversation_count > 0 ? '✓' : '○'} 案例数大于 0</li>
+            </ul>
+            <button
+              className="s01-primary-action s01-primary-action--full"
+              type="button"
+              disabled={!canStart}
+              onClick={() => void startBaseline()}
+            >
+              {pendingReviewResults.length > 0
+                ? '完成待处理复核后继续'
+                : working || pageStatus === 'running'
+                  ? '评测运行中'
+                  : actionLabel}<MdPlayArrow aria-hidden="true" />
+            </button>
+            <p className="s01-side-note">
+              {run ? `运行 ${run.id.slice(0, 8).toUpperCase()} · ` : ''}回答集：所选数据集会话。判定模型与运行来源在启动时由后端固化；评测完成后进入基线分析。
+            </p>
+          </div>
+        </aside>
       </div>
-
-      <footer className="s01-action-rail">
-        <div className="s01-action-copy">
-          <span>状态: {currentStatus.label}</span>
-          <span>{run ? `运行 ID: ${run.id}` : '启动后生成真实运行 ID；完成后进入基线分析。'}</span>
-        </div>
-        <button className="s01-primary-action" type="button" disabled={!canStart} onClick={() => void startBaseline()}>
-          {pendingReviewResults.length > 0
-            ? '完成待处理复核后继续'
-            : working || pageStatus === 'running'
-              ? '评测运行中'
-              : actionLabel}<MdPlayArrow aria-hidden="true" />
-        </button>
-      </footer>
     </section>
   )
 }
