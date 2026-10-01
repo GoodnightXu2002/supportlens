@@ -160,15 +160,7 @@
   line-height: 20px;
 }
 
-.s05-outcome-card dl,
-.s05-human-decision dl {
-  margin: 0;
-}
-
-
-
-.s05-human-decision dt,
-.s05-human-decision dd {
+.s05-outcome-card dl {
   margin: 0;
 }
 
@@ -529,75 +521,8 @@
   border-top: 1px dashed var(--color-border);
 }
 
-.s05-decision {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-bottom: 1px solid var(--color-border);
-}
-
-.s05-recommendation,
-.s05-human-decision {
-  min-width: 0;
-  padding: 24px;
-}
-
-.s05-recommendation {
-  border-right: 1px solid var(--color-border);
-}
-
-.s05-recommendation h2 {
-  margin: 8px 0 12px;
-  font-family: var(--font-heading);
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 32px;
-}
-
-.s05-recommendation__gates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-  margin: 14px 0 0;
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.s05-recommendation__gates span {
-  color: var(--color-text-secondary);
-}
-
-.s05-recommendation__gates strong {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.s05-recommendation__blockers {
-  display: flex;
-  margin: 18px 0 0;
-  align-items: center;
-  gap: 8px;
-  padding-top: 10px;
-  color: var(--color-text-secondary);
-  border-top: 1px solid var(--color-border);
-  font-size: 13px;
-  font-style: italic;
-  line-height: 20px;
-}
-
-.s05-human-decision {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.s05-human-decision > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .s05-override-toggle {
-  align-self: flex-start;
+  flex: 0 0 auto;
   padding: 0;
   color: var(--color-text-secondary);
   background: none;
@@ -611,36 +536,30 @@
   color: var(--color-text);
 }
 
-.s05-human-decision > header > div {
+.s05-action-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--color-text-secondary);
-  font-size: 13px;
-  opacity: 0.55;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
-.s05-human-decision img {
-  width: 20px;
-  height: 20px;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-.s05-human-decision textarea {
-  width: 100%;
-  height: 96px;
-  padding: 12px;
+.s05-action-field input {
+  width: 120px;
+  min-height: 30px;
+  padding: 4px 10px;
   color: var(--color-text);
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  font-size: 13px;
-  line-height: 20px;
-  resize: none;
+  font: 12px/18px var(--font-body);
 }
 
-.s05-human-decision label,
+.s05-action-field--reason input {
+  width: 200px;
+}
+
 .s05-submit label {
   display: flex;
   flex-direction: column;
@@ -653,7 +572,6 @@
   text-transform: uppercase;
 }
 
-.s05-human-decision input,
 .s05-submit input,
 .s05-submit textarea {
   width: 100%;
@@ -894,49 +812,6 @@
   color: var(--color-status-warning);
 }
 
-.s05-human-decision textarea:focus {
-  border-color: var(--color-outline);
-  outline: 2px solid rgb(29 78 216 / 12%);
-}
-
-.s05-human-decision textarea::placeholder {
-  color: var(--color-text-secondary);
-}
-
-.s05-human-decision dl {
-  display: grid;
-  margin-top: 2px;
-  padding-top: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  border-top: 1px solid var(--color-border);
-}
-
-.s05-human-decision dl > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.s05-human-decision dt {
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 15px;
-  text-transform: uppercase;
-}
-
-.s05-human-decision dd {
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.s05-human-decision dl > div:last-child dd {
-  color: var(--color-text-secondary);
-  font-style: italic;
-}
-
-
 .s05-claim-boundary strong {
   color: var(--color-text);
 }
@@ -961,10 +836,15 @@
 
 .s05-action-area {
   display: flex;
-  width: 268px;
+  flex: 0 1 auto;
   justify-content: flex-end;
   flex-wrap: nowrap;
-  gap: 16px;
+  gap: 12px;
+}
+
+.s05-action-error {
+  color: var(--color-status-critical);
+  font-style: normal;
 }
 
 .s05-action-area > button {
@@ -1076,13 +956,11 @@
 }
 
 @media (max-width: 1180px) {
-  .s05-outcomes,
-  .s05-decision {
+  .s05-outcomes {
     grid-template-columns: 1fr;
   }
 
-  .s05-outcome-card:first-child,
-  .s05-recommendation {
+  .s05-outcome-card:first-child {
     border-right: 0;
     border-bottom: 1px solid var(--color-border);
   }

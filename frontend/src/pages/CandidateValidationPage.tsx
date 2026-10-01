@@ -459,18 +459,11 @@ function CandidateWorkspace({
           <p className="s05-detail-note">回归指候选版本把基线原本答对的案例改错。</p>
         </section>
 
-        {candidateRun.final_decision ? (
-          <div className="s05-decision-line" role="status">
-            <span>机器建议 <strong>{statusText(summary.recommended_verdict)}</strong></span>
-            <span>完整性 <strong>{statusText(summary.integrity_gate)}</strong> · 兼容性 <strong>{statusText(summary.compatibility_gate)}</strong></span>
-            {summary.blockers.length ? <span>阻断项：{summary.blockers.map(blockerLabel).join('、')}</span> : null}
-          </div>
-        ) : (
-          <section className="s05-decision" aria-label="候选版本决策">
-            <article className="s05-recommendation"><span className="s05-eyebrow">系统建议</span><h2>{statusText(summary.recommended_verdict)}</h2><p className="s05-recommendation__gates"><span>目标结果 <strong>{statusText(summary.target_outcome)}</strong></span><span>完整性 <strong>{statusText(summary.integrity_gate)}</strong></span><span>兼容性 <strong>{statusText(summary.compatibility_gate)}</strong></span></p><p className="s05-recommendation__blockers">{summary.blockers.length ? `阻断项：${summary.blockers.map(blockerLabel).join('、')}` : '所有机器阻断项已通过；等待人工决策。'}</p></article>
-            <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span></header><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><button className="s05-override-toggle" type="button" onClick={() => setShowOverride((value) => !value)} disabled={decisionBusy}>{showOverride ? '▾ 改判理由（与机器建议不一致时必填）' : '▸ 改判理由（与机器建议不一致时必填）'}</button>{showOverride && <textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填 override_reason。" disabled={decisionBusy} />}{decisionError && <p className="s05-form-error">{decisionError}</p>}</article>
-          </section>
-        )}
+        <div className="s05-decision-line" role="status">
+          <span>目标结果 <strong>{statusText(summary.target_outcome)}</strong></span>
+          <span>完整性 <strong>{statusText(summary.integrity_gate)}</strong> · 兼容性 <strong>{statusText(summary.compatibility_gate)}</strong></span>
+          {summary.blockers.length ? <span>阻断项：{summary.blockers.map(blockerLabel).join('、')}</span> : null}
+        </div>
 
         <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={[
                   's05-case-tab',
@@ -511,7 +504,9 @@ function CandidateWorkspace({
       </div>
 
       <footer className="s05-action-rail">
-        <em title={target.plan_hash ?? undefined}>PLAN V{target.version} · {target.plan_hash ? `${target.plan_hash.slice(0, 8)}…` : '—'} · 结论仅适用于当前已冻结目标与数据集</em>
+        {decisionError
+          ? <em className="s05-action-error" role="alert">{decisionError}</em>
+          : <em title={target.plan_hash ?? undefined}>PLAN V{target.version} · {target.plan_hash ? `${target.plan_hash.slice(0, 8)}…` : '—'} · 结论仅适用于当前已冻结目标与数据集</em>}
         <div className="s05-action-area">
           {candidateRun.final_decision === 'continue' ? (
             <div className="s05-action-complete s05-action-complete--continue" role="status">
@@ -524,6 +519,12 @@ function CandidateWorkspace({
             </div>
           ) : (
             <>
+              <label className="s05-action-field"><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label>
+              <label className="s05-action-field s05-action-field--reason"><span>决策理由</span><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必填" disabled={decisionBusy} /></label>
+              <button className="s05-override-toggle" type="button" onClick={() => setShowOverride((value) => !value)} disabled={decisionBusy}>{showOverride ? '− 改判理由' : '+ 改判理由'}</button>
+              {showOverride && (
+                <label className="s05-action-field s05-action-field--reason"><span>改判理由</span><input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填" disabled={decisionBusy} /></label>
+              )}
               <button type="button" onClick={() => onDecision('continue', actor, reason, overrideReason)} disabled={decisionBusy || !actor.trim() || !reason.trim()}>继续迭代</button>
               <button type="button" onClick={() => onDecision('accept', actor, reason, overrideReason)} disabled={decisionBusy || summary.recommended_verdict !== 'ACCEPT' || !actor.trim() || !reason.trim()}><MdVerified aria-hidden="true" />接受候选版本</button>
             </>
