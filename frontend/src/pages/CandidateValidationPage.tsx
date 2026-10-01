@@ -400,6 +400,7 @@ function CandidateWorkspace({
   const [actor, setActor] = useState('')
   const [reason, setReason] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
+  const [showOverride, setShowOverride] = useState(false)
   const problemStatusLabels = {
     improved: '明确改善',
     partially_improved: '部分改善',
@@ -414,18 +415,6 @@ function CandidateWorkspace({
     target_id: target.id,
   }).toString()}`
   const pendingReviewCount = candidateResults.filter((item) => item.status === 'pending_review').length
-  const gates = [
-    ['目标结果', summary.target_outcome],
-    ['目标明确改善', `${summary.rule_outcomes.clear_improved_count}/${summary.rule_outcomes.target_case_count}`],
-    ['目标变差', String(summary.rule_outcomes.target_worse_count)],
-    ['严重回归', String(summary.regression_summary.critical)],
-    ['较大回退', String(summary.regression_summary.major)],
-    ['轻微回归', String(summary.regression_summary.minor)],
-    ['新系统性问题', String(summary.new_systematic_problems.length)],
-    ['待人工复核', String(pendingReviewCount)],
-    ['完整性', summary.integrity_gate],
-    ['兼容性', summary.compatibility_gate],
-  ]
 
   if (!selectedComparison || !conversation || !baselineResult || !candidateResult) {
     return <PageMessage title="案例追溯链不完整" detail="无法按案例对比 ID 关联当前目标案例。" />
@@ -467,9 +456,7 @@ function CandidateWorkspace({
           ) : (
             <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>
           )}
-          <p className="s05-detail-note">
-            另有轻微回退 {summary.regression_summary.minor}、新系统性问题 {summary.new_systematic_problems.length}、其他问题 {summary.other_problems.length}。回归指候选版本把基线原本答对的案例改错。
-          </p>
+          <p className="s05-detail-note">回归指候选版本把基线原本答对的案例改错。</p>
         </section>
 
         {candidateRun.final_decision ? (
@@ -480,8 +467,8 @@ function CandidateWorkspace({
           </div>
         ) : (
           <section className="s05-decision" aria-label="候选版本决策">
-            <article className="s05-recommendation"><span className="s05-eyebrow">系统建议 · {summary.policy_version}</span><h2>{statusText(summary.recommended_verdict)}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{statusText(value)}</dd></div>)}</dl><p>{summary.blockers.length ? `阻断项：${summary.blockers.map(blockerLabel).join('、')}` : '所有机器阻断项已通过；等待人工决策。'}</p></article>
-            <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span></header><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</article>
+            <article className="s05-recommendation"><span className="s05-eyebrow">系统建议</span><h2>{statusText(summary.recommended_verdict)}</h2><p className="s05-recommendation__gates"><span>目标结果 <strong>{statusText(summary.target_outcome)}</strong></span><span>完整性 <strong>{statusText(summary.integrity_gate)}</strong></span><span>兼容性 <strong>{statusText(summary.compatibility_gate)}</strong></span></p><p className="s05-recommendation__blockers">{summary.blockers.length ? `阻断项：${summary.blockers.map(blockerLabel).join('、')}` : '所有机器阻断项已通过；等待人工决策。'}</p></article>
+            <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span></header><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><button className="s05-override-toggle" type="button" onClick={() => setShowOverride((value) => !value)} disabled={decisionBusy}>{showOverride ? '▾ 改判理由（与机器建议不一致时必填）' : '▸ 改判理由（与机器建议不一致时必填）'}</button>{showOverride && <textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填 override_reason。" disabled={decisionBusy} />}{decisionError && <p className="s05-form-error">{decisionError}</p>}</article>
           </section>
         )}
 
