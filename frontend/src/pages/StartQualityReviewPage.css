@@ -14,8 +14,9 @@
 }
 
 .s01-side {
-  position: sticky;
-  top: 16px;
+  align-self: stretch;
+  padding-left: 20px;
+  border-left: 1px solid var(--color-border);
 }
 
 .s01-ready-banner {
@@ -697,11 +698,12 @@
 }
 
 .s01-side-card {
+  position: sticky;
+  top: 28px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 4px 0 4px 20px;
-  border-left: 2px solid var(--color-border-strong);
+  padding: 4px 0;
 }
 
 .s01-side-card h2 {
@@ -808,7 +810,8 @@
   }
 
   .s01-side {
-    position: static;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .s01-context-topline,
