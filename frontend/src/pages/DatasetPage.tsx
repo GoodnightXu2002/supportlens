@@ -480,7 +480,7 @@ function DatasetPage() {
         <section className="s02-metadata" aria-label="数据集基本信息">
           <div className="s02-metadata__item">
             <span>数据集 ID</span>
-            <code>{datasetDetail.dataset_id}</code>
+            <code title={datasetDetail.dataset_id}>{datasetDetail.dataset_id.slice(0, 8)}…</code>
           </div>
           <div className="s02-metadata__item s02-metadata__item--source">
             <span>来源</span>
@@ -520,17 +520,9 @@ function DatasetPage() {
                     )}
                   </div>
                 </div>
-                <div>
-                  <h3>案例集成员数量</h3>
-                  <p className="s02-unconfigured">未配置</p>
-                </div>
               </div>
 
               <div className="s02-overview__references">
-                <div>
-                  <h3>参考依据</h3>
-                  <p className="s02-unconfigured">未配置</p>
-                </div>
                 <div>
                   <h3>代表性声明</h3>
                   <p className="s02-representativeness">
@@ -613,7 +605,7 @@ function DatasetPage() {
             <span>结论仅适用于当前评测集，不代表生产发生率、统计显著性或业务收益。</span>
           </p>
         </div>
-        <Link to="/review">用于质量复盘</Link>
+        <Link to={`/review?dataset_id=${datasetDetail.dataset_id}`}>用这个数据集开始质量复盘</Link>
       </footer>
                     </>
                   )}
@@ -658,7 +650,7 @@ function DatasetPage() {
                   <h3>数据集已成功导入</h3>
                   <p>全部会话已完成原子写入，可以关闭窗口。</p>
                   <dl>
-                    <div><dt>数据集 ID</dt><dd><code>{importResult.dataset_id}</code></dd></div>
+                    <div><dt>数据集 ID</dt><dd><code title={importResult.dataset_id}>{importResult.dataset_id.slice(0, 8)}…</code></dd></div>
                     <div><dt>名称</dt><dd>{importResult.name}</dd></div>
                     <div><dt>版本</dt><dd><code>{importResult.version}</code></dd></div>
                     <div><dt>会话</dt><dd>{importResult.conversation_count}</dd></div>

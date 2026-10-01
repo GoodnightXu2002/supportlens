@@ -159,7 +159,7 @@ function AppShell() {
               <span className="route-header-title">数据集详情</span>
               <div className="dataset-header-actions">
                 <button className="dataset-header-action dataset-header-action--plain" type="button">
-                  <MdHistory aria-hidden="true" />查看历史不可变版本
+                  <MdHistory aria-hidden="true" />查看历史版本
                 </button>
                 <button
                   ref={datasetImportButtonRef}
