@@ -502,8 +502,9 @@
   grid-column: auto;
 }
 
-.s03-priority-grid__frequency {
-  white-space: nowrap;
+.s03-priority-grid__frequency dd {
+  white-space: normal;
+  line-height: 18px;
 }
 
 .s03-profile-detail,
