@@ -488,7 +488,7 @@ function StartQualityReviewPage() {
                   <p><strong>详情:</strong> {dataset ? `${dataset.conversation_count} 个案例` : '—'}</p>
                   <p><strong>场景分布:</strong> {dataset ? formatScenarioDistribution(dataset.scenario_distribution) : '—'}</p>
                   <p className="s01-details-wide"><strong>结论边界:</strong> {dataset?.representativeness_statement ?? '未提供'}</p>
-                  <p><strong>数据集快照:</strong> <code className="s01-inline-code">{dataset?.dataset_id ?? '—'}</code></p>
+                  <p><strong>数据集快照:</strong> <code className="s01-inline-code" title={dataset?.dataset_id ?? undefined}>{dataset?.dataset_id ? `${dataset.dataset_id.slice(0, 8)}…` : '—'}</code></p>
                 </div>
               </div>
             </article>
