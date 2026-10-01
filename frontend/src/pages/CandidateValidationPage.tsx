@@ -239,6 +239,15 @@ function statusText(value: unknown) {
   return statusTextLabels[text] ?? text
 }
 
+const CASE_FILTERS = [
+  ['all', '全部'],
+  ['improved', '明确改善'],
+  ['regressed', '变差'],
+  ['inconclusive', '无法得出结论'],
+] as const
+
+type CaseFilter = (typeof CASE_FILTERS)[number][0]
+
 function PageMessage({ title, detail }: { title: string; detail: string }) {
   return (
     <section className="s05-page s05-page-message" role="status">
@@ -401,6 +410,8 @@ function CandidateWorkspace({
   const [reason, setReason] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
   const [showOverride, setShowOverride] = useState(false)
+  const [caseFilter, setCaseFilter] = useState<CaseFilter>('all')
+  const filteredComparisons = caseFilter === 'all' ? orderedComparisons : orderedComparisons.filter((item) => item.movement === caseFilter)
   const problemStatusLabels = {
     improved: '明确改善',
     partially_improved: '部分改善',
@@ -465,12 +476,49 @@ function CandidateWorkspace({
           {summary.blockers.length ? <span>阻断项：{summary.blockers.map(blockerLabel).join('、')}</span> : null}
         </div>
 
-        <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={[
-                  's05-case-tab',
-                  item.case_id === selectedComparison.case_id ? 's05-case-tab--active' : '',
-                  item.movement === 'improved' ? 's05-case-tab--improved' : '',
-                  item.movement === 'regressed' ? 's05-case-tab--regressed' : '',
-                ].filter(Boolean).join(' ')} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${statusText(item.movement)}${item.regression_level ? ` · ${statusText(item.regression_level)}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
+        <section className="s05-case-tabs" aria-label="评测案例选择">
+          <strong>评测案例（{orderedComparisons.length}）：</strong>
+          <div className="s05-case-filters" role="group" aria-label="按案例变化筛选">
+            {CASE_FILTERS.map(([value, label]) => {
+              const count = value === 'all' ? orderedComparisons.length : orderedComparisons.filter((item) => item.movement === value).length
+              return (
+                <button
+                  className={caseFilter === value ? 's05-case-filter s05-case-filter--active' : 's05-case-filter'}
+                  disabled={value !== 'all' && count === 0}
+                  key={value}
+                  type="button"
+                  aria-pressed={caseFilter === value}
+                  onClick={() => {
+                    setCaseFilter(value)
+                    const next = value === 'all' ? orderedComparisons : orderedComparisons.filter((item) => item.movement === value)
+                    if (next.length && !next.some((item) => item.case_id === selectedCaseId)) onSelectCase(next[0].case_id)
+                  }}
+                >
+                  {label}
+                  <small>{count}</small>
+                </button>
+              )
+            })}
+          </div>
+          <div
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+              const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'))
+              const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+              if (index === -1) return
+              event.preventDefault()
+              const next = event.key === 'ArrowRight' ? Math.min(index + 1, buttons.length - 1) : Math.max(index - 1, 0)
+              buttons[next]?.focus()
+            }}
+          >
+            {filteredComparisons.map((item) => <button className={[
+                      's05-case-tab',
+                      item.case_id === selectedComparison.case_id ? 's05-case-tab--active' : '',
+                      item.movement === 'improved' ? 's05-case-tab--improved' : '',
+                      item.movement === 'regressed' ? 's05-case-tab--regressed' : '',
+                    ].filter(Boolean).join(' ')} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${statusText(item.movement)}${item.regression_level ? ` · ${statusText(item.regression_level)}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}
+          </div>
+        </section>
 
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
           <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2></header>
@@ -506,16 +554,18 @@ function CandidateWorkspace({
       <footer className="s05-action-rail">
         {decisionError
           ? <em className="s05-action-error" role="alert">{decisionError}</em>
-          : <em title={target.plan_hash ?? undefined}>PLAN V{target.version} · {target.plan_hash ? `${target.plan_hash.slice(0, 8)}…` : '—'} · 结论仅适用于当前已冻结目标与数据集</em>}
+          : <em title={target.plan_hash ?? undefined}>PLAN V{target.version} · {target.plan_hash ? `${target.plan_hash.slice(0, 8)}…` : '—'} · 基于已冻结目标与数据集</em>}
         <div className="s05-action-area">
           {candidateRun.final_decision === 'continue' ? (
             <div className="s05-action-complete s05-action-complete--continue" role="status">
               <strong>当前候选版本不采纳</strong>
+              {candidateRun.decided_by ? <span>{candidateRun.decided_by} · {formatDate(candidateRun.decided_at)}</span> : null}
               <Link to={targetPlanHref}>返回上一步</Link>
             </div>
           ) : candidateRun.final_decision === 'accept' ? (
             <div className="s05-action-complete s05-action-complete--accept" role="status">
               <strong>候选版本已接受</strong>
+              {candidateRun.decided_by ? <span>{candidateRun.decided_by} · {formatDate(candidateRun.decided_at)}</span> : null}
             </div>
           ) : (
             <>
