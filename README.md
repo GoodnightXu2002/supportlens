@@ -72,19 +72,19 @@ Dataset Import
 
 数据集导入与管理
 
-![数据集导入与管理](docs/images/supportlens-s02-dataset.png)
+![数据集导入与管理](docs/images/supportlens-s02-dataset.png?v=20261002)
 
 问题级诊断与证据追溯
 
-![问题级诊断与证据追溯](docs/images/supportlens-s03-problem-evidence.png)
+![问题级诊断与证据追溯](docs/images/supportlens-s03-problem-evidence.png?v=20261002)
 
 自动优化建议与目标冻结
 
-![自动优化建议与目标冻结](docs/images/supportlens-s04-optimization-plan.png)
+![自动优化建议与目标冻结](docs/images/supportlens-s04-optimization-plan.png?v=20261002)
 
 候选版本验证与回归检查
 
-![候选版本验证与回归检查](docs/images/supportlens-s05-candidate-validation.png)
+![候选版本验证与回归检查](docs/images/supportlens-s05-candidate-validation.png?v=20261002)
 
 ## 技术栈
 
