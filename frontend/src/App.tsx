@@ -1,9 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import AppShell from './components/AppShell'
 import BaselineAnalysisPage from './pages/BaselineAnalysisPage'
 import CandidateValidationPage from './pages/CandidateValidationPage'
 import DatasetPage from './pages/DatasetPage'
+import LandingPage from './pages/LandingPage'
 import StartQualityReviewPage from './pages/StartQualityReviewPage'
 import TargetPlanPage from './pages/TargetPlanPage'
 
@@ -11,8 +12,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route element={<AppShell />}>
-          <Route index element={<Navigate to="/review" replace />} />
           <Route path="review" element={<StartQualityReviewPage />} />
           <Route path="dataset" element={<DatasetPage />} />
           <Route path="baseline" element={<BaselineAnalysisPage />} />

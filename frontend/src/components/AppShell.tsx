@@ -82,7 +82,7 @@ function AppShell() {
       <aside className="app-sidebar">
         <Link
           className="brand"
-          to="/review"
+          to="/"
           aria-label="SupportLens 首页"
           onClick={() => setDatasetImportOpen(false)}
         >

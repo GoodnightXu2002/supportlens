@@ -1,0 +1,374 @@
+.lp-page {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+.lp-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding: 0 40px;
+  background: rgb(253 252 249 / 88%);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(10px);
+}
+
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.lp-brand-mark {
+  display: block;
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.lp-brand span {
+  font-family: var(--font-brand);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.lp-header-cta {
+  padding: 7px 16px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.lp-header-cta:hover {
+  background: var(--color-surface-low);
+}
+
+.lp-main {
+  display: flex;
+  width: 100%;
+  max-width: 960px;
+  flex: 1 0 auto;
+  flex-direction: column;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+.lp-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 96px 0 72px;
+  text-align: center;
+}
+
+.lp-kicker {
+  margin: 0 0 20px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+}
+
+.lp-hero-title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+
+.lp-hero-sub {
+  max-width: 640px;
+  margin: 24px 0 0;
+  color: var(--color-text-prose);
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+.lp-hero-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 36px;
+}
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 24px;
+  border-radius: var(--radius-control);
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.lp-btn--primary {
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.lp-btn--primary:hover {
+  background: #33302a;
+}
+
+.lp-btn--ghost {
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+}
+
+.lp-btn--ghost:hover {
+  background: var(--color-surface-low);
+}
+
+.lp-hero-note {
+  margin: 20px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.lp-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 40px 0 56px;
+  border-top: 1px solid var(--color-border);
+}
+
+.lp-step {
+  padding: 20px 20px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+}
+
+.lp-step-id {
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.lp-step h2 {
+  margin: 10px 0 8px;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.lp-step p {
+  margin: 0;
+  color: var(--color-text-prose);
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+.lp-sample {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 0 88px;
+  border-top: 1px solid var(--color-border);
+}
+
+.lp-section-title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lp-section-sub {
+  margin: 10px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.lp-report {
+  width: 100%;
+  max-width: 720px;
+  margin-top: 32px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+  box-shadow: 0 1px 2px rgb(58 50 34 / 6%);
+}
+
+.lp-report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  color: var(--color-text-prose);
+  background: var(--color-surface-low);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-surface) var(--radius-surface) 0 0;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lp-report-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: var(--color-status-success);
+  border-radius: 50%;
+}
+
+.lp-report-run {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.lp-report-stats {
+  display: flex;
+  gap: 40px;
+  padding: 18px 20px 4px;
+}
+
+.lp-report-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lp-report-stats strong {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-report-stats span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.lp-report-problem {
+  padding: 16px 20px;
+}
+
+.lp-report-problem-title {
+  margin: 0 0 12px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lp-report-problem-title strong {
+  color: var(--color-status-critical);
+}
+
+.lp-report-problem blockquote {
+  display: flex;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 10px 14px;
+  background: var(--color-surface-low);
+  border-left: 2px solid var(--color-border-strong);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.lp-report-problem blockquote span {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.9;
+}
+
+.lp-report-verdict {
+  margin: 12px 0 0;
+  color: var(--color-text-prose);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.lp-report-suggest {
+  display: flex;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  border-top: 1px dashed var(--color-border-strong);
+}
+
+.lp-report-suggest span {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  color: var(--color-surface);
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.lp-report-suggest p {
+  margin: 0;
+  color: var(--color-text-prose);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.lp-footer {
+  flex: 0 0 auto;
+  padding: 24px 40px 32px;
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  text-align: center;
+}
+
+.lp-footer p {
+  margin: 4px 0;
+}
+
+.lp-footer a {
+  color: var(--color-text-prose);
+  text-decoration: none;
+}
+
+.lp-footer a:hover {
+  text-decoration: underline;
+}
