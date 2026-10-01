@@ -360,7 +360,6 @@ function CandidateWorkspace({
   const [reason, setReason] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
   const movements = ['improved', 'partially_improved', 'stable', 'regressed', 'inconclusive'] as const
-  const movementCounts = Object.fromEntries(movements.map((movement) => [movement, targetComparisons.filter((item) => item.movement === movement).length]))
   const problemStatusLabels = {
     improved: '明确改善',
     partially_improved: '部分改善',
@@ -405,15 +404,57 @@ function CandidateWorkspace({
             目标 {summary.rule_outcomes.target_case_count} 个问题中 {summary.rule_outcomes.clear_improved_count} 个明确改善、{summary.rule_outcomes.target_worse_count} 个变差；其余 {comparisons.length - targetComparisons.length} 个非目标案例出现 {summary.regression_summary.critical + summary.regression_summary.major} 处较大回退（其中严重 {summary.regression_summary.critical} 处）。{candidateRun.reason ? `决策理由：${candidateRun.reason}` : ''}
           </p>
         </div>
-        <section className="s05-outcomes" aria-label="目标与回归结果">
-          <article className="s05-outcome-card"><div><h2>目标问题逐个对照（{summary.problem_results.length || 1} 个）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : problem.status === 'improved' ? 's05-positive' : problem.status === 'inconclusive' ? 's05-neutral' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标高/严重问题</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
-          <article className="s05-outcome-card s05-regression-card"><div><h2>整体回归检查（{comparisons.length - targetComparisons.length} 个非目标案例）</h2><div className="s05-regression-grid"><dl><div><dt>严重回退</dt><dd className={summary.regression_summary.critical > 0 ? 's05-negative' : undefined}>{summary.regression_summary.critical}</dd></div><div><dt>较大回退</dt><dd className={summary.regression_summary.major > 0 ? 's05-negative' : undefined}>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>回归指候选版本把基线原本答对的案例改错；数字来自后端验证摘要。</p></div></article>
+        <div className="s05-metrics" role="list">
+          <div className="s05-metric" role="listitem"><strong>{summary.rule_outcomes.target_case_count}</strong><span>目标问题</span></div>
+          <div className="s05-metric" role="listitem"><strong className="s05-positive">{summary.rule_outcomes.clear_improved_count}</strong><span>明确改善</span></div>
+          <div className="s05-metric" role="listitem"><strong className={summary.rule_outcomes.target_worse_count > 0 ? 's05-negative' : undefined}>{summary.rule_outcomes.target_worse_count}</strong><span>目标变差</span></div>
+          <div className="s05-metric" role="listitem"><strong className={summary.regression_summary.major > 0 ? 's05-negative' : undefined}>{summary.regression_summary.major}</strong><span>较大回退</span></div>
+          <div className="s05-metric" role="listitem"><strong className={summary.regression_summary.critical > 0 ? 's05-negative' : undefined}>{summary.regression_summary.critical}</strong><span>严重回退</span></div>
+          <div className="s05-metric" role="listitem"><strong className={pendingReviewCount > 0 ? 's05-neutral' : undefined}>{pendingReviewCount}</strong><span>待人工复核</span></div>
+        </div>
+
+        <section className="s05-details" aria-label="目标对照与回归明细">
+          <div className="s05-detail-col">
+            <h2>目标问题逐个对照（{summary.problem_results.length || 1} 个）</h2>
+            {summary.problem_results.length ? (
+              <ul className="s05-problem-results">
+                {summary.problem_results.map((problem) => (
+                  <li key={problem.problem_id}>
+                    <span title={problem.definition}>{problem.definition}</span>
+                    <strong className={problem.status === 'regressed' ? 's05-negative' : problem.status === 'improved' ? 's05-positive' : problem.status === 'inconclusive' ? 's05-neutral' : undefined}>{problemStatusLabels[problem.status]}</strong>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>
+            )}
+          </div>
+          <div className="s05-detail-col">
+            <h2>整体回归检查（其余 {comparisons.length - targetComparisons.length} 个非目标案例）</h2>
+            <dl className="s05-regression-detail">
+              <div><dt>严重回退</dt><dd className={summary.regression_summary.critical > 0 ? 's05-negative' : undefined}>{summary.regression_summary.critical}</dd></div>
+              <div><dt>较大回退</dt><dd className={summary.regression_summary.major > 0 ? 's05-negative' : undefined}>{summary.regression_summary.major}</dd></div>
+              <div><dt>轻微回退</dt><dd>{summary.regression_summary.minor}</dd></div>
+              <div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div>
+              <div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div>
+            </dl>
+            <p className="s05-detail-note">回归指候选版本把基线原本答对的案例改错；数字来自后端验证摘要。</p>
+          </div>
         </section>
 
-        <section className="s05-decision" aria-label="候选版本决策">
-          <article className="s05-recommendation"><span className="s05-eyebrow">版本级 · 系统建议 · {summary.policy_version}</span><h2>{statusText(summary.recommended_verdict)}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{statusText(value)}</dd></div>)}</dl><p><span aria-hidden="true" />{summary.blockers.length ? `阻断项：${summary.blockers.map(blockerLabel).join('、')}` : '所有机器阻断项已通过；仍等待独立人工决策。'}</p></article>
-          <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span><div><span>{candidateRun.decided_by ?? '尚未决定'}</span></div></header>{candidateRun.final_decision ? <dl><div><dt>决策</dt><dd>{statusText(candidateRun.final_decision)}</dd></div><div><dt>决定时间</dt><dd>{formatDate(candidateRun.decided_at)}</dd></div><div><dt>理由</dt><dd>{candidateRun.reason}</dd></div><div><dt>改判理由</dt><dd>{candidateRun.override_reason ?? '未改判机器建议'}</dd></div></dl> : <><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</>}</article>
-        </section>
+        {candidateRun.final_decision ? (
+          <div className="s05-decision-line" role="status">
+            <span>机器建议 <strong>{statusText(summary.recommended_verdict)}</strong></span>
+            <span>完整性 <strong>{statusText(summary.integrity_gate)}</strong> · 兼容性 <strong>{statusText(summary.compatibility_gate)}</strong></span>
+            {summary.blockers.length ? <span>阻断项：{summary.blockers.map(blockerLabel).join('、')}</span> : null}
+          </div>
+        ) : (
+          <section className="s05-decision" aria-label="候选版本决策">
+            <article className="s05-recommendation"><span className="s05-eyebrow">系统建议 · {summary.policy_version}</span><h2>{statusText(summary.recommended_verdict)}</h2><dl>{gates.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{statusText(value)}</dd></div>)}</dl><p>{summary.blockers.length ? `阻断项：${summary.blockers.map(blockerLabel).join('、')}` : '所有机器阻断项已通过；等待人工决策。'}</p></article>
+            <article className="s05-human-decision"><header><span className="s05-eyebrow">人工最终决策</span></header><label><span>决策人</span><input value={actor} onChange={(event) => setActor(event.target.value)} disabled={decisionBusy} /></label><textarea aria-label="决策理由" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="必须填写决策理由。" disabled={decisionBusy} /><textarea aria-label="改判理由" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} placeholder="与机器建议不一致时必填 override_reason。" disabled={decisionBusy} />{decisionError && <p className="s05-form-error">{decisionError}</p>}</article>
+          </section>
+        )}
+
         <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={[
                   's05-case-tab',
                   item.case_id === selectedComparison.case_id ? 's05-case-tab--active' : '',

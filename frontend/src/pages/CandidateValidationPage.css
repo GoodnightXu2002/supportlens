@@ -70,24 +70,104 @@
   line-height: 20px;
 }
 
-.s05-outcomes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  border-bottom: 1px solid var(--color-border);
+.s05-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 56px;
+  margin-bottom: 24px;
 }
 
-.s05-outcome-card {
+.s05-metric {
   display: flex;
   min-width: 0;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.s05-outcome-card:first-child {
-  border-right: 1px solid var(--color-border);
+.s05-metric strong {
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
 }
+
+.s05-metric span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.s05-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.s05-detail-col h2 {
+  margin: 0 0 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.s05-detail-note {
+  margin: 10px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.s05-regression-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0 0;
+}
+
+.s05-regression-detail > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.s05-regression-detail dt {
+  color: var(--color-text-secondary);
+}
+
+.s05-regression-detail dd {
+  margin: 0;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.s05-decision-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 28px;
+  margin-bottom: 24px;
+  color: var(--color-text-prose);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.s05-decision-line strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+
+
 
 
 
@@ -112,21 +192,8 @@
   margin: 0;
 }
 
-.s05-outcome-card dl {
-  max-width: 360px;
-}
 
-.s05-outcome-card dl > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 12px;
-  line-height: 18px;
-}
 
-.s05-outcome-card dt,
-.s05-outcome-card dd,
 .s05-recommendation dt,
 .s05-recommendation dd,
 .s05-human-decision dt,
@@ -136,14 +203,7 @@
   margin: 0;
 }
 
-.s05-outcome-card dt {
-  color: var(--color-text-secondary);
-}
 
-.s05-outcome-card dd {
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-}
 
 .s05-outcome-card .s05-positive {
   color: var(--color-status-success);
@@ -169,11 +229,10 @@
 }
 
 .s05-problem-results span {
-  display: -webkit-box;
   overflow: hidden;
   color: var(--color-text-secondary);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .s05-problem-results .s05-neutral {
@@ -214,36 +273,9 @@
   line-height: 16px;
 }
 
-.s05-regression-grid dt {
-  color: var(--color-text-secondary);
-}
 
-.s05-regression-grid dd {
-  margin: 0;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-}
 
-.s05-minor-regression dd {
-  color: var(--color-status-warning);
-  white-space: normal;
-}
 
-.s05-minor-regression button {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0;
-  color: var(--color-status-info);
-  background: transparent;
-  border: 0;
-  font-size: 10px;
-  cursor: pointer;
-}
 
 .s05-minor-regression button:hover {
   text-decoration: underline;
