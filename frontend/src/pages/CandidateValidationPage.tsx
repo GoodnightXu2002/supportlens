@@ -412,33 +412,23 @@ function CandidateWorkspace({
           <div className="s05-metric" role="listitem"><strong className={pendingReviewCount > 0 ? 's05-neutral' : undefined}>{pendingReviewCount}</strong><span>待人工复核</span></div>
         </div>
 
-        <section className="s05-details" aria-label="目标对照与回归明细">
-          <div className="s05-detail-col">
-            <h2>目标问题逐个对照（{summary.problem_results.length || 1} 个）</h2>
-            {summary.problem_results.length ? (
-              <ul className="s05-problem-results">
-                {summary.problem_results.map((problem) => (
-                  <li key={problem.problem_id}>
-                    <span title={problem.definition}>{problem.definition}</span>
-                    <strong className={problem.status === 'regressed' ? 's05-negative' : problem.status === 'improved' ? 's05-positive' : problem.status === 'inconclusive' ? 's05-neutral' : undefined}>{problemStatusLabels[problem.status]}</strong>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>
-            )}
-          </div>
-          <div className="s05-detail-col">
-            <h2>整体回归检查（其余 {comparisons.length - targetComparisons.length} 个非目标案例）</h2>
-            <dl className="s05-regression-detail">
-              <div><dt>严重回退</dt><dd className={summary.regression_summary.critical > 0 ? 's05-negative' : undefined}>{summary.regression_summary.critical}</dd></div>
-              <div><dt>较大回退</dt><dd className={summary.regression_summary.major > 0 ? 's05-negative' : undefined}>{summary.regression_summary.major}</dd></div>
-              <div><dt>轻微回退</dt><dd>{summary.regression_summary.minor}</dd></div>
-              <div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div>
-              <div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div>
-            </dl>
-            <p className="s05-detail-note">回归指候选版本把基线原本答对的案例改错；数字来自后端验证摘要。</p>
-          </div>
+        <section className="s05-details" aria-label="目标对照明细">
+          <h2>目标问题逐个对照（{summary.problem_results.length || 1} 个）</h2>
+          {summary.problem_results.length ? (
+            <ul className="s05-problem-results">
+              {summary.problem_results.map((problem) => (
+                <li key={problem.problem_id}>
+                  <span title={problem.definition}>{problem.definition}</span>
+                  <strong className={problem.status === 'regressed' ? 's05-negative' : problem.status === 'improved' ? 's05-positive' : problem.status === 'inconclusive' ? 's05-neutral' : undefined}>{problemStatusLabels[problem.status]}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>
+          )}
+          <p className="s05-detail-note">
+            另有轻微回退 {summary.regression_summary.minor}、新系统性问题 {summary.new_systematic_problems.length}、其他问题 {summary.other_problems.length}。回归指候选版本把基线原本答对的案例改错。
+          </p>
         </section>
 
         {candidateRun.final_decision ? (

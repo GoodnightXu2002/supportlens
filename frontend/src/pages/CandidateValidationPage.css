@@ -15,6 +15,7 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
+  padding: 20px 48px 40px;
   background: var(--color-surface);
 }
 
@@ -100,13 +101,10 @@
 }
 
 .s05-details {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 32px;
   margin-bottom: 24px;
 }
 
-.s05-detail-col h2 {
+.s05-details h2 {
   margin: 0 0 4px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border);
@@ -123,32 +121,9 @@
   line-height: 18px;
 }
 
-.s05-regression-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 14px 0 0;
-}
 
-.s05-regression-detail > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 13px;
-  line-height: 20px;
-}
 
-.s05-regression-detail dt {
-  color: var(--color-text-secondary);
-}
 
-.s05-regression-detail dd {
-  margin: 0;
-  color: var(--color-text);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
 
 .s05-decision-line {
   display: flex;

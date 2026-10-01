@@ -10,7 +10,7 @@
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 20px;
   align-items: start;
-  padding: 28px var(--container-margin) 48px;
+  padding: 28px 48px 56px;
 }
 
 .s01-side {
