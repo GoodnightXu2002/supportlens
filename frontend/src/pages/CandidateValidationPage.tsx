@@ -359,7 +359,6 @@ function CandidateWorkspace({
   const [actor, setActor] = useState('')
   const [reason, setReason] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
-  const movements = ['improved', 'partially_improved', 'stable', 'regressed', 'inconclusive'] as const
   const problemStatusLabels = {
     improved: '明确改善',
     partially_improved: '部分改善',
