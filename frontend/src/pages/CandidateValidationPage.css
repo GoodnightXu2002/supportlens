@@ -73,6 +73,7 @@
 .s05-outcomes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -181,10 +182,16 @@
 }
 
 .s05-problem-results span {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--color-text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.s05-problem-results .s05-neutral {
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 .s05-problem-results strong {
