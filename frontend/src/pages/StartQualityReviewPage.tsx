@@ -107,11 +107,10 @@ function formatScenarioDistribution(distribution: Record<string, number>) {
     : '未提供场景分类'
 }
 
-function formatRunDate(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
+function formatRunTimestamp(value: string) {
+  const date = new Date(value)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 async function prepareBaselineAnalysis(run: EvaluationRun) {
@@ -446,17 +445,16 @@ function StartQualityReviewPage() {
               <div className="s01-history-list">
                 {historyRuns.map((historyRun) => (
                   <article className="s01-history-run" key={historyRun.id}>
-                    <div className="s01-history-run__top">
-                      <code title={historyRun.id}>{historyRun.id.slice(0, 8).toUpperCase()}</code>
-                      <strong>{runStatusLabel(historyRun.status)}</strong>
-                      <time dateTime={historyRun.created_at}>{formatRunDate(historyRun.created_at)}</time>
-                    </div>
-                    <div className="s01-history-run__meta">
-                      <code>{historyRun.judge_model || '判定模型 —'}</code>
-                      <Link className="s01-text-action s01-text-action--info" to={`/baseline?run_id=${encodeURIComponent(historyRun.id)}`}>
-                        查看结果<MdOpenInNew aria-hidden="true" />
-                      </Link>
-                    </div>
+                    <code className="s01-history-run__id" title={historyRun.id}>{historyRun.id.slice(0, 8).toUpperCase()}</code>
+                    <span className="s01-history-run__status">
+                      <span className="s01-status-dot" aria-hidden="true" />
+                      {runStatusLabel(historyRun.status)}
+                    </span>
+                    <time dateTime={historyRun.created_at}>{formatRunTimestamp(historyRun.created_at)}</time>
+                    <code className="s01-history-run__model" title={historyRun.judge_model ?? undefined}>{historyRun.judge_model || '判定模型 —'}</code>
+                    <Link className="s01-text-action s01-text-action--info" to={`/baseline?run_id=${encodeURIComponent(historyRun.id)}`}>
+                      查看结果<MdOpenInNew aria-hidden="true" />
+                    </Link>
                   </article>
                 ))}
               </div>
