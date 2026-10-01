@@ -492,7 +492,6 @@ function CandidateWorkspace({
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
           <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
           <div className="s05-comparison-body">
-            <ComparisonNode label="用户提问"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <VerdictDeltaBar
               baseline={effectiveOutput(baselineResult)}
               candidate={effectiveOutput(candidateResult)}
@@ -500,6 +499,7 @@ function CandidateWorkspace({
               targetWorse={selectedComparison.target_worse}
               regressionLevel={selectedComparison.regression_level}
             />
+            <ComparisonNode label="用户提问"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <div className="s05-version-columns">
               <div className="s05-version-column">
                 <ComparisonNode label="客服回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode>
