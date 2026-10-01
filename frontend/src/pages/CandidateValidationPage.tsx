@@ -69,16 +69,19 @@ type PageState =
 
 type ComparisonNodeProps = {
   accent?: boolean
-  icon?: React.ReactNode
   label: string
+  aside?: string
   children: React.ReactNode
 }
 
-function ComparisonNode({ accent = false, label, children }: ComparisonNodeProps) {
+function ComparisonNode({ accent = false, label, aside, children }: ComparisonNodeProps) {
   return (
     <div className={accent ? 's05-node s05-node--candidate' : 's05-node'}>
       <div className="s05-node__content">
-        <span className="s05-node__label">{label}</span>
+        <div className="s05-node__head">
+          <span className="s05-node__label">{label}</span>
+          {aside ? <span className="s05-node__aside">{aside}</span> : null}
+        </div>
         {children}
       </div>
     </div>
@@ -182,7 +185,7 @@ function VerdictDeltaBar({ baseline, candidate, movement, targetWorse, regressio
   ]
   return (
     <div className="s05-verdict-delta" role="status">
-      <strong className="s05-verdict-delta__movement">{statusText(movement)}</strong>
+      <strong className="s05-verdict-delta__movement"><span>案例变化</span>{statusText(movement)}</strong>
       {fields.map((field) => (
         <span className="s05-verdict-delta__field" key={field.label}>
           <span>{field.label}</span>
@@ -490,7 +493,7 @@ function CandidateWorkspace({
                 ].filter(Boolean).join(' ')} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${statusText(item.movement)}${item.regression_level ? ` · ${statusText(item.regression_level)}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
 
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
-          <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
+          <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2></header>
           <div className="s05-comparison-body">
             <VerdictDeltaBar
               baseline={effectiveOutput(baselineResult)}
@@ -502,17 +505,15 @@ function CandidateWorkspace({
             <ComparisonNode label="用户提问"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <div className="s05-version-columns">
               <div className="s05-version-column">
-                <ComparisonNode label="客服回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode>
-                <ComparisonNode label="评测判定">
+                <ComparisonNode label="客服回复 · 基线"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode>
+                <ComparisonNode label="评测判定 · 基线" aside={provenanceLine(baselineResult)}>
                   {effectiveOutput(baselineResult) ? <JudgeBlock result={effectiveOutput(baselineResult)!} /> : <p>{statusText(baselineResult?.status)}</p>}
-                  <p className="s05-provenance">{provenanceLine(baselineResult)}</p>
                 </ComparisonNode>
               </div>
               <div className="s05-version-column s05-version-column--candidate">
-                <ComparisonNode accent label="客服回复"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode>
-                <ComparisonNode accent label="评测判定">
+                <ComparisonNode accent label="客服回复 · 候选版本"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode>
+                <ComparisonNode accent label="评测判定 · 候选版本" aside={provenanceLine(candidateResult)}>
                   {effectiveOutput(candidateResult) ? <JudgeBlock result={effectiveOutput(candidateResult)!} /> : <p>候选判定不存在</p>}
-                  <p className="s05-provenance">{provenanceLine(candidateResult)}</p>
                 </ComparisonNode>
               </div>
             </div>

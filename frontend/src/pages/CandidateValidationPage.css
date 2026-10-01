@@ -335,8 +335,8 @@
   margin: 0;
   color: var(--color-text);
   font-weight: 600;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .s05-judge__verdict--failure,
@@ -351,8 +351,8 @@
 .s05-judge__rationale {
   margin: 0;
   color: var(--color-text-prose);
-  font-size: 12px;
-  line-height: 19px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .s05-comparison {
@@ -389,42 +389,12 @@
 
 .s05-comparison-header h2 > em {
   margin-left: 8px;
-  color: var(--color-status-info);
+  color: var(--color-text-secondary);
   font-size: 10px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.s05-comparison-header > div {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 20px;
-  font-size: 12px;
-}
-
-.s05-comparison-header > div > span {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-text-secondary);
-}
-
-.s05-comparison-header > div > span:last-child {
-  color: var(--color-status-info);
-  font-weight: 500;
-}
-
-.s05-comparison-header i {
-  width: 12px;
-  height: 4px;
-  background: var(--color-surface-high);
-  border-radius: 2px;
-}
-
-.s05-comparison-header > div > span:last-child i {
-  background: var(--color-status-info);
 }
 
 .s05-comparison-body {
@@ -446,15 +416,29 @@
   flex: 1;
 }
 
+.s05-node__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
 .s05-node__label {
   display: block;
-  margin-bottom: 4px;
   color: var(--color-text-secondary);
   font-family: var(--font-code);
   font-size: 11px;
   font-weight: 500;
   line-height: 15px;
   text-transform: uppercase;
+}
+
+.s05-node__aside {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 15px;
 }
 
 .s05-node--candidate .s05-node__label {
@@ -503,7 +487,14 @@
 .s05-verdict-delta__movement {
   color: var(--color-status-info);
   font-family: var(--font-heading);
+  font-size: 13px;
   font-weight: 600;
+}
+
+.s05-verdict-delta__movement span {
+  margin-right: 6px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 .s05-verdict-delta__field {
@@ -530,13 +521,6 @@
   margin-left: auto;
   color: var(--color-text-secondary);
   font-size: 11px;
-}
-
-.s05-provenance {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  line-height: 16px;
 }
 
 .s05-shared-evidence {
