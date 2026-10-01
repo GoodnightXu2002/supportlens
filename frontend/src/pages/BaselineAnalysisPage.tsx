@@ -408,7 +408,13 @@ function BaselineAnalysisPage() {
   for (const result of data.finalResults) {
     judgmentCounts[(result.final_result ?? result.machine_result).judgment] += 1
   }
-  const topProblems = problems.filter((problem) => problem.rank !== null).slice(0, 3)
+  const rankedProblems = problems.filter((problem) => problem.rank !== null).slice(0, 3)
+  const topProblems = rankedProblems.length > 0
+    ? rankedProblems
+    : [...problems]
+      .sort((left, right) => right.affected_case_count - left.affected_case_count)
+      .slice(0, 3)
+  const topProblemsLabel = rankedProblems.length > 0 ? '建议优先处理' : '受影响案例最多'
   const metadata = metadataRecord(selectedConversation)
   const businessContext = formatMetadata(metadata.business_context)
   const referenceEvidence = formatMetadata(metadata.reference_evidence)
@@ -543,7 +549,7 @@ function BaselineAnalysisPage() {
           </p>
           {topProblems.length > 0 ? (
             <div className="s03-conclusion-actions">
-              <span>建议优先处理</span>
+              <span>{topProblemsLabel}</span>
               {topProblems.map((problem) => (
                 <button
                   key={problem.problem_id}
@@ -557,7 +563,7 @@ function BaselineAnalysisPage() {
               ))}
             </div>
           ) : (
-            <p className="s03-conclusion-actions">问题聚合未给出可排序的问题。</p>
+            <p className="s03-conclusion-actions">本次运行未聚合出问题。</p>
           )}
         </div>
       </div>
@@ -643,7 +649,7 @@ function BaselineAnalysisPage() {
                       <dl className="s03-priority-grid">
                         <div><dt><span className="s03-dot s03-dot--critical" aria-hidden="true" />严重程度：</dt><dd>{problem.priority_severity ? severityLabels[problem.priority_severity] : '不可用'}</dd></div>
                         <div><dt><span className="s03-dot s03-dot--critical" aria-hidden="true" />业务影响：</dt><dd>{signalLabel(problem.business_impact)}</dd></div>
-                        <div className="s03-priority-grid__frequency"><dt><span className="s03-dot s03-dot--secondary" aria-hidden="true" />频率：</dt><dd>{problem.frequency.numerator}/{problem.frequency.denominator}{frequencyPercent === null ? '' : ` (${frequencyPercent.toFixed(1)}%)`}{frequencyPer100 !== null ? ` · 约每 100 个案例中出现 ${frequencyPer100} 例` : ''}</dd></div>
+                        <div className="s03-priority-grid__frequency"><dt><span className="s03-dot s03-dot--secondary" aria-hidden="true" />频率：</dt><dd>{problem.frequency.numerator}/{problem.frequency.denominator}{frequencyPercent === null ? '' : ` (${frequencyPercent.toFixed(1)}%)`}{frequencyPer100 !== null && frequencyPer100 > 0 ? ` · 约每 100 个案例中出现 ${frequencyPer100} 例` : ''}</dd></div>
                         <div><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />模式一致性：</dt><dd>{signalLabel(problem.pattern_consistency)}</dd></div>
                         <div className="s03-priority-grid__wide"><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />证据置信度：</dt><dd>{signalLabel(problem.evidence_confidence)}</dd></div>
                       </dl>

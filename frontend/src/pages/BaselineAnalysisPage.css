@@ -461,9 +461,9 @@
 .s03-priority-grid {
   display: grid;
   margin: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   column-gap: 16px;
-  row-gap: 8px;
+  row-gap: 6px;
 }
 
 .s03-priority-grid > div {
@@ -481,21 +481,25 @@
 .s03-priority-grid dt {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 6px;
   color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 20px;
+  white-space: nowrap;
 }
 
 .s03-priority-grid dd {
+  min-width: 0;
   color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
   line-height: 18px;
 }
 
-.s03-priority-grid__wide {
-  grid-column: span 2;
+.s03-priority-grid__wide,
+.s03-priority-grid__frequency {
+  grid-column: auto;
 }
 
 .s03-priority-grid__frequency {
