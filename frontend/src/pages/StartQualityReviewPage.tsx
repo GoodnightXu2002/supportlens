@@ -508,6 +508,29 @@ function StartQualityReviewPage() {
             </article>
           </section>
 
+          <section className="s01-loop" aria-label="评测闭环">
+            <div className="s01-loop-heading">
+              <h2>评测闭环</h2>
+              <span>从真实会话到可验证的优化</span>
+            </div>
+            <ol className="s01-loop-steps">
+              {[
+                { id: '01', name: '数据导入', desc: '导入真实会话，形成可复用的评测数据集' },
+                { id: '02', name: '基线评测', desc: '逐会话自动评测，保留完整证据' },
+                { id: '03', name: '问题定位', desc: '失败聚合归因，排出优化优先级' },
+                { id: '04', name: '目标冻结', desc: '生成优化建议，确认并冻结验证范围' },
+                { id: '05', name: '候选验证', desc: '候选版本在同一范围内回归评测' },
+                { id: '06', name: '人工决策', desc: '对比改善与回归，由人做最终判断' },
+              ].map((step) => (
+                <li className="s01-loop-step" key={step.id}>
+                  <span className="s01-loop-step-id">{step.id}</span>
+                  <strong>{step.name}</strong>
+                  <p>{step.desc}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+
           {run?.status === 'completed' && (reviewLoading || currentReviewData) ? (
             <section className="s01-gates s01-review" aria-labelledby="s01-review-title">
               <div className="s01-gates-heading">
