@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MdError } from 'react-icons/md'
+import { MdError, MdExpandMore } from 'react-icons/md'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
@@ -237,6 +237,7 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
   const { problems, target } = data
   const frozen = target?.status === 'frozen'
   const busy = pendingAction !== null
+  const [expandedPairs, setExpandedPairs] = useState<Set<string>>(new Set())
   const scope = validationScope(problems, data.conversations)
   const targetCaseCount = target?.target_case_ids.length ?? scope.targetCaseIds.length
   const regressionCaseCount = target?.regression_case_ids.length ?? scope.regressionCaseIds.length
@@ -288,34 +289,52 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
           <ol className="s04-pair-list">
             {problems.map((problem, index) => {
               const suggestionText = suggestionByProblemId.get(problem.problem_id)
+              const isOpen = expandedPairs.has(problem.problem_id)
+              const pending = suggestionStatusForTarget === 'generating'
+              const suggestionSlot = pending
+                ? '正在生成…'
+                : suggestionText
+                  ? suggestionText
+                  : target?.status === 'frozen'
+                    ? '该历史目标未生成系统优化建议'
+                    : '暂无优化建议。'
+              const togglePair = () => {
+                setExpandedPairs((current) => {
+                  const next = new Set(current)
+                  if (next.has(problem.problem_id)) next.delete(problem.problem_id)
+                  else next.add(problem.problem_id)
+                  return next
+                })
+              }
               return (
-                <li className="s04-pair-row" key={problem.problem_id}>
-                  <header className="s04-pair-meta">
-                    <span className="s04-pair-num">{String(index + 1).padStart(2, '0')}</span>
-                    <span className="s04-pair-scenario">{scenarioLabel(problem.scenario)}</span>
-                    {problem.priority_severity ? (
-                      <span className={`s04-severity s04-severity--${problem.priority_severity}`}>严重度 {severityLabels[problem.priority_severity]}</span>
-                    ) : (
-                      <span className="s04-severity">严重度 待补充</span>
-                    )}
-                    <span className="s04-pair-pid" title={problem.problem_id}>P-{shortId(problem.problem_id)}</span>
-                  </header>
-                  <div className="s04-pair-block">
-                    <span>问题</span>
-                    <p>{problem.definition}</p>
-                  </div>
-                  <div className="s04-pair-block">
-                    <span>建议</span>
-                    {suggestionStatusForTarget === 'generating' ? (
-                      <p className="s04-pair-pending">正在生成…</p>
-                    ) : suggestionText ? (
-                      <p>{suggestionText}</p>
-                    ) : target?.status === 'frozen' ? (
-                      <p className="s04-pair-pending">该历史目标未生成系统优化建议</p>
-                    ) : (
-                      <p className="s04-pair-pending">暂无优化建议。</p>
-                    )}
-                  </div>
+                <li className={isOpen ? 's04-pair-row s04-pair-row--open' : 's04-pair-row'} key={problem.problem_id}>
+                  <button type="button" className="s04-pair-toggle" aria-expanded={isOpen} onClick={togglePair}>
+                    <span className="s04-pair-meta">
+                      <span className="s04-pair-num">{String(index + 1).padStart(2, '0')}</span>
+                      <span className="s04-pair-scenario">{scenarioLabel(problem.scenario)}</span>
+                      {problem.priority_severity ? (
+                        <span className={`s04-severity s04-severity--${problem.priority_severity}`}>严重度 {severityLabels[problem.priority_severity]}</span>
+                      ) : (
+                        <span className="s04-severity">严重度 待补充</span>
+                      )}
+                      <MdExpandMore aria-hidden="true" className="s04-pair-chevron" />
+                      <span className="s04-pair-pid" title={problem.problem_id}>P-{shortId(problem.problem_id)}</span>
+                    </span>
+                    <span className="s04-pair-summary s04-pair-summary--problem">{problem.definition}</span>
+                    <span className="s04-pair-summary s04-pair-summary--suggestion">{suggestionSlot}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="s04-pair-body">
+                      <div className="s04-pair-block">
+                        <span>问题</span>
+                        <p>{problem.definition}</p>
+                      </div>
+                      <div className="s04-pair-block">
+                        <span>建议</span>
+                        <p className={pending ? 's04-pair-pending' : undefined}>{suggestionSlot}</p>
+                      </div>
+                    </div>
+                  )}
                 </li>
               )
             })}

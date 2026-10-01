@@ -128,10 +128,15 @@ const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
 }
 
 function JudgeBlock({ result }: { result: JudgeOutput }) {
+  const [expanded, setExpanded] = useState(false)
+  const rationaleLong = result.rationale.length > 100
   return (
     <div className="s05-judge">
       {result.problem ? <p className="s05-judge__problem">{result.problem}</p> : null}
-      <p className="s05-judge__rationale">{result.rationale}</p>
+      <p className={expanded || !rationaleLong ? 's05-judge__rationale' : 's05-judge__rationale s05-judge__rationale--clamped'}>{result.rationale}</p>
+      {rationaleLong ? (
+        <button type="button" className="s05-judge-toggle" onClick={() => setExpanded((value) => !value)}>{expanded ? '收起理由' : '展开完整理由'}</button>
+      ) : null}
     </div>
   )
 }

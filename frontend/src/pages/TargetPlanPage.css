@@ -205,7 +205,6 @@
 }
 
 .s04-pair-row {
-  padding: 14px 12px;
   border-bottom: 1px dashed var(--color-border);
 }
 
@@ -213,7 +212,21 @@
   border-bottom: 0;
 }
 
-.s04-pair-row:hover {
+.s04-pair-toggle {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.s04-pair-toggle:hover,
+.s04-pair-row--open .s04-pair-toggle {
   background: var(--color-surface-subtle);
 }
 
@@ -221,7 +234,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+}
+
+.s04-pair-chevron {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.s04-pair-row--open .s04-pair-chevron {
+  transform: rotate(180deg);
 }
 
 .s04-pair-num {
@@ -273,11 +296,34 @@
 }
 
 .s04-pair-pid {
-  margin-left: auto;
   color: var(--color-text-secondary);
   font-family: var(--font-code);
   font-size: 11px;
   line-height: 16px;
+}
+
+.s04-pair-summary {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.s04-pair-summary--problem {
+  color: var(--color-text-prose);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.s04-pair-summary--suggestion {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.s04-pair-body {
+  padding: 10px 12px 2px;
 }
 
 .s04-pair-block {
@@ -286,7 +332,7 @@
 }
 
 .s04-pair-block + .s04-pair-block {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .s04-pair-block > span {
@@ -298,6 +344,7 @@
 
 .s04-pair-block > p {
   margin: 0;
+  max-width: 72em;
   color: var(--color-text-prose);
   font-size: 13px;
   line-height: 20px;

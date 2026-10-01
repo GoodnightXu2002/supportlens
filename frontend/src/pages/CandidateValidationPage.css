@@ -404,6 +404,28 @@
   line-height: 20px;
 }
 
+.s05-judge__rationale--clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.s05-judge-toggle {
+  align-self: flex-start;
+  padding: 0;
+  color: var(--color-text-secondary);
+  background: none;
+  border: 0;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.s05-judge-toggle:hover {
+  color: var(--color-text);
+}
+
 .s05-comparison {
   border-bottom: 1px solid var(--color-border);
 }
