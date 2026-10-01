@@ -94,7 +94,20 @@ const signalLabels = {
 } as const
 
 function signalLabel(value: keyof typeof signalLabels | null) {
-  return value === null ? '不可用' : signalLabels[value]
+  return value === null ? '待补充' : signalLabels[value]
+}
+
+function patternPlainText(value: keyof typeof signalLabels | null) {
+  if (value === 'strong') return '在各案例中表现一致，定位相对容易'
+  if (value === 'weak') return '在各案例中表现分散，需要多点修复'
+  if (value === 'moderate') return '在各案例中表现有一定规律'
+  return '在各案例中的表现规律待确认'
+}
+
+function confidencePlainText(value: keyof typeof signalLabels | null) {
+  if (value === 'high') return '证据充分'
+  if (value === 'moderate') return '证据较为充分'
+  return '证据有待补充'
 }
 
 function shortId(value: string) {
@@ -576,6 +589,9 @@ function BaselineAnalysisPage() {
               const frequencyPercent = problem.frequency.denominator === 0
                 ? null
                 : (problem.frequency.numerator / problem.frequency.denominator) * 100
+              const frequencyPer100 = frequencyPercent === null
+                ? null
+                : Math.round(frequencyPercent)
               return (
                 <article
                   className={isActive
@@ -627,17 +643,20 @@ function BaselineAnalysisPage() {
                       <dl className="s03-priority-grid">
                         <div><dt><span className="s03-dot s03-dot--critical" aria-hidden="true" />严重程度：</dt><dd>{problem.priority_severity ? severityLabels[problem.priority_severity] : '不可用'}</dd></div>
                         <div><dt><span className="s03-dot s03-dot--critical" aria-hidden="true" />业务影响：</dt><dd>{signalLabel(problem.business_impact)}</dd></div>
-                        <div className="s03-priority-grid__frequency"><dt><span className="s03-dot s03-dot--secondary" aria-hidden="true" />频率：</dt><dd>{problem.frequency.numerator}/{problem.frequency.denominator}{frequencyPercent === null ? '' : ` (${frequencyPercent.toFixed(1)}%)`}</dd></div>
+                        <div className="s03-priority-grid__frequency"><dt><span className="s03-dot s03-dot--secondary" aria-hidden="true" />频率：</dt><dd>{problem.frequency.numerator}/{problem.frequency.denominator}{frequencyPercent === null ? '' : ` (${frequencyPercent.toFixed(1)}%)`}{frequencyPer100 !== null ? ` · 约每 100 个案例中出现 ${frequencyPer100} 例` : ''}</dd></div>
                         <div><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />模式一致性：</dt><dd>{signalLabel(problem.pattern_consistency)}</dd></div>
                         <div className="s03-priority-grid__wide"><dt><span className="s03-dot s03-dot--info" aria-hidden="true" />证据置信度：</dt><dd>{signalLabel(problem.evidence_confidence)}</dd></div>
                       </dl>
+                      <p className="s03-profile-detail">
+                        该问题{patternPlainText(problem.pattern_consistency)}，{confidencePlainText(problem.evidence_confidence)}。
+                      </p>
                       <p className="s03-profile-detail">
                         严重程度分布：低 {problem.severity_distribution.low} / 中 {problem.severity_distribution.medium} / 高 {problem.severity_distribution.high} / 严重 {problem.severity_distribution.critical}
                       </p>
                       <p className="s03-ranking-detail">
                         {problem.rank !== null
                           ? `密集排名 ${problem.rank}${problem.equal_review_priority ? ' · 复核优先级相同' : ''}`
-                          : `不可排名${problem.ranking_blockers.length > 0 ? `：${problem.ranking_blockers.map(blockerLabel).join('、')}` : ''}`}
+                          : `暂无法排序${problem.ranking_blockers.length > 0 ? `：${problem.ranking_blockers.map(blockerLabel).join('、')}` : ''}`}
                       </p>
                     </>
                   ) : (
@@ -737,7 +756,7 @@ function BaselineAnalysisPage() {
                 <article className="s03-evidence-node">
                   <span className="s03-node-marker"><span /></span>
                   <div className="s03-node-content">
-                    <h3>节点 2 / 基线回复</h3>
+                    <h3>节点 2 / 当前客服回复</h3>
                     {assistantMessages.map((message, index) => (
                       <blockquote key={`${selectedConversation.id}-assistant-${index}`}>{message.content}</blockquote>
                     ))}
@@ -747,7 +766,7 @@ function BaselineAnalysisPage() {
                 <article className="s03-evidence-node">
                   <span className="s03-node-marker s03-node-marker--icon"><MdSmartToy aria-hidden="true" /></span>
                   <div className="s03-node-content">
-                    <h3 className="s03-node-title--italic">节点 3 / 机器原始判定</h3>
+                    <h3 className="s03-node-title--italic">节点 3 / AI 评测判定</h3>
                     <div className="s03-ai-judgment">
                       <div className="s03-ai-judgment__status">
                         <span className={`s03-ai-judgment__verdict s03-ai-judgment__verdict--${selectedResult.machine_result.judgment}`}>

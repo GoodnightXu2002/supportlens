@@ -56,7 +56,7 @@ const evidenceTypeLabels: Record<string, string> = {
 }
 
 const blockerLabels: Record<string, string> = {
-  business_impact_unmapped: '业务影响未映射',
+  business_impact_unmapped: '业务影响待补充',
   priority_severity_unavailable: '优先级严重程度不可用',
   pattern_consistency_unavailable: '模式一致性不可用',
   pending_human_review: '待人工复核',
