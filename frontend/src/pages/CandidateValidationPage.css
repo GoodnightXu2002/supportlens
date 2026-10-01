@@ -331,24 +331,12 @@
   gap: 8px;
 }
 
-.s05-judge__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
+.s05-judge__problem {
   margin: 0;
+  color: var(--color-text);
+  font-weight: 600;
   font-size: 12px;
   line-height: 18px;
-}
-
-.s05-judge__meta span {
-  color: var(--color-text-secondary);
-}
-
-.s05-judge__meta strong {
-  color: var(--color-text);
-  font-family: var(--font-heading);
-  font-weight: 600;
 }
 
 .s05-judge__verdict--failure,
@@ -358,16 +346,6 @@
 
 .s05-judge__verdict--success {
   color: var(--color-status-success);
-}
-
-.s05-judge__problem {
-  margin: 0;
-  padding: 8px 12px;
-  color: var(--color-text-prose);
-  background: var(--color-surface-low);
-  border-left: 2px solid var(--color-border-strong);
-  font-size: 12px;
-  line-height: 18px;
 }
 
 .s05-judge__rationale {
@@ -515,27 +493,10 @@
 }
 
 .s05-version-column {
-  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 16px;
-}
-
-.s05-version-column::before {
-  position: absolute;
-  top: 14px;
-  bottom: 14px;
-  left: 11px;
-  z-index: 0;
-  width: 1px;
-  background: var(--color-border);
-  content: '';
-}
-
-.s05-version-column .s05-node {
-  position: relative;
-  z-index: 1;
 }
 
 .s05-verdict-delta {

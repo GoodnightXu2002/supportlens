@@ -127,14 +127,6 @@ const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
 function JudgeBlock({ result }: { result: JudgeOutput }) {
   return (
     <div className="s05-judge">
-      <p className="s05-judge__meta">
-        <span>判定</span>
-        <strong className={`s05-judge__verdict s05-judge__verdict--${result.judgment}`}>{judgmentLabels[result.judgment]}</strong>
-        <span>严重度</span>
-        <strong>{result.severity ? severityLabels[result.severity] : '无'}</strong>
-        <span>失败模式</span>
-        <strong>{result.primary_failure_mode ? failureModeLabel(result.primary_failure_mode) : '无'}</strong>
-      </p>
       {result.problem ? <p className="s05-judge__problem">{result.problem}</p> : null}
       <p className="s05-judge__rationale">{result.rationale}</p>
     </div>
@@ -154,6 +146,10 @@ function provenanceLine(result: FinalEffectiveResult | undefined) {
   return `人工复核 · ${result.human_decision.reviewer} · ${formatDate(result.human_decision.reviewed_at)} · 机器原始判定 ${judgmentLabels[machine.judgment]} · 严重度 ${machineSeverity}`
 }
 
+function verdictColorClass(result: JudgeOutput | null) {
+  return result ? `s05-judge__verdict--${result.judgment}` : undefined
+}
+
 function VerdictDeltaBar({ baseline, candidate, movement, targetWorse, regressionLevel }: {
   baseline: JudgeOutput | null
   candidate: JudgeOutput | null
@@ -166,16 +162,22 @@ function VerdictDeltaBar({ baseline, candidate, movement, targetWorse, regressio
       label: '判定',
       from: baseline ? judgmentLabels[baseline.judgment] : '无',
       to: candidate ? judgmentLabels[candidate.judgment] : '无',
+      fromClass: verdictColorClass(baseline),
+      toClass: verdictColorClass(candidate),
     },
     {
       label: '严重度',
       from: baseline?.severity ? severityLabels[baseline.severity] : '无',
       to: candidate?.severity ? severityLabels[candidate.severity] : '无',
+      fromClass: undefined,
+      toClass: undefined,
     },
     {
       label: '失败模式',
       from: baseline?.primary_failure_mode ? failureModeLabel(baseline.primary_failure_mode) : '无',
       to: candidate?.primary_failure_mode ? failureModeLabel(candidate.primary_failure_mode) : '无',
+      fromClass: undefined,
+      toClass: undefined,
     },
   ]
   return (
@@ -184,7 +186,9 @@ function VerdictDeltaBar({ baseline, candidate, movement, targetWorse, regressio
       {fields.map((field) => (
         <span className="s05-verdict-delta__field" key={field.label}>
           <span>{field.label}</span>
-          {field.from === field.to ? <strong>{field.from}</strong> : <strong className="s05-verdict-delta__changed">{field.from} → {field.to}</strong>}
+          {field.from === field.to
+            ? <strong className={field.fromClass}>{field.from}</strong>
+            : <strong className={`s05-verdict-delta__changed ${field.toClass ?? ''}`.trim()}>{field.from} → {field.to}</strong>}
         </span>
       ))}
       <span className="s05-verdict-delta__meta">目标变差 {statusText(targetWorse)} · 回归级别 {statusText(regressionLevel ?? 'none')}</span>
@@ -488,7 +492,7 @@ function CandidateWorkspace({
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
           <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
           <div className="s05-comparison-body">
-            <ComparisonNode label="会话 / 用户消息"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
+            <ComparisonNode label="用户提问"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <VerdictDeltaBar
               baseline={effectiveOutput(baselineResult)}
               candidate={effectiveOutput(candidateResult)}
@@ -498,15 +502,15 @@ function CandidateWorkspace({
             />
             <div className="s05-version-columns">
               <div className="s05-version-column">
-                <ComparisonNode label="回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode>
-                <ComparisonNode label="生效判定">
+                <ComparisonNode label="客服回复"><p>{messageContent(conversation, 'assistant')}</p></ComparisonNode>
+                <ComparisonNode label="评测判定">
                   {effectiveOutput(baselineResult) ? <JudgeBlock result={effectiveOutput(baselineResult)!} /> : <p>{statusText(baselineResult?.status)}</p>}
                   <p className="s05-provenance">{provenanceLine(baselineResult)}</p>
                 </ComparisonNode>
               </div>
               <div className="s05-version-column s05-version-column--candidate">
-                <ComparisonNode accent label="回复"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode>
-                <ComparisonNode accent label="生效判定">
+                <ComparisonNode accent label="客服回复"><p>{candidateResponse?.assistant_content ?? '候选版本回复不存在'}</p></ComparisonNode>
+                <ComparisonNode accent label="评测判定">
                   {effectiveOutput(candidateResult) ? <JudgeBlock result={effectiveOutput(candidateResult)!} /> : <p>候选判定不存在</p>}
                   <p className="s05-provenance">{provenanceLine(candidateResult)}</p>
                 </ComparisonNode>
