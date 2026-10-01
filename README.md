@@ -72,7 +72,7 @@ Dataset Import
 
 数据集导入与管理
 
-![数据集导入与管理](docs/images/supportlens-s02-dataset.png?raw=true)
+![数据集导入与管理](https://github.com/GoodnightXu2002/supportlens/raw/372ef9d/docs/images/supportlens-s02-dataset.png)
 
 问题级诊断与证据追溯
 
