@@ -412,15 +412,25 @@ function CandidateWorkspace({
   return (
     <section className="s05-page" aria-label="候选版本验证工作区">
       <div className="s05-canvas">
+        <div className="s05-conclusion" role="status">
+          <span className={`s05-conclusion__verdict s05-conclusion__verdict--${(candidateRun.final_decision ?? summary.recommended_verdict).toLowerCase()}`}>
+            {candidateRun.final_decision
+              ? `人工决策：${statusText(candidateRun.final_decision)}`
+              : `机器建议：${statusText(summary.recommended_verdict)}`}
+          </span>
+          <p>
+            目标 {summary.rule_outcomes.target_case_count} 个问题中 {summary.rule_outcomes.clear_improved_count} 个明确改善、{summary.rule_outcomes.target_worse_count} 个变差；其余 {comparisons.length - targetComparisons.length} 个非目标案例出现 {summary.regression_summary.critical + summary.regression_summary.major} 处较大回退。{candidateRun.reason ? `决策理由：${candidateRun.reason}` : ''}
+          </p>
+        </div>
         <section className="s05-outcomes" aria-label="目标与回归结果">
-          <article className="s05-outcome-card"><MdCheckCircle className={`s05-outcome-icon s05-outcome-icon--${problemCardTone}`} aria-hidden="true" /><div><h2>问题级（{summary.problem_results.length || 1}）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标高/严重问题</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
-          <article className="s05-outcome-card s05-regression-card"><MdVerified className={`s05-outcome-icon s05-outcome-icon--${regressionCardTone}`} aria-hidden="true" /><div><h2>版本级 · 回归检查（{comparisons.length - targetComparisons.length} 个非目标案例）</h2><div className="s05-regression-grid"><dl><div><dt>严重回归</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>回归与新系统性问题均直接来自后端验证摘要。</p></div></article>
+          <article className="s05-outcome-card"><MdCheckCircle className={`s05-outcome-icon s05-outcome-icon--${problemCardTone}`} aria-hidden="true" /><div><h2>目标问题逐个对照（{summary.problem_results.length || 1} 个）</h2>{summary.problem_results.length ? <ul className="s05-problem-results">{summary.problem_results.map((problem) => <li key={problem.problem_id}><span title={problem.definition}>{problem.definition}</span><strong className={problem.status === 'regressed' ? 's05-negative' : undefined}>{problemStatusLabels[problem.status]}</strong></li>)}</ul> : <p className="s05-legacy-problem-result">历史单问题结果：{statusText(summary.target_outcome)}</p>}<dl><div><dt>目标案例</dt><dd>{targetComparisons.length}</dd></div><div><dt>明确改善</dt><dd className="s05-positive">{movementCounts.improved}</dd></div><div><dt>部分改善</dt><dd>{movementCounts.partially_improved}</dd></div><div><dt>目标变差</dt><dd>{summary.rule_outcomes.target_worse_count}</dd></div><div><dt>无法得出结论</dt><dd>{movementCounts.inconclusive}</dd></div><div><dt>剩余目标高/严重问题</dt><dd>{summary.rule_outcomes.remaining_target_high_critical}</dd></div></dl></div></article>
+          <article className="s05-outcome-card s05-regression-card"><MdVerified className={`s05-outcome-icon s05-outcome-icon--${regressionCardTone}`} aria-hidden="true" /><div><h2>整体回归检查（{comparisons.length - targetComparisons.length} 个非目标案例）</h2><div className="s05-regression-grid"><dl><div><dt>严重回归</dt><dd>{summary.regression_summary.critical}</dd></div><div><dt>重大回归</dt><dd>{summary.regression_summary.major}</dd></div></dl><dl><div className="s05-minor-regression"><dt>轻微回归</dt><dd>{summary.regression_summary.minor}</dd></div></dl><dl><div><dt>新系统性问题</dt><dd>{summary.new_systematic_problems.length}</dd></div><div><dt>其他问题</dt><dd>{summary.other_problems.length}</dd></div><div><dt>剩余必需人工复核</dt><dd>{pendingReviewCount}</dd></div></dl></div><p>回归指候选版本把基线原本答对的案例改错；数字来自后端验证摘要。</p></div></article>
         </section>
 
         <section className="s05-case-tabs" aria-label="评测案例选择"><strong>评测案例（{orderedComparisons.length}）：</strong><div>{orderedComparisons.map((item) => <button className={item.case_id === selectedComparison.case_id ? 's05-case-tab s05-case-tab--active' : 's05-case-tab'} key={item.id} type="button" aria-pressed={item.case_id === selectedComparison.case_id} title={`${statusText(item.movement)}${item.regression_level ? ` · ${statusText(item.regression_level)}` : ''}`} onClick={() => onSelectCase(item.case_id)}>{item.case_id}</button>)}</div></section>
 
         <section className="s05-comparison" aria-labelledby="s05-comparison-title">
-          <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em>conversation_id：{selectedComparison.conversation_id}</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
+          <header className="s05-comparison-header"><h2 id="s05-comparison-title"><span>案例 ID：</span>{selectedComparison.case_id}<em title={selectedComparison.conversation_id}>conversation_id：{selectedComparison.conversation_id.slice(0, 8)}…</em></h2><div><span><i />基线</span><span><i />候选版本</span></div></header>
           <div className="s05-comparison-body">
             <ComparisonNode icon={<MdChatBubble />} label="会话 / 用户消息"><p>{messageContent(conversation, 'user')}</p></ComparisonNode>
             <div className="s05-version-columns">
@@ -440,7 +450,7 @@ function CandidateWorkspace({
       </div>
 
       <footer className="s05-action-rail">
-        <em>PLAN V{target.version} · {target.plan_hash}</em>
+        <em title={target.plan_hash ?? undefined}>PLAN V{target.version} · {target.plan_hash ? `${target.plan_hash.slice(0, 8)}…` : '—'}</em>
         <div className="s05-action-area">
           {candidateRun.final_decision === 'continue' ? (
             <div className="s05-action-complete s05-action-complete--continue" role="status">
