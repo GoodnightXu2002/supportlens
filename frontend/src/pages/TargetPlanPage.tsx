@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MdError } from 'react-icons/md'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -210,35 +210,6 @@ function ContextMetadata({ data, form }: { data: LoadedData; form: TargetForm })
   )
 }
 
-type EditableFieldProps = {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  disabled: boolean
-  multiline?: boolean
-  placeholder?: string
-}
-
-function EditableField({
-  label,
-  value,
-  onChange,
-  disabled,
-  multiline = false,
-  placeholder,
-}: EditableFieldProps) {
-  return (
-    <label className="s04-form-field">
-      <span>{label}</span>
-      {multiline ? (
-        <textarea value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} placeholder={placeholder} rows={3} />
-      ) : (
-        <input value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} placeholder={placeholder} />
-      )}
-    </label>
-  )
-}
-
 function PageMessage({ title, detail }: { title: string; detail: string }) {
   return (
     <section className="s04-page s04-page-message" role="status">
@@ -257,10 +228,11 @@ type TargetPlanWorkspaceProps = {
   onActorChange: (value: string) => void
   onExportValidationCases: () => void
   onEnterValidation: () => void
+  onRetrySuggestions: () => void
 }
 
 function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
-  suggestionGeneration, onActorChange, onExportValidationCases, onEnterValidation,
+  suggestionGeneration, onActorChange, onExportValidationCases, onEnterValidation, onRetrySuggestions,
 }: TargetPlanWorkspaceProps) {
   const { problems, target } = data
   const frozen = target?.status === 'frozen'
@@ -288,86 +260,80 @@ function TargetPlanWorkspace({ data, form, actor, pendingAction, actionError,
     <section className="s04-page">
       <ContextMetadata data={data} form={form} />
 
-      <div className="s04-workspace">
-        <section className="s04-pane" aria-labelledby="s04-evidence-title">
-          <header className="s04-pane-header"><h2 id="s04-evidence-title">证据</h2></header>
-          <div className="s04-pane-scroll">
-            <section className="s04-section" aria-labelledby="s04-problem-title">
-              <h2 id="s04-problem-title">优化问题（来自基线分析）：{problems.length} 个</h2>
-              <ul className="s04-problem-list">
-                {problems.map((problem) => (
-                  <li className="s04-problem-card" key={problem.problem_id}>
-                    <span className="s04-code-label" title={problem.problem_id}>
-                      {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)} · {problem.priority_severity ? `严重度 ${severityLabels[problem.priority_severity]}` : '严重度待补充'}
-                    </span>
-                    <p>{problem.definition}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="s04-section" aria-labelledby="s04-scope-title">
-              <h2 id="s04-scope-title">验证范围</h2>
-              <dl className="s04-plan-grid">
-                <div><dt>目标案例</dt><dd className="s04-scope-count">{targetCaseCount} 个</dd><dd className="s04-scope-desc">所选问题涉及的核心案例去重并集</dd></div>
-                <div><dt>回归案例</dt><dd className="s04-scope-count">{regressionCaseCount} 个</dd><dd className="s04-scope-desc">其余核心案例，用于检查现有表现</dd></div>
-                <div><dt>挑战案例</dt><dd className="s04-scope-count">{challengeCaseCount} 个</dd><dd className="s04-scope-desc">数据集中的全部挑战案例</dd></div>
-              </dl>
-              <div className="s04-criteria">
-                <div><span>纳入标准</span><p>{form.inclusionCriteria}</p></div>
-                <div><span>排除标准</span><p>{form.exclusionCriteria}</p></div>
-              </div>
-              {missingCases && <p className="s04-alert" role="alert">所选问题缺少目标案例。</p>}
-              {frozen && (
-                <>
-                  <p className="s04-freeze-record">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />锁定人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p>
-                  <button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button>
-                </>
-              )}
-            </section>
+      <div className="s04-plan-scroll">
+        <section className="s04-scope" aria-label="验证范围">
+          <dl className="s04-scope-stats">
+            <div><dt>目标案例</dt><dd>{targetCaseCount}</dd><dd className="s04-scope-desc">所选问题涉及的核心案例去重并集</dd></div>
+            <div><dt>回归案例</dt><dd>{regressionCaseCount}</dd><dd className="s04-scope-desc">其余核心案例，用于检查现有表现</dd></div>
+            <div><dt>挑战案例</dt><dd>{challengeCaseCount}</dd><dd className="s04-scope-desc">数据集中的全部挑战案例</dd></div>
+          </dl>
+          <div className="s04-criteria">
+            <div><span>纳入标准</span><p>{form.inclusionCriteria}</p></div>
+            <div><span>排除标准</span><p>{form.exclusionCriteria}</p></div>
           </div>
+          {missingCases && <p className="s04-alert" role="alert">所选问题缺少目标案例。</p>}
         </section>
 
-        <section className="s04-pane" aria-labelledby="s04-decision-title">
-          <header className="s04-pane-header"><h2 id="s04-decision-title">系统优化建议</h2></header>
-          <div className="s04-pane-scroll">
-            <section className="s04-section" aria-labelledby="s04-suggestion-title">
-              <h2 id="s04-suggestion-title">系统建议（针对每个问题）：{problems.length} 条</h2>
-              {target == null ? (
-                <p className="s04-source-note">尚未创建优化目标。</p>
-              ) : frozen && !suggestions?.length ? (
-                <p className="s04-source-note">该历史目标未生成系统优化建议</p>
-              ) : suggestionStatusForTarget === 'generating' ? (
-                <p className="s04-source-note" role="status">正在生成系统优化建议…</p>
-              ) : suggestionStatusForTarget === 'error' ? (
-                <p className="s04-alert" role="alert">{suggestionGeneration.error}</p>
-              ) : (
-                <ul className="s04-problem-list">
-                  {problems.map((problem) => (
-                    <li className="s04-problem-card" key={problem.problem_id}>
-                      <span className="s04-code-label" title={problem.problem_id}>
-                        {scenarioLabel(problem.scenario)} · P-{shortId(problem.problem_id)}
-                      </span>
-                      <p>{suggestionByProblemId.get(problem.problem_id) ?? '暂无优化建议。'}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            {frozen ? (
-              <div className="s04-evidence-field s04-evidence-field--actor"><span>操作人（必填）</span><p>{target.frozen_by ?? ''}</p></div>
-            ) : (
-              <div className="s04-actor-field">
-                <EditableField label="操作人（必填）" value={actor} onChange={onActorChange} disabled={busy} />
-              </div>
-            )}
-          </div>
+        <section className="s04-pairs" aria-labelledby="s04-pairs-title">
+          <header className="s04-pairs-header">
+            <h2 id="s04-pairs-title">优化问题 → 系统建议（{problems.length} 对）</h2>
+            {suggestionStatusForTarget === 'generating' ? <span className="s04-generating" role="status">正在生成系统优化建议…</span> : null}
+          </header>
+          {suggestionStatusForTarget === 'error' ? (
+            <div className="s04-generation-error" role="alert">
+              <span>{suggestionGeneration.error}</span>
+              <button type="button" onClick={onRetrySuggestions}>重新生成</button>
+            </div>
+          ) : null}
+          <ol className="s04-pair-list">
+            {problems.map((problem, index) => {
+              const suggestionText = suggestionByProblemId.get(problem.problem_id)
+              return (
+                <li className="s04-pair-row" key={problem.problem_id}>
+                  <header className="s04-pair-meta">
+                    <span className="s04-pair-num">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="s04-pair-scenario">{scenarioLabel(problem.scenario)} · 严重度 {problem.priority_severity ? severityLabels[problem.priority_severity] : '待补充'}</span>
+                    <span className="s04-pair-pid" title={problem.problem_id}>P-{shortId(problem.problem_id)}</span>
+                  </header>
+                  <div className="s04-pair-block">
+                    <span>问题</span>
+                    <p>{problem.definition}</p>
+                  </div>
+                  <div className="s04-pair-block">
+                    <span>建议</span>
+                    {suggestionStatusForTarget === 'generating' ? (
+                      <p className="s04-pair-pending">正在生成…</p>
+                    ) : suggestionText ? (
+                      <p>{suggestionText}</p>
+                    ) : target?.status === 'frozen' ? (
+                      <p className="s04-pair-pending">该历史目标未生成系统优化建议</p>
+                    ) : (
+                      <p className="s04-pair-pending">暂无优化建议。</p>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+          {frozen && (
+            <div className="s04-freeze-block">
+              <p className="s04-freeze-record">确认人：{target.confirmed_by} · {formatDate(target.confirmed_at)}<br />锁定人：{target.frozen_by} · {formatDate(target.frozen_at)} · V{target.version}</p>
+              <button className="s04-outline-action" type="button" onClick={onExportValidationCases} disabled={busy}>{pendingAction === 'export' ? '正在导出…' : '导出验证案例 JSON'}</button>
+            </div>
+          )}
         </section>
       </div>
 
       <footer className="s04-action-rail">
         <p role={actionError ? 'alert' : 'status'}>{actionError ?? (frozen ? '验证计划已确认锁定，可继续进入候选版本验证。' : '确认时自动保存目标并锁定版本级验证计划。')}</p>
-        <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并锁定…' : frozen ? '进入候选版本验证' : '确认并锁定验证计划'}</button>
+        <div className="s04-rail-fields">
+          {frozen ? (
+            <span className="s04-rail-operator">操作人 {target.frozen_by ?? '—'}</span>
+          ) : (
+            <label className="s04-rail-field"><span>操作人（必填）</span><input value={actor} onChange={(event) => onActorChange(event.target.value)} disabled={busy} /></label>
+          )}
+          <button type="button" onClick={onEnterValidation} disabled={busy || !canEnter}>{pendingAction === 'complete' ? '正在保存并锁定…' : frozen ? '进入候选版本验证' : '确认并锁定验证计划'}</button>
+        </div>
       </footer>
     </section>
   )
@@ -539,13 +505,9 @@ function TargetPlanPage() {
   const target = pageState.kind === 'ready' ? pageState.data.target : null
   const readyData = pageState.kind === 'ready' ? pageState.data : null
 
-  useEffect(() => {
-    const readyTarget = readyData?.target
-    if (!readyTarget || readyTarget.status === 'frozen') return
-    if (readyTarget.optimization_suggestions?.length) return
-    if (attemptedSuggestionTargetIdsRef.current.has(readyTarget.id)) return
-    attemptedSuggestionTargetIdsRef.current.add(readyTarget.id)
+  const requestSuggestions = useCallback((readyTarget: OptimizationTarget) => {
     const targetId = readyTarget.id
+    attemptedSuggestionTargetIdsRef.current.add(targetId)
     setSuggestionGeneration({ targetId, status: 'generating', suggestions: null, error: null })
     void generateOptimizationTargetSuggestions(targetId)
       .then((response) => {
@@ -559,7 +521,15 @@ function TargetPlanPage() {
           error: error instanceof Error ? error.message : '生成系统优化建议失败。',
         })
       })
-  }, [readyData])
+  }, [])
+
+  useEffect(() => {
+    const readyTarget = readyData?.target
+    if (!readyTarget || readyTarget.status === 'frozen') return
+    if (readyTarget.optimization_suggestions?.length) return
+    if (attemptedSuggestionTargetIdsRef.current.has(readyTarget.id)) return
+    requestSuggestions(readyTarget)
+  }, [readyData, requestSuggestions])
 
   async function enterValidation() {
     if (pageState.kind !== 'ready' || pendingAction) return
@@ -628,6 +598,12 @@ function TargetPlanPage() {
       onActorChange={setActor}
       onExportValidationCases={() => { void exportValidationCases() }}
       onEnterValidation={() => { void enterValidation() }}
+      onRetrySuggestions={() => {
+        if (pageState.kind !== 'ready') return
+        const readyTarget = pageState.data.target
+        if (!readyTarget || readyTarget.status === 'frozen') return
+        requestSuggestions(readyTarget)
+      }}
     />
   )
 }
