@@ -19,36 +19,33 @@
 .s01-ready-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 12px 16px;
+  gap: 10px;
+  margin-bottom: 28px;
   color: var(--color-status-success);
-  background: #f0fdf4;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
 }
 
 .s01-ready-banner--running,
 .s01-ready-banner--loading {
   color: var(--color-status-info);
-  background: #eff6ff;
 }
 
-.s01-ready-banner--partial_failure {
-  color: var(--color-status-warning);
-  background: #fffbeb;
-}
-
+.s01-ready-banner--partial_failure,
 .s01-ready-banner--review {
   color: var(--color-status-warning);
-  background: #fffbeb;
 }
 
 .s01-ready-banner--failed,
 .s01-ready-banner--invalid,
 .s01-ready-banner--error {
   color: var(--color-status-critical);
-  background: #fef2f2;
+}
+
+.s01-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: currentColor;
+  border-radius: 50%;
 }
 
 .s01-ready-banner > svg {
@@ -76,14 +73,11 @@
 }
 
 .s01-ready-copy span {
-  color: rgb(21 128 61 / 80%);
+  color: var(--color-text-secondary);
 }
 
 .s01-context {
-  overflow: hidden;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
+  margin-bottom: 32px;
 }
 
 .s01-section-heading {
@@ -106,21 +100,8 @@
 
 .s01-context-row {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 20px;
-  padding: 20px;
-}
-
-.s01-context-icon {
-  display: flex;
-  width: 48px;
-  height: 48px;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  background: var(--color-surface-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 
 .s01-context-icon svg {
@@ -164,11 +145,12 @@
 
 .s01-code-chip {
   display: inline-block;
-  margin-top: 4px;
-  padding: 4px 8px;
-  color: var(--color-primary);
-  background: var(--color-surface-low);
-  border-radius: var(--radius-control);
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
 }
 
 .s01-context-actions {
@@ -195,7 +177,10 @@
 }
 
 .s01-text-action--info {
-  color: var(--color-status-info);
+  color: var(--color-text-prose);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 4px;
 }
 
 .s01-text-action:hover {
@@ -203,9 +188,8 @@
 }
 
 .s01-text-action--info:hover {
-  color: var(--color-status-info);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--color-text);
+  text-decoration-color: var(--color-text);
 }
 
 .s01-text-action svg {
@@ -326,8 +310,7 @@
   min-height: 48px;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  background: var(--color-surface-subtle);
+  padding: 12px 16px;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -347,28 +330,24 @@
 }
 
 .s01-history {
-  overflow: hidden;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
+  margin-bottom: 32px;
 }
 
 .s01-history-heading {
   display: flex;
-  min-height: 48px;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  padding: 10px 16px;
-  background: var(--color-surface-low);
+  gap: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .s01-history-heading h2 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  line-height: 20px;
+  line-height: 24px;
 }
 
 .s01-history-heading code {
@@ -551,7 +530,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 16px;
+  padding: 12px 0;
 }
 
 .s01-history-run + .s01-history-run {
@@ -609,7 +588,7 @@
 
 .s01-history-state {
   margin: 0;
-  padding: 12px 16px;
+  padding: 12px 0 0;
 }
 
 .s01-history-state--error {
@@ -654,11 +633,8 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-surface);
-  box-shadow: 0 1px 2px rgb(46 40 26 / 6%);
+  padding: 4px 0 4px 20px;
+  border-left: 2px solid var(--color-border-strong);
 }
 
 .s01-side-card h2 {
@@ -708,10 +684,8 @@
   flex-direction: column;
   gap: 6px;
   margin: 0;
-  padding: 10px 12px;
+  padding: 0;
   list-style: none;
-  background: var(--color-surface-low);
-  border-radius: var(--radius-surface);
 }
 
 .s01-side-gate {

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  MdCheckCircleOutline,
   MdOpenInNew,
   MdPlayArrow,
 } from 'react-icons/md'
-import { PiDatabase } from 'react-icons/pi'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
@@ -87,7 +85,7 @@ const severityLabels: Record<NonNullable<JudgeOutput['severity']>, string> = {
 
 const statusCopy: Record<PageStatus, { label: string; detail: string }> = {
   loading: { label: '正在读取', detail: '正在读取真实数据集与评测运行。' },
-  ready: { label: '已就绪', detail: '可以创建并启动真实基线评测运行。' },
+  ready: { label: '已就绪', detail: '一切就绪，随时可以开始。' },
   running: { label: '运行中', detail: '后端正在执行基线评测运行。' },
   completed: { label: '已完成', detail: '正在进入基线分析。' },
   partial_failure: { label: '部分失败', detail: '部分案例执行失败，已保留成功结果。' },
@@ -429,7 +427,7 @@ function StartQualityReviewPage() {
       <div className="s01-layout">
         <div className="s01-main">
           <div className={`s01-ready-banner s01-ready-banner--${pendingReviewResults.length ? 'review' : reviewLoading && run?.status === 'completed' ? 'loading' : pageStatus}`} role="status">
-            <MdCheckCircleOutline aria-hidden="true" />
+            <span className="s01-status-dot" aria-hidden="true" />
             <div className="s01-ready-copy">
               <strong>{currentStatus.label}</strong>
               <span>{runError ?? currentStatus.detail}</span>
@@ -467,7 +465,6 @@ function StartQualityReviewPage() {
 
           <section className="s01-context" aria-label="评测数据集">
             <article className="s01-context-row">
-              <div className="s01-context-icon" aria-hidden="true"><PiDatabase /></div>
               <div className="s01-context-content">
                 <div className="s01-context-topline">
                   <div>
