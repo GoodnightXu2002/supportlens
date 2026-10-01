@@ -391,6 +391,11 @@ function BaselineAnalysisPage() {
   const pendingReviewCount = data.finalResults.filter(
     (result) => result.status === 'pending_review',
   ).length
+  const judgmentCounts = { success: 0, warning: 0, failure: 0, uncertain: 0 }
+  for (const result of data.finalResults) {
+    judgmentCounts[(result.final_result ?? result.machine_result).judgment] += 1
+  }
+  const topProblems = problems.filter((problem) => problem.rank !== null).slice(0, 3)
   const metadata = metadataRecord(selectedConversation)
   const businessContext = formatMetadata(metadata.business_context)
   const referenceEvidence = formatMetadata(metadata.reference_evidence)
@@ -488,6 +493,60 @@ function BaselineAnalysisPage() {
           </dl>
         </div>
 
+      </div>
+
+      <div className="s03-conclusion-band" aria-label="本轮评测结论">
+        <div className="s03-conclusion-stats">
+          <div className="s03-conclusion-stat">
+            <strong>{data.finalResults.length}</strong>
+            <span>评测案例</span>
+          </div>
+          <div className={judgmentCounts.failure > 0
+            ? 's03-conclusion-stat s03-conclusion-stat--alert'
+            : 's03-conclusion-stat'}
+          >
+            <strong>{judgmentCounts.failure}</strong>
+            <span>不合格</span>
+          </div>
+          <div className="s03-conclusion-stat">
+            <strong>{judgmentCounts.warning + judgmentCounts.uncertain}</strong>
+            <span>警告 · 存疑</span>
+          </div>
+          <div className="s03-conclusion-stat">
+            <strong>{problems.length}</strong>
+            <span>问题聚类</span>
+          </div>
+        </div>
+
+        <span className="s03-conclusion-divider" aria-hidden="true" />
+
+        <div className="s03-conclusion-findings">
+          <p className="s03-conclusion-headline">
+            {data.finalResults.length === 0
+              ? '本次运行没有最终生效结果。'
+              : judgmentCounts.failure > 0
+                ? `${judgmentCounts.failure} / ${data.finalResults.length} 个案例不合格`
+                : '全部案例通过评测'}
+          </p>
+          {topProblems.length > 0 ? (
+            <div className="s03-conclusion-actions">
+              <span>建议优先处理</span>
+              {topProblems.map((problem) => (
+                <button
+                  key={problem.problem_id}
+                  type="button"
+                  className="s03-conclusion-chip"
+                  title={problem.definition}
+                  onClick={() => activateProblem(problem.problem_id)}
+                >
+                  {scenarioLabel(problem.scenario)} · {problem.definition}（{problem.affected_case_count} 例）
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="s03-conclusion-actions">问题聚合未给出可排序的问题。</p>
+          )}
+        </div>
       </div>
 
       <div className="s03-workspace">
