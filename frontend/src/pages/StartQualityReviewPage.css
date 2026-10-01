@@ -5,8 +5,8 @@
 
 .s01-layout {
   display: grid;
-  max-width: 1080px;
-  margin: 0 auto;
+  max-width: 1280px;
+  margin: 0;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 20px;
   align-items: start;

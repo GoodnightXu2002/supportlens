@@ -201,8 +201,8 @@ textarea {
 
 .route-header--review {
   gap: 24px;
-  max-width: 1080px;
-  margin: 0 auto;
+  max-width: 1280px;
+  margin: 0;
 }
 
 .route-header--dataset {
